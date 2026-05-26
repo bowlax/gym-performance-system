@@ -28,12 +28,12 @@
 
 | ID | Activity | Size | Depends On | Status | Notes |
 |---|---|---|---|---|---|
-| L1 | Select and configure on-device storage technology | S | -- | ⬜ | |
+| L1 | Select and configure on-device storage technology | S | -- | ✅ | |
 | L2 | Define data schema for all phase 1 data types | M | L1 | ⬜ | High risk -- cascades everywhere. Must anticipate phase 2. Treat as dedicated session |
 | L3 | Validate schema against all phase 1 use cases | S | L2 | ⬜ | Review activity -- walk every use case against the schema |
-| A1 | Define user identity model for phase 1 | S | -- | ⬜ | Phase 1 is single user / member only. Must be extensible for phase 2 |
-| A2 | Build the Access Control utility | S | A1 | ⬜ | Minimal in phase 1 but architecture must support future roles |
-| A3 | Test Access Control | S | A2 | ⬜ | |
+| A1 | Define user identity model for phase 1 | S | -- | ✅ | Phase 1 is single user / member only. Must be extensible for phase 2 |
+| A2 | Build the Access Control utility | S | A1 | ✅ | Minimal in phase 1 but architecture must support future roles |
+| A3 | Test Access Control | S | A2 | ✅ | |
 
 ### Data Layer
 
@@ -132,13 +132,13 @@ Sessions are variable in length and intensity. Two to three sessions per week is
 | Session | Date | Activities Completed | Decisions Made | Next Up |
 |---|---|---|---|---|
 | 1 | May 2026 | Design document completed. Architecture validated. Phase 1 scoped. Project document created | See decisions log | L1, then L2 as dedicated session |
+| 2 | May 2026 | L1, A1, A2, A3 | SwiftData selected for iOS 17+ local storage. SSH authentication configured for GitHub. | L2 -- data schema definition |
 
 ---
 
 ## Next Session
 
-**Start here:** L1 -- Select and configure on-device storage technology  
-**Then:** A1 -- Define user identity model (can run in parallel with L1)  
-**Dedicated session:** L2 -- Data schema definition (do not rush this)
+**Start here:** L2 -- Data schema definition  
+**Note:** This is a high risk activity -- it cascades across the entire data layer and must anticipate phase 2. Treat as a dedicated session. Do not rush it.
 
 > Reminder: always provide both `gym-performance-system-design.md` and this document at the start of each session.
