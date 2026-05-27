@@ -24,6 +24,9 @@ targets:
       - path: src/data
         excludes:
           - "**/*.md"
+      - path: src/core
+        excludes:
+          - "**/*.md"
       - path: src/resources/local-store
         excludes:
           - "**/*.md"
@@ -31,7 +34,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.gymperformance.GymPerformance
         INFOPLIST_FILE: GymPerformance/Info.plist
-        DEVELOPMENT_ASSET_PATHS: GymPerformance/Preview Content
+        DEVELOPMENT_ASSET_PATHS: GymPerformance/PreviewContent
     info:
       path: GymPerformance/Info.plist
       properties:
@@ -55,6 +58,9 @@ targets:
           - "**/*.md"
     dependencies:
       - target: GymPerformance
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
 
 schemes:
   GymPerformance:
