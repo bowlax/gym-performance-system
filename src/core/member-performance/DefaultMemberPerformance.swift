@@ -230,6 +230,100 @@ final class DefaultMemberPerformance: MemberPerformance {
         return weeklyCounts
     }
 
+    func exerciseHistory(
+        memberId: UUID,
+        exerciseId: UUID,
+        from: Date
+    ) throws -> [ExerciseSetSummary] {
+        guard let exercise = try exerciseRegistry.exercise(id: exerciseId) else {
+            throw MemberPerformanceError.invalidExercise(exerciseId)
+        }
+
+        let personalBests = try performanceDataAccess.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
+        let pbSetIds = Set(personalBests.compactMap(\.setId))
+
+        let sessions = try performanceDataAccess.fetchSessions(memberId: memberId)
+            .filter { $0.date >= from }
+            .sorted { $0.date < $1.date }
+
+        var history: [ExerciseSetSummary] = []
+
+        for session in sessions {
+            let entries = try performanceDataAccess.fetchExerciseEntries(sessionId: session.id)
+                .filter { $0.exerciseId == exerciseId }
+
+            guard !entries.isEmpty else { continue }
+
+            var sets: [ModelSet] = []
+            for entry in entries {
+                sets.append(contentsOf: try performanceDataAccess.fetchSets(exerciseEntryId: entry.id))
+            }
+
+            guard let bestSet = bestSet(from: sets, exercise: exercise) else { continue }
+
+            let isPB = pbSetIds.contains(bestSet.id)
+            history.append(
+                ExerciseSetSummary(
+                    sessionDate: session.date,
+                    set: bestSet,
+                    isPB: isPB
+                )
+            )
+        }
+
+        return history
+    }
+
+    private func bestSet(from sets: [ModelSet], exercise: ExerciseModel) -> ModelSet? {
+        guard let pbRule = exercise.pbRule else { return nil }
+
+        switch pbRule {
+        case .heaviestWeightAtReps:
+            return sets
+                .filter { $0.reps == exercise.targetReps && $0.weight != nil }
+                .max { ($0.weight ?? 0) < ($1.weight ?? 0) }
+
+        case .heaviestWeight:
+            return sets
+                .filter { $0.weight != nil }
+                .max { ($0.weight ?? 0) < ($1.weight ?? 0) }
+
+        case .bestWeightAndReps:
+            guard let minimumReps = exercise.minimumReps else { return nil }
+
+            return sets
+                .filter {
+                    guard let reps = $0.reps, $0.weight != nil else { return false }
+                    return reps >= minimumReps
+                }
+                .max {
+                    let leftWeight = $0.weight ?? 0
+                    let rightWeight = $1.weight ?? 0
+
+                    if leftWeight != rightWeight {
+                        return leftWeight < rightWeight
+                    }
+
+                    return ($0.reps ?? 0) < ($1.reps ?? 0)
+                }
+
+        case .fastestTime:
+            return sets
+                .filter { $0.time != nil }
+                .min { ($0.time ?? .infinity) < ($1.time ?? .infinity) }
+
+        case .longestDistance:
+            return sets
+                .filter { $0.distance != nil }
+                .max { ($0.distance ?? 0) < ($1.distance ?? 0) }
+
+        case .mostReps:
+            return sets
+                .filter { $0.reps != nil }
+                .max { ($0.reps ?? 0) < ($1.reps ?? 0) }
+        }
+    }
+
     private func validateMeasurementFields(
         measurementType: MeasurementType,
         weight: Double?,

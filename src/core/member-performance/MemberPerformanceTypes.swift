@@ -17,3 +17,10 @@ struct WeeklySessionCount {
     let weekStarting: Date
     let count: Int
 }
+
+/// Best set from a single session for exercise history views.
+struct ExerciseSetSummary {
+    let sessionDate: Date
+    let set: ModelSet
+    let isPB: Bool
+}

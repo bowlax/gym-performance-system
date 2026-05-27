@@ -50,4 +50,12 @@ protocol MemberPerformance {
         memberId: UUID,
         from: Date
     ) throws -> [WeeklySessionCount]
+
+    /// Returns one ExerciseSetSummary per session where this exercise was logged,
+    /// representing the best set from that session, ordered by sessionDate ascending.
+    func exerciseHistory(
+        memberId: UUID,
+        exerciseId: UUID,
+        from: Date
+    ) throws -> [ExerciseSetSummary]
 }

@@ -679,6 +679,167 @@ struct MemberPerformanceTests {
             #expect(weekday == 2, "Expected Monday, got weekday \(weekday) for \(week.weekStarting)")
         }
     }
+
+    // MARK: -- Exercise History
+
+    @Test
+    func testTC_MP21_ExerciseHistoryReturnsOneEntryPerSession() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let calendar = Calendar.current
+        let now = Date()
+        let earlierDate = calendar.date(byAdding: .day, value: -10, to: now)!
+        let laterDate = calendar.date(byAdding: .day, value: -5, to: now)!
+        let from = calendar.date(byAdding: .month, value: -6, to: now)!
+
+        let earlierSession = makeSession(date: earlierDate)
+        let earlierEntry = makeEntry(sessionId: earlierSession.id, exerciseId: freeSquatId)
+        _ = try test.memberPerformance.saveSession(
+            earlierSession,
+            entries: [earlierEntry],
+            sets: [earlierEntry.id: [makeSet(exerciseEntryId: earlierEntry.id, weight: 80.0, reps: 5)]]
+        )
+
+        let laterSession = makeSession(date: laterDate)
+        let laterEntry = makeEntry(sessionId: laterSession.id, exerciseId: freeSquatId)
+        _ = try test.memberPerformance.saveSession(
+            laterSession,
+            entries: [laterEntry],
+            sets: [laterEntry.id: [makeSet(exerciseEntryId: laterEntry.id, weight: 82.0, reps: 5)]]
+        )
+
+        let history = try test.memberPerformance.exerciseHistory(
+            memberId: testMemberId,
+            exerciseId: freeSquatId,
+            from: from
+        )
+
+        #expect(history.count == 2)
+        #expect(history[0].sessionDate == earlierDate)
+        #expect(history[1].sessionDate == laterDate)
+        #expect(history.map(\.sessionDate) == history.map(\.sessionDate).sorted())
+    }
+
+    @Test
+    func testTC_MP22_ExerciseHistorySelectsBestSetWhenMultipleSetsLogged() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let calendar = Calendar.current
+        let from = calendar.date(byAdding: .month, value: -6, to: Date())!
+
+        let session = makeSession()
+        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [entry],
+            sets: [
+                entry.id: [
+                    makeSet(exerciseEntryId: entry.id, weight: 80.0, reps: 5),
+                    makeSet(exerciseEntryId: entry.id, weight: 85.0, reps: 5)
+                ]
+            ]
+        )
+
+        let history = try test.memberPerformance.exerciseHistory(
+            memberId: testMemberId,
+            exerciseId: freeSquatId,
+            from: from
+        )
+
+        #expect(history.count == 1)
+        #expect(history[0].set.weight == 85.0)
+        #expect(history[0].set.reps == 5)
+    }
+
+    @Test
+    func testTC_MP23_ExerciseHistoryMarksPBSetsCorrectly() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let calendar = Calendar.current
+        let from = calendar.date(byAdding: .month, value: -6, to: Date())!
+
+        let session = makeSession()
+        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
+        let set = makeSet(exerciseEntryId: entry.id, weight: 85.0, reps: 5)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [entry],
+            sets: [entry.id: [set]]
+        )
+
+        let history = try test.memberPerformance.exerciseHistory(
+            memberId: testMemberId,
+            exerciseId: freeSquatId,
+            from: from
+        )
+
+        #expect(history.count == 1)
+        #expect(history[0].isPB == true)
+        #expect(history[0].set.id == set.id)
+    }
+
+    @Test
+    func testTC_MP24_ExerciseHistoryExcludesSessionsOutsideTheDateWindow() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let calendar = Calendar.current
+        let now = Date()
+        let eightMonthsAgo = calendar.date(byAdding: .month, value: -8, to: now)!
+        let twoMonthsAgo = calendar.date(byAdding: .month, value: -2, to: now)!
+        let sixMonthsAgo = calendar.date(byAdding: .month, value: -6, to: now)!
+
+        let oldSession = makeSession(date: eightMonthsAgo)
+        let oldEntry = makeEntry(sessionId: oldSession.id, exerciseId: freeSquatId)
+        _ = try test.memberPerformance.saveSession(
+            oldSession,
+            entries: [oldEntry],
+            sets: [oldEntry.id: [makeSet(exerciseEntryId: oldEntry.id, weight: 75.0, reps: 5)]]
+        )
+
+        let recentSession = makeSession(date: twoMonthsAgo)
+        let recentEntry = makeEntry(sessionId: recentSession.id, exerciseId: freeSquatId)
+        _ = try test.memberPerformance.saveSession(
+            recentSession,
+            entries: [recentEntry],
+            sets: [recentEntry.id: [makeSet(exerciseEntryId: recentEntry.id, weight: 80.0, reps: 5)]]
+        )
+
+        let history = try test.memberPerformance.exerciseHistory(
+            memberId: testMemberId,
+            exerciseId: freeSquatId,
+            from: sixMonthsAgo
+        )
+
+        #expect(history.count == 1)
+        #expect(history[0].sessionDate == twoMonthsAgo)
+        #expect(history[0].set.weight == 80.0)
+    }
+
+    @Test
+    func testTC_MP25_ExerciseHistoryReturnsEmptyWhenNoSessionsInWindow() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let calendar = Calendar.current
+        let now = Date()
+        let eightMonthsAgo = calendar.date(byAdding: .month, value: -8, to: now)!
+        let sixMonthsAgo = calendar.date(byAdding: .month, value: -6, to: now)!
+
+        let oldSession = makeSession(date: eightMonthsAgo)
+        let oldEntry = makeEntry(sessionId: oldSession.id, exerciseId: freeSquatId)
+        _ = try test.memberPerformance.saveSession(
+            oldSession,
+            entries: [oldEntry],
+            sets: [oldEntry.id: [makeSet(exerciseEntryId: oldEntry.id, weight: 75.0, reps: 5)]]
+        )
+
+        let history = try test.memberPerformance.exerciseHistory(
+            memberId: testMemberId,
+            exerciseId: freeSquatId,
+            from: sixMonthsAgo
+        )
+
+        #expect(history.isEmpty)
+    }
 }
 
 #else
@@ -1075,6 +1236,157 @@ final class MemberPerformanceTests: XCTestCase {
             from: calendar.date(byAdding: .month, value: -2, to: Date())!
         )
         XCTAssertTrue(consistency.allSatisfy { calendar.component(.weekday, from: $0.weekStarting) == 2 })
+    }
+
+    func testTC_MP21_ExerciseHistoryReturnsOneEntryPerSession() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let calendar = Calendar.current
+        let now = Date()
+        let earlierDate = calendar.date(byAdding: .day, value: -10, to: now)!
+        let laterDate = calendar.date(byAdding: .day, value: -5, to: now)!
+        let from = calendar.date(byAdding: .month, value: -6, to: now)!
+
+        let earlierSession = makeSession(date: earlierDate)
+        let earlierEntry = makeEntry(sessionId: earlierSession.id, exerciseId: freeSquatId)
+        _ = try test.memberPerformance.saveSession(
+            earlierSession,
+            entries: [earlierEntry],
+            sets: [earlierEntry.id: [makeSet(exerciseEntryId: earlierEntry.id, weight: 80.0, reps: 5)]]
+        )
+
+        let laterSession = makeSession(date: laterDate)
+        let laterEntry = makeEntry(sessionId: laterSession.id, exerciseId: freeSquatId)
+        _ = try test.memberPerformance.saveSession(
+            laterSession,
+            entries: [laterEntry],
+            sets: [laterEntry.id: [makeSet(exerciseEntryId: laterEntry.id, weight: 82.0, reps: 5)]]
+        )
+
+        let history = try test.memberPerformance.exerciseHistory(
+            memberId: testMemberId,
+            exerciseId: freeSquatId,
+            from: from
+        )
+
+        XCTAssertEqual(history.count, 2)
+        XCTAssertEqual(history[0].sessionDate, earlierDate)
+        XCTAssertEqual(history[1].sessionDate, laterDate)
+    }
+
+    func testTC_MP22_ExerciseHistorySelectsBestSetWhenMultipleSetsLogged() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let from = Calendar.current.date(byAdding: .month, value: -6, to: Date())!
+
+        let session = makeSession()
+        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [entry],
+            sets: [
+                entry.id: [
+                    makeSet(exerciseEntryId: entry.id, weight: 80.0, reps: 5),
+                    makeSet(exerciseEntryId: entry.id, weight: 85.0, reps: 5)
+                ]
+            ]
+        )
+
+        let history = try test.memberPerformance.exerciseHistory(
+            memberId: testMemberId,
+            exerciseId: freeSquatId,
+            from: from
+        )
+
+        XCTAssertEqual(history.count, 1)
+        XCTAssertEqual(history[0].set.weight, 85.0)
+        XCTAssertEqual(history[0].set.reps, 5)
+    }
+
+    func testTC_MP23_ExerciseHistoryMarksPBSetsCorrectly() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let from = Calendar.current.date(byAdding: .month, value: -6, to: Date())!
+
+        let session = makeSession()
+        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
+        let set = makeSet(exerciseEntryId: entry.id, weight: 85.0, reps: 5)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [entry],
+            sets: [entry.id: [set]]
+        )
+
+        let history = try test.memberPerformance.exerciseHistory(
+            memberId: testMemberId,
+            exerciseId: freeSquatId,
+            from: from
+        )
+
+        XCTAssertEqual(history.count, 1)
+        XCTAssertTrue(history[0].isPB)
+        XCTAssertEqual(history[0].set.id, set.id)
+    }
+
+    func testTC_MP24_ExerciseHistoryExcludesSessionsOutsideTheDateWindow() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let calendar = Calendar.current
+        let now = Date()
+        let eightMonthsAgo = calendar.date(byAdding: .month, value: -8, to: now)!
+        let twoMonthsAgo = calendar.date(byAdding: .month, value: -2, to: now)!
+        let sixMonthsAgo = calendar.date(byAdding: .month, value: -6, to: now)!
+
+        let oldSession = makeSession(date: eightMonthsAgo)
+        let oldEntry = makeEntry(sessionId: oldSession.id, exerciseId: freeSquatId)
+        _ = try test.memberPerformance.saveSession(
+            oldSession,
+            entries: [oldEntry],
+            sets: [oldEntry.id: [makeSet(exerciseEntryId: oldEntry.id, weight: 75.0, reps: 5)]]
+        )
+
+        let recentSession = makeSession(date: twoMonthsAgo)
+        let recentEntry = makeEntry(sessionId: recentSession.id, exerciseId: freeSquatId)
+        _ = try test.memberPerformance.saveSession(
+            recentSession,
+            entries: [recentEntry],
+            sets: [recentEntry.id: [makeSet(exerciseEntryId: recentEntry.id, weight: 80.0, reps: 5)]]
+        )
+
+        let history = try test.memberPerformance.exerciseHistory(
+            memberId: testMemberId,
+            exerciseId: freeSquatId,
+            from: sixMonthsAgo
+        )
+
+        XCTAssertEqual(history.count, 1)
+        XCTAssertEqual(history[0].sessionDate, twoMonthsAgo)
+        XCTAssertEqual(history[0].set.weight, 80.0)
+    }
+
+    func testTC_MP25_ExerciseHistoryReturnsEmptyWhenNoSessionsInWindow() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let calendar = Calendar.current
+        let now = Date()
+        let eightMonthsAgo = calendar.date(byAdding: .month, value: -8, to: now)!
+        let sixMonthsAgo = calendar.date(byAdding: .month, value: -6, to: now)!
+
+        let oldSession = makeSession(date: eightMonthsAgo)
+        let oldEntry = makeEntry(sessionId: oldSession.id, exerciseId: freeSquatId)
+        _ = try test.memberPerformance.saveSession(
+            oldSession,
+            entries: [oldEntry],
+            sets: [oldEntry.id: [makeSet(exerciseEntryId: oldEntry.id, weight: 75.0, reps: 5)]]
+        )
+
+        let history = try test.memberPerformance.exerciseHistory(
+            memberId: testMemberId,
+            exerciseId: freeSquatId,
+            from: sixMonthsAgo
+        )
+
+        XCTAssertTrue(history.isEmpty)
     }
 }
 #endif
