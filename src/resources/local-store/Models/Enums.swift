@@ -28,3 +28,8 @@ enum PBRule: String, Codable {
     case mostReps
     case bestWeightAndReps
 }
+
+enum PBEntryType: String, Codable {
+    case sessionDerived
+    case manualEntry
+}

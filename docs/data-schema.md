@@ -142,7 +142,8 @@ A PB record for a member against a specific exercise. Derived from Set data by M
 | id | UUID | No | Primary key |
 | memberId | UUID | No | Foreign key → UserIdentity.id |
 | exerciseId | UUID | No | Foreign key → Exercise.id |
-| setId | UUID | No | Foreign key → Set.id -- the set that achieved this PB |
+| setId | UUID | Yes | Foreign key → Set.id -- the set that achieved this PB. Nil for manual entries |
+| entryType | PBEntryType | No | See enums -- sessionDerived or manualEntry. Internal only, not shown to member |
 | weight | Double | Yes | Mirrors the achieving set's relevant value |
 | reps | Int | Yes | |
 | time | Double | Yes | |
@@ -156,10 +157,18 @@ A PB record for a member against a specific exercise. Derived from Set data by M
 - When a new PB is set, the existing `isCurrent` record is updated to false and a new record is inserted with `isCurrent: true`
 - PersonalBest records are never deleted
 - Only exercises where `category` is `pbExercise` generate PersonalBest records
+- `setId` is nil for manual entries -- `entryType` distinguishes the two paths
+- `entryType` is internal bookkeeping -- not displayed to members
 
 ---
 
 ## Enums
+
+### PBEntryType
+```
+sessionDerived    -- PB detected automatically from a logged set in a session
+manualEntry       -- PB entered directly by the member without a session
+```
 
 ### Role
 ```
