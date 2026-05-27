@@ -50,8 +50,8 @@
 
 | ID | Activity | Size | Depends On | Status | Notes |
 |---|---|---|---|---|---|
-| E1 | Define the exercise list and measurement types for phase 1 | M | -- | ⬜ | Requires domain input -- collaborative session needed |
-| E2 | Define PB rules per exercise type | M | E1 | ⬜ | Non-trivial -- multiple measurement types. Requires domain input |
+| E1 | Define the exercise list and measurement types for phase 1 | M | -- | ✅ | Requires domain input -- collaborative session needed |
+| E2 | Define PB rules per exercise type | M | E1 | ✅ | Non-trivial -- multiple measurement types. Requires domain input |
 | E3 | Build the Exercise Registry component | S | E2, C3 | ⬜ | Logic defined in E1/E2 -- build is straightforward |
 | E4 | Test PB rule evaluation against known scenarios | M | E3 | ⬜ | Needs scenario coverage across all exercise types |
 
@@ -122,7 +122,7 @@ Sessions are variable in length and intensity. Two to three sessions per week is
 | ID | Description | Severity | Status |
 |---|---|---|---|
 | R1 | Data schema (L2) must anticipate phase 2 centralisation or migration becomes costly | High | Open -- mitigated by treating L2 as a dedicated careful session |
-| R2 | Exercise definitions and PB rules (E1, E2) require domain expertise input -- cannot be completed without collaborative session | Medium | Open |
+| R2 | Exercise definitions and PB rules (E1, E2) require domain expertise input -- cannot be completed without collaborative session | Medium | Closed |
 | R3 | Access Control built minimally in phase 1 must remain extensible for multi-role phase 2 | Medium | Open -- mitigated by design |
 
 ---
@@ -134,13 +134,13 @@ Sessions are variable in length and intensity. Two to three sessions per week is
 | 1 | May 2026 | Design document completed. Architecture validated. Phase 1 scoped. Project document created | See decisions log | L1, then L2 as dedicated session |
 | 2 | May 2026 | L1, A1, A2, A3 | SwiftData selected for iOS 17+ local storage. SSH authentication configured for GitHub. | L2 -- data schema definition |
 | 3 | May 2026 | L2, L3 | Data schema defined and validated against all phase 1 use cases. Schema saved to docs/data-schema.md. | C1, P1 -- data layer interfaces |
+| 4 | May 2026 | E1, E2 | Exercise list defined. PB rules defined per exercise type. Schema updated: weightAndTime added to MeasurementType, bestWeightAndReps and minimumReps added. Seed data spec saved to docs/cursor-specs/E2-exercise-seed-data.md. | E3 -- build Exercise Registry |
 
 ---
 
 ## Next Session
 
-**Start here:** C1 -- Define the interface for reading exercise definitions  
-**In parallel:** P1 -- Define the interface for reading and writing session and PB data  
-**Note:** Both depend on L3 (complete). Can be worked concurrently.
+**Start here:** E3 -- Build the Exercise Registry component  
+**Note:** Logic is fully defined in E1/E2. Build should be straightforward.
 
 > Reminder: always provide both `gym-performance-system-design.md` and this document at the start of each session.
