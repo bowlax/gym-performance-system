@@ -39,12 +39,12 @@
 
 | ID | Activity | Size | Depends On | Status | Notes |
 |---|---|---|---|---|---|
-| C1 | Define the interface for reading exercise definitions | S | L3 | ⬜ | Read-only interface |
-| C2 | Build the Configuration Data Access component | S | C1 | ⬜ | Thin layer over Local Device Store |
-| C3 | Test Configuration Data Access | S | C2 | ⬜ | |
-| P1 | Define the interface for reading and writing session and PB data | M | L3 | ⬜ | Read and write, multiple data types |
-| P2 | Build the Performance Data Access component | M | P1 | ⬜ | |
-| P3 | Test Performance Data Access | S | P2 | ⬜ | |
+| C1 | Define the interface for reading exercise definitions | S | L3 | ✅ | Read-only interface |
+| C2 | Build the Configuration Data Access component | S | C1 | ✅ | Thin layer over Local Device Store |
+| C3 | Test Configuration Data Access | S | C2 | ✅ | |
+| P1 | Define the interface for reading and writing session and PB data | M | L3 | ✅ | Read and write, multiple data types |
+| P2 | Build the Performance Data Access component | M | P1 | ✅ | |
+| P3 | Test Performance Data Access | S | P2 | ✅ | |
 
 ### Exercise and PB Logic
 
@@ -135,12 +135,13 @@ Sessions are variable in length and intensity. Two to three sessions per week is
 | 2 | May 2026 | L1, A1, A2, A3 | SwiftData selected for iOS 17+ local storage. SSH authentication configured for GitHub. | L2 -- data schema definition |
 | 3 | May 2026 | L2, L3 | Data schema defined and validated against all phase 1 use cases. Schema saved to docs/data-schema.md. | C1, P1 -- data layer interfaces |
 | 4 | May 2026 | E1, E2 | Exercise list defined. PB rules defined per exercise type. Schema updated: weightAndTime added to MeasurementType, bestWeightAndReps and minimumReps added. Seed data spec saved to docs/cursor-specs/E2-exercise-seed-data.md. | E3 -- build Exercise Registry |
+| 5 | May 2026 | C1, C2, C3, P1, P2, P3 | SwiftData #Predicate does not support captured enum values -- filter in memory after fetch instead. ModelSet naming convention adopted to avoid Swift Set collision. @testable import used for test target access. | E3, E4 -- Exercise Registry |
 
 ---
 
 ## Next Session
 
 **Start here:** E3 -- Build the Exercise Registry component  
-**Note:** Logic is fully defined in E1/E2. Build should be straightforward.
+**Note:** E1 and E2 are complete. Logic and seed data are fully defined. Cursor instructions are in docs/cursor-specs/cursor-instructions-exercise-registry.md.
 
 > Reminder: always provide both `gym-performance-system-design.md` and this document at the start of each session.
