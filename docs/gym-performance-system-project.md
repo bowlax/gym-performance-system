@@ -59,10 +59,10 @@
 
 | ID | Activity | Size | Depends On | Status | Notes |
 |---|---|---|---|---|---|
-| MP1 | Define session recording and PB evaluation rules | M | E4, P3 | ⬜ | Core business logic -- needs precision before build |
-| MP2 | Define progression calculation logic | M | MP1 | ⬜ | What does progression mean, how is it calculated and displayed |
-| MP3 | Build the Member Performance component | L | MP2, A3 | ⬜ | Most complex component in phase 1 |
-| MP4 | Test Member Performance | L | MP3 | ⬜ | Broad scenario coverage -- session recording, PB detection, progression |
+| MP1 | Define session recording and PB evaluation rules | M | E4, P3 | ✅ | Core business logic -- needs precision before build |
+| MP2 | Define progression calculation logic | M | MP1 | ✅ | What does progression mean, how is it calculated and displayed |
+| MP3 | Build the Member Performance component | L | MP2, A3 | ✅ | Most complex component in phase 1 |
+| MP4 | Test Member Performance | L | MP3 | ✅ | Broad scenario coverage -- session recording, PB detection, progression |
 
 ### Client and Integration
 
@@ -137,12 +137,13 @@ Sessions are variable in length and intensity. Two to three sessions per week is
 | 4 | May 2026 | E1, E2 | Exercise list defined. PB rules defined per exercise type. Schema updated: weightAndTime added to MeasurementType, bestWeightAndReps and minimumReps added. Seed data spec saved to docs/cursor-specs/E2-exercise-seed-data.md. | E3 -- build Exercise Registry |
 | 5 | May 2026 | C1, C2, C3, P1, P2, P3 | SwiftData #Predicate does not support captured enum values -- filter in memory after fetch instead. ModelSet naming convention adopted to avoid Swift Set collision. @testable import used for test target access. | E3, E4 -- Exercise Registry |
 | 6 | May 2026 | E1, E2, E3, E4 | Conditioning exercises deferred to phase 2. bestWeightAndReps PB rule defined with per-exercise minimum rep threshold. weightAndTime measurement type added for plank. Plank PB rule (heaviestWeight) flagged for coach confirmation. | MP1 -- Define session recording and PB evaluation rules |
+| 7 | May 2026 | MP1, MP2, MP3, MP4 | PersonalBest.setId made optional to support manual PB entry. PBEntryType enum added (sessionDerived, manualEntry). Manual PB backdating deferred to phase 2. Progression default window is 6 months, passed as parameter. | MS1 -- Define screen flows and interactions |
 
 ---
 
 ## Next Session
 
-**Start here:** MP1 -- Define session recording and PB evaluation rules  
-**Note:** Core business logic. Needs precision before build. Depends on E4 and P3 (both complete).
+**Start here:** MS1 -- Define screen flows and interactions  
+**Note:** This is a Claude design activity. Screen flows and interactions must be defined here before Lovable is used to build MS2, MS3, and MS4.
 
 > Reminder: always provide both `gym-performance-system-design.md` and this document at the start of each session.
