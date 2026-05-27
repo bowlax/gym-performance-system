@@ -15,3 +15,4 @@ xcuserdata/
 *.swp
 .swiftpm/
 .build/
+tools/
