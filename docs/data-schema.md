@@ -47,15 +47,17 @@ Defines an exercise, how it is measured, and -- for PB exercises -- what constit
 | measurementType | MeasurementType | No | See enums -- determines which Set fields are used |
 | pbRule | PBRule | Yes | Nil for conditioning exercises |
 | targetReps | Int | Yes | Populated only when pbRule is heaviestWeightAtReps |
+| minimumReps | Int | Yes | Populated only when pbRule is bestWeightAndReps |
 | parentExerciseId | UUID | Yes | Nil unless this exercise is a variant of another. References Exercise.id |
 | displayOrder | Int | No | Controls ordering in exercise lists |
 | isActive | Bool | No | False for retired exercises. Never deleted |
 | createdAt | Date | No | |
 
 **Rules:**
-- If `category` is `conditioning`, `pbRule` and `targetReps` must be nil
+- If `category` is `conditioning`, `pbRule`, `targetReps` and `minimumReps` must be nil
 - If `category` is `pbExercise`, `pbRule` must be populated
 - If `pbRule` is `heaviestWeightAtReps`, `targetReps` must be populated
+- If `pbRule` is `bestWeightAndReps`, `minimumReps` must be populated
 - Only exercises where `isActive` is true appear in session logging
 
 ---
@@ -123,6 +125,7 @@ One logged set within an exercise entry. Members log their best one or best few 
 | MeasurementType | weight | reps | time | distance |
 |---|---|---|---|---|
 | weightAndReps | ✅ | ✅ | -- | -- |
+| weightAndTime | ✅ | -- | ✅ | -- |
 | timeOnly | -- | -- | ✅ | -- |
 | distanceOnly | -- | -- | -- | ✅ |
 | repsOnly | -- | ✅ | -- | -- |
@@ -174,16 +177,20 @@ conditioning    -- logged in sessions for tracking. No PB defined or evaluated
 ### MeasurementType
 ```
 weightAndReps       -- e.g. Back Squat: 100kg x 5 reps
-timeOnly            -- e.g. 400m Run: 1:32
-distanceOnly        -- e.g. Rowing: 2000m
-repsOnly            -- e.g. Pull-ups: 15 reps
+weightAndTime       -- e.g. Plank: 20kg held for 45 seconds
+timeOnly            -- e.g. Ski 500m: 1:52
+distanceOnly        -- e.g. Bike: 420m in 60 seconds
+repsOnly            -- e.g. Chin-ups: 15 reps
 weightAndDistance   -- e.g. Weighted Carry: 40kg x 20m
 ```
 
 ### PBRule
 ```
-heaviestWeightAtReps    -- heaviest weight achieved at exactly targetReps reps
-heaviestWeight          -- heaviest weight regardless of rep count
+heaviestWeightAtReps    -- heaviest weight achieved at exactly targetReps reps. Rep count is fixed
+heaviestWeight          -- heaviest weight regardless of reps or time
+bestWeightAndReps       -- moving weight floor with minimum rep threshold (see minimumReps on Exercise)
+                        -- new PB when weight exceeds current best at or above minimumReps, OR
+                        -- reps exceed current best at or above current best weight and minimumReps
 fastestTime             -- lowest time value
 longestDistance         -- highest distance value
 mostReps                -- highest rep count
