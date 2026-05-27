@@ -1,2 +1,17 @@
-cursor-specs/cursor-instructions-data-layer.md
+docs/cursor-specs/cursor-instructions-data-layer.md
 .DS_Store
+
+# Xcode / SwiftPM
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.moved-aside
+*.xcscmblueprint
+*.xccheckout
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.swp
+.swiftpm/
+.build/
