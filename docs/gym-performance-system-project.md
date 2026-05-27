@@ -52,8 +52,8 @@
 |---|---|---|---|---|---|
 | E1 | Define the exercise list and measurement types for phase 1 | M | -- | ✅ | Requires domain input -- collaborative session needed |
 | E2 | Define PB rules per exercise type | M | E1 | ✅ | Non-trivial -- multiple measurement types. Requires domain input |
-| E3 | Build the Exercise Registry component | S | E2, C3 | ⬜ | Logic defined in E1/E2 -- build is straightforward |
-| E4 | Test PB rule evaluation against known scenarios | M | E3 | ⬜ | Needs scenario coverage across all exercise types |
+| E3 | Build the Exercise Registry component | S | E2, C3 | ✅ | Logic defined in E1/E2 -- build is straightforward |
+| E4 | Test PB rule evaluation against known scenarios | M | E3 | ✅ | Needs scenario coverage across all exercise types |
 
 ### Core Business Logic
 
@@ -136,12 +136,13 @@ Sessions are variable in length and intensity. Two to three sessions per week is
 | 3 | May 2026 | L2, L3 | Data schema defined and validated against all phase 1 use cases. Schema saved to docs/data-schema.md. | C1, P1 -- data layer interfaces |
 | 4 | May 2026 | E1, E2 | Exercise list defined. PB rules defined per exercise type. Schema updated: weightAndTime added to MeasurementType, bestWeightAndReps and minimumReps added. Seed data spec saved to docs/cursor-specs/E2-exercise-seed-data.md. | E3 -- build Exercise Registry |
 | 5 | May 2026 | C1, C2, C3, P1, P2, P3 | SwiftData #Predicate does not support captured enum values -- filter in memory after fetch instead. ModelSet naming convention adopted to avoid Swift Set collision. @testable import used for test target access. | E3, E4 -- Exercise Registry |
+| 6 | May 2026 | E1, E2, E3, E4 | Conditioning exercises deferred to phase 2. bestWeightAndReps PB rule defined with per-exercise minimum rep threshold. weightAndTime measurement type added for plank. Plank PB rule (heaviestWeight) flagged for coach confirmation. | MP1 -- Define session recording and PB evaluation rules |
 
 ---
 
 ## Next Session
 
-**Start here:** E3 -- Build the Exercise Registry component  
-**Note:** E1 and E2 are complete. Logic and seed data are fully defined. Cursor instructions are in docs/cursor-specs/cursor-instructions-exercise-registry.md.
+**Start here:** MP1 -- Define session recording and PB evaluation rules  
+**Note:** Core business logic. Needs precision before build. Depends on E4 and P3 (both complete).
 
 > Reminder: always provide both `gym-performance-system-design.md` and this document at the start of each session.
