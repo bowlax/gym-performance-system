@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ExerciseCard: View {
     @Binding var draft: DraftExercise
+    let currentPB: PersonalBestModel?
     let onRemove: () -> Void
 
     private let maxSets = 3
@@ -18,6 +19,10 @@ struct ExerciseCard: View {
                 }
                 .buttonStyle(.borderless)
             }
+
+            Text(currentPBText)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
 
             ForEach(Array(draft.sets.enumerated()), id: \.offset) { index, _ in
                 HStack(spacing: 8) {
@@ -45,6 +50,13 @@ struct ExerciseCard: View {
             Color(.secondarySystemGroupedBackground),
             in: RoundedRectangle(cornerRadius: 12)
         )
+    }
+
+    private var currentPBText: String {
+        if let currentPB {
+            return "Current PB: \(PBFormatter.formatPB(currentPB, exercise: draft.exercise))"
+        }
+        return "No PB yet"
     }
 }
 
@@ -231,6 +243,6 @@ private struct StatefulPreview: View {
     @State var draft = DraftExercise(exercise: ExerciseModel.seedData[0])
 
     var body: some View {
-        ExerciseCard(draft: $draft, onRemove: {})
+        ExerciseCard(draft: $draft, currentPB: nil, onRemove: {})
     }
 }

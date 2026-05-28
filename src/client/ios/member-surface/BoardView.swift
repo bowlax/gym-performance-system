@@ -59,6 +59,10 @@ struct BoardView: View {
 
     private var list: some View {
         List {
+            Section {
+                consistencySection
+            }
+
             if !hasAnyPB {
                 Text("Tap any exercise to log your first PB")
                     .foregroundStyle(.secondary)
@@ -76,10 +80,6 @@ struct BoardView: View {
                             pbEntryExerciseId = exercise.id
                         }
                     }
-            }
-
-            Section {
-                consistencySection
             }
         }
         .listStyle(.plain)

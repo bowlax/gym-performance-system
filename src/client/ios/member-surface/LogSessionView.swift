@@ -11,9 +11,10 @@ struct LogSessionView: View {
 
     @State private var showPicker = false
     @State private var showHistory = false
-    @State private var celebrationPBs: [CelebrationPB] = []
+    @State private var celebrationPBs: [PersonalBestModel] = []
     @State private var showCelebration = false
     @State private var saveError: String?
+    @State private var pbByExerciseId: [UUID: PersonalBestModel] = [:]
 
     private let today = Date()
 
@@ -48,7 +49,10 @@ struct LogSessionView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach($draftExercises) { $draft in
-                            ExerciseCard(draft: $draft) {
+                            ExerciseCard(
+                                draft: $draft,
+                                currentPB: pbByExerciseId[draft.exercise.id]
+                            ) {
                                 draftExercises.removeAll { $0.id == draft.id }
                             }
                             .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
@@ -101,8 +105,21 @@ struct LogSessionView: View {
                 dependencies.refresh()
                 switchToBoard()
             }) {
-                PBCelebrationSheet(pbs: celebrationPBs)
+                PBCelebrationSheet(newPBs: celebrationPBs)
             }
+            .task(id: dependencies.refreshID) {
+                await loadCurrentPBs()
+            }
+        }
+    }
+
+    @MainActor
+    private func loadCurrentPBs() async {
+        do {
+            let pbs = try dependencies.memberPerformance.currentPBs(memberId: dependencies.memberId)
+            pbByExerciseId = Dictionary(uniqueKeysWithValues: pbs.map { ($0.exerciseId, $0) })
+        } catch {
+            pbByExerciseId = [:]
         }
     }
 
@@ -144,20 +161,7 @@ struct LogSessionView: View {
                 dependencies.refresh()
                 switchToBoard()
             } else {
-                var celebration: [CelebrationPB] = []
-                for pb in result.newPBs {
-                    guard let exercise = try dependencies.exerciseRegistry.exercise(id: pb.exerciseId) else {
-                        continue
-                    }
-                    celebration.append(
-                        CelebrationPB(
-                            id: pb.id,
-                            exerciseName: exercise.name,
-                            formattedValue: PBFormatter.formatPB(pb, exercise: exercise)
-                        )
-                    )
-                }
-                celebrationPBs = celebration
+                celebrationPBs = result.newPBs
                 showCelebration = true
             }
         } catch {
@@ -173,8 +177,10 @@ struct LogSessionView: View {
 }
 
 struct PBCelebrationSheet: View {
-    let pbs: [CelebrationPB]
+    let newPBs: [PersonalBestModel]
+
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppDependencies.self) private var dependencies
 
     var body: some View {
         VStack(spacing: 24) {
@@ -183,9 +189,9 @@ struct PBCelebrationSheet: View {
                 .multilineTextAlignment(.center)
                 .padding(.top, 32)
 
-            VStack(spacing: 12) {
-                ForEach(pbs) { pb in
-                    Text(pb.displayLine)
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(newPBs, id: \.id) { pb in
+                    Text(rowText(for: pb))
                         .font(.body.monospacedDigit())
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding()
@@ -209,6 +215,14 @@ struct PBCelebrationSheet: View {
             .padding()
         }
         .presentationDetents([.medium, .large])
+    }
+
+    private func rowText(for pb: PersonalBestModel) -> String {
+        guard let exercise = try? dependencies.exerciseRegistry.exercise(id: pb.exerciseId) else {
+            return "• Unknown exercise"
+        }
+        let formattedValue = PBFormatter.formatPB(pb, exercise: exercise)
+        return "• \(exercise.name): \(formattedValue)"
     }
 }
 
