@@ -14,7 +14,7 @@
 
 - **UUID primary keys throughout** -- enables collision-free merging when data centralises in phase 2. Never use auto-incrementing integers.
 - **Soft fields for phase 2 data** -- optional fields anticipated for phase 2 (e.g. `parentExerciseId`) are present but unused in phase 1.
-- **No deletes** -- records are never physically deleted. Members may edit but not delete sessions or sets. This protects PB history integrity.
+- **Session deletion with cascade** -- sessions may be deleted. Deletion cascades to exercise entries, sets, and associated personal bests. Previous PBs are restored where they exist. Personal bests are otherwise never deleted.
 - **Nullable measurement fields** -- Set carries nullable fields for all measurement types. The Exercise.measurementType determines which fields are relevant for any given exercise.
 - **PB evaluation is exercise-driven** -- PB rules live on the Exercise entity. Member Performance consults Exercise before evaluating any set.
 
@@ -78,7 +78,8 @@ A training session on a specific date. The top-level container for all exercise 
 
 **Rules:**
 - One session per member per date is the expected pattern, but not enforced at schema level
-- Sessions may be edited but never deleted
+- Sessions may be edited
+- Sessions may be deleted. Deletion cascades to ExerciseEntries, Sets, and associated PersonalBest records. Previous PBs are restored where they exist.
 
 ---
 
@@ -95,7 +96,7 @@ One exercise performed within a session. A session contains one or more exercise
 | updatedAt | Date | No | Updated on any edit |
 
 **Rules:**
-- An exercise entry may not be deleted, only edited
+- Exercise entries are removed when their parent session is deleted
 - Each exercise entry must have at least one associated Set
 
 ---

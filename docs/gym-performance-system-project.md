@@ -2,7 +2,7 @@
 
 **Methodology:** Righting Software (The Method)  
 **Phase:** 1 -- iOS, On-Device, Members Only  
-**Status:** Ready to build  
+**Status:** Phase 1 complete -- 76 tests passing  
 **Last updated:** May 2026
 
 > At the start of every session, provide both this document and `gym-performance-system-design.md` as context.  
@@ -68,11 +68,11 @@
 
 | ID | Activity | Size | Depends On | Status | Notes |
 |---|---|---|---|---|---|
-| MS1 | Define screen flows and interactions for phase 1 | M | MP2 | ⬜ | Design activity -- use Lovable for exploration |
-| MS2 | Build the session logging screen | M | MS1, MP4 | ⬜ | |
-| MS3 | Build the PB tracking and display screen | M | MS1, MP4 | ⬜ | |
-| MS4 | Build the progression view screen | M | MS1, MP4 | ⬜ | |
-| MS5 | Integration test -- full use case walkthrough end to end | L | MS2, MS3, MS4 | ⬜ | Walk every member use case through the built system |
+| MS1 | Define screen flows and interactions for phase 1 | M | MP2 | ✅ | Design activity -- use Lovable for exploration |
+| MS2 | Build the session logging screen | M | MS1, MP4 | ✅ | |
+| MS3 | Build the PB tracking and display screen | M | MS1, MP4 | ✅ | |
+| MS4 | Build the progression view screen | M | MS1, MP4 | ✅ | |
+| MS5 | Integration test -- full use case walkthrough end to end | L | MS2, MS3, MS4 | ✅ | Walk every member use case through the built system |
 
 ---
 
@@ -138,12 +138,18 @@ Sessions are variable in length and intensity. Two to three sessions per week is
 | 5 | May 2026 | C1, C2, C3, P1, P2, P3 | SwiftData #Predicate does not support captured enum values -- filter in memory after fetch instead. ModelSet naming convention adopted to avoid Swift Set collision. @testable import used for test target access. | E3, E4 -- Exercise Registry |
 | 6 | May 2026 | E1, E2, E3, E4 | Conditioning exercises deferred to phase 2. bestWeightAndReps PB rule defined with per-exercise minimum rep threshold. weightAndTime measurement type added for plank. Plank PB rule (heaviestWeight) flagged for coach confirmation. | MP1 -- Define session recording and PB evaluation rules |
 | 7 | May 2026 | MP1, MP2, MP3, MP4 | PersonalBest.setId made optional to support manual PB entry. PBEntryType enum added (sessionDerived, manualEntry). Manual PB backdating deferred to phase 2. Progression default window is 6 months, passed as parameter. | MS1 -- Define screen flows and interactions |
+| 8 | May 2026 | MS1, MS2, MS3, MS4, MS5 | Session deletion added with cascading PB restoration. weightAndTime exercises display time in seconds (e.g. 45s). timeOnly exercises display time in mm:ss (e.g. 1:52). Fixed rep exercises show pre-filled locked reps field. Session consistency chart moved to Board screen top. Progression screen shows all entries including manual PBs. Conditioning exercises confirmed out of scope for phase 1. | Phase 1 complete -- begin phase 2 scoping |
 
 ---
 
 ## Next Session
 
-**Start here:** MS1 -- Define screen flows and interactions  
-**Note:** This is a Claude design activity. Screen flows and interactions must be defined here before Lovable is used to build MS2, MS3, and MS4.
+**Phase 1 is complete.** See **Phase 2** below to begin scoping the next phase.
 
 > Reminder: always provide both `gym-performance-system-design.md` and this document at the start of each session.
+
+---
+
+## Phase 2
+
+Not yet scoped. Return to Claude with both context documents to begin phase 2 design using the same methodology.
