@@ -58,4 +58,7 @@ protocol MemberPerformance {
         exerciseId: UUID,
         from: Date
     ) throws -> [ExerciseSetSummary]
+
+    /// Deletes a session and cascades removal of entries, sets, and affected PBs.
+    func deleteSession(id: UUID, memberId: UUID) throws
 }

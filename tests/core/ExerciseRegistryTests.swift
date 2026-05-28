@@ -285,7 +285,7 @@ struct ExerciseRegistryTests {
     @Test
     func testTC_E19_LongerDistanceIsAPB() {
         let registry = try! makeRegistry()
-        let exercise = exercise(named: "Bike")
+        let exercise = exercise(named: "Bike 60s")
         let currentPB = makeCurrentPB(exerciseId: exercise.id, distance: 400.0)
         let set = makeSet(distance: 420.0)
 
@@ -297,7 +297,7 @@ struct ExerciseRegistryTests {
     @Test
     func testTC_E20_ShorterDistanceIsNotAPB() {
         let registry = try! makeRegistry()
-        let exercise = exercise(named: "Bike")
+        let exercise = exercise(named: "Bike 60s")
         let currentPB = makeCurrentPB(exerciseId: exercise.id, distance: 400.0)
         let set = makeSet(distance: 390.0)
 
@@ -490,14 +490,14 @@ final class ExerciseRegistryTests: XCTestCase {
 
     func testTC_E19_LongerDistanceIsAPB() throws {
         let registry = try makeRegistry()
-        let exercise = exercise(named: "Bike")
+        let exercise = exercise(named: "Bike 60s")
         let currentPB = makeCurrentPB(exerciseId: exercise.id, distance: 400.0)
         XCTAssertTrue(registry.isPB(set: makeSet(distance: 420.0), exercise: exercise, currentPB: currentPB))
     }
 
     func testTC_E20_ShorterDistanceIsNotAPB() throws {
         let registry = try makeRegistry()
-        let exercise = exercise(named: "Bike")
+        let exercise = exercise(named: "Bike 60s")
         let currentPB = makeCurrentPB(exerciseId: exercise.id, distance: 400.0)
         XCTAssertFalse(registry.isPB(set: makeSet(distance: 390.0), exercise: exercise, currentPB: currentPB))
     }

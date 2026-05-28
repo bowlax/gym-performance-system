@@ -118,5 +118,36 @@ final class SwiftDataPerformanceDataAccess: PerformanceDataAccess {
             try context.save()
         }
     }
+
+    func removeSession(_ session: SessionModel) throws {
+        context.delete(session)
+        try context.save()
+    }
+
+    func removeExerciseEntry(_ entry: ExerciseEntryModel) throws {
+        context.delete(entry)
+        try context.save()
+    }
+
+    func removeSet(_ set: ModelSet) throws {
+        context.delete(set)
+        try context.save()
+    }
+
+    func removePersonalBest(_ pb: PersonalBestModel) throws {
+        context.delete(pb)
+        try context.save()
+    }
+
+    func setPersonalBestCurrent(id: UUID, isCurrent: Bool) throws {
+        let descriptor = FetchDescriptor<PersonalBestModel>(
+            predicate: #Predicate { $0.id == id }
+        )
+
+        if let pb = try context.fetch(descriptor).first {
+            pb.isCurrent = isCurrent
+            try context.save()
+        }
+    }
 }
 

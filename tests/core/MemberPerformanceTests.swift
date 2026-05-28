@@ -840,6 +840,88 @@ struct MemberPerformanceTests {
 
         #expect(history.isEmpty)
     }
+
+    // MARK: -- Session Deletion
+
+    @Test
+    func testTC_MP26_DeleteSessionWithNoPBsRemovesSessionAndEntries() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+
+        let session = makeSession()
+        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
+        _ = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 100.0,
+            reps: 5
+        )
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [entry],
+            sets: [entry.id: [makeSet(exerciseEntryId: entry.id, weight: 90.0, reps: 5)]]
+        )
+
+        try test.memberPerformance.deleteSession(id: session.id, memberId: testMemberId)
+
+        #expect(try test.performanceDataAccess.fetchSession(id: session.id) == nil)
+        #expect(try test.performanceDataAccess.fetchExerciseEntries(sessionId: session.id).isEmpty)
+        #expect(try test.performanceDataAccess.fetchSets(exerciseEntryId: entry.id).isEmpty)
+    }
+
+    @Test
+    func testTC_MP27_DeleteSessionContainingPBRemovesPBWhenNoHistory() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+
+        let session = makeSession()
+        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
+        let set = makeSet(exerciseEntryId: entry.id, weight: 85.0, reps: 5)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [entry],
+            sets: [entry.id: [set]]
+        )
+
+        try test.memberPerformance.deleteSession(id: session.id, memberId: testMemberId)
+
+        #expect(try test.performanceDataAccess.fetchSession(id: session.id) == nil)
+        #expect(try test.performanceDataAccess.fetchCurrentPB(memberId: testMemberId, exerciseId: freeSquatId) == nil)
+        #expect(try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId).isEmpty)
+    }
+
+    @Test
+    func testTC_MP28_DeleteSessionContainingPBRestoresPreviousPB() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+
+        let oldPB = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 80.0,
+            reps: 5,
+            isCurrent: false
+        )
+
+        let session = makeSession()
+        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [entry],
+            sets: [entry.id: [makeSet(exerciseEntryId: entry.id, weight: 85.0, reps: 5)]]
+        )
+
+        try test.memberPerformance.deleteSession(id: session.id, memberId: testMemberId)
+
+        #expect(try test.performanceDataAccess.fetchSession(id: session.id) == nil)
+        let currentPB = try test.performanceDataAccess.fetchCurrentPB(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+        #expect(currentPB?.id == oldPB.id)
+        #expect(currentPB?.isCurrent == true)
+        #expect(currentPB?.weight == 80.0)
+    }
 }
 
 #else
@@ -1387,6 +1469,82 @@ final class MemberPerformanceTests: XCTestCase {
         )
 
         XCTAssertTrue(history.isEmpty)
+    }
+
+    func testTC_MP26_DeleteSessionWithNoPBsRemovesSessionAndEntries() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+
+        let session = makeSession()
+        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
+        _ = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 100.0,
+            reps: 5
+        )
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [entry],
+            sets: [entry.id: [makeSet(exerciseEntryId: entry.id, weight: 90.0, reps: 5)]]
+        )
+
+        try test.memberPerformance.deleteSession(id: session.id, memberId: testMemberId)
+
+        XCTAssertNil(try test.performanceDataAccess.fetchSession(id: session.id))
+        XCTAssertTrue(try test.performanceDataAccess.fetchExerciseEntries(sessionId: session.id).isEmpty)
+        XCTAssertTrue(try test.performanceDataAccess.fetchSets(exerciseEntryId: entry.id).isEmpty)
+    }
+
+    func testTC_MP27_DeleteSessionContainingPBRemovesPBWhenNoHistory() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+
+        let session = makeSession()
+        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [entry],
+            sets: [entry.id: [makeSet(exerciseEntryId: entry.id, weight: 85.0, reps: 5)]]
+        )
+
+        try test.memberPerformance.deleteSession(id: session.id, memberId: testMemberId)
+
+        XCTAssertNil(try test.performanceDataAccess.fetchSession(id: session.id))
+        XCTAssertNil(try test.performanceDataAccess.fetchCurrentPB(memberId: testMemberId, exerciseId: freeSquatId))
+        XCTAssertTrue(try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId).isEmpty)
+    }
+
+    func testTC_MP28_DeleteSessionContainingPBRestoresPreviousPB() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+
+        let oldPB = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 80.0,
+            reps: 5,
+            isCurrent: false
+        )
+
+        let session = makeSession()
+        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [entry],
+            sets: [entry.id: [makeSet(exerciseEntryId: entry.id, weight: 85.0, reps: 5)]]
+        )
+
+        try test.memberPerformance.deleteSession(id: session.id, memberId: testMemberId)
+
+        XCTAssertNil(try test.performanceDataAccess.fetchSession(id: session.id))
+        let currentPB = try test.performanceDataAccess.fetchCurrentPB(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+        XCTAssertEqual(currentPB?.id, oldPB.id)
+        XCTAssertTrue(currentPB?.isCurrent == true)
+        XCTAssertEqual(currentPB?.weight, 80.0)
     }
 }
 #endif

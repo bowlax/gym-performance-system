@@ -154,7 +154,7 @@ extension ExerciseModel {
             ),
             ExerciseModel(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000014")!,
-                name: "Overhead Pull-downs",
+                name: "Pulldown",
                 category: .pbExercise,
                 measurementType: .weightAndReps,
                 pbRule: .bestWeightAndReps,
@@ -221,7 +221,7 @@ extension ExerciseModel {
 
             ExerciseModel(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000019")!,
-                name: "Bike",
+                name: "Bike 60s",
                 category: .pbExercise,
                 measurementType: .distanceOnly,
                 pbRule: .longestDistance,

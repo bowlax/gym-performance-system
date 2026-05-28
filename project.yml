@@ -30,6 +30,12 @@ targets:
       - path: src/resources/local-store
         excludes:
           - "**/*.md"
+      - path: src/client/ios/member-surface
+        excludes:
+          - "**/*.md"
+      - path: src/utilities/access-control
+        excludes:
+          - "**/*.md"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.gymperformance.GymPerformance

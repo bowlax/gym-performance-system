@@ -6,6 +6,7 @@ enum MemberPerformanceError: Error, Equatable {
     case invalidExercise(UUID)
     case inactiveExercise(UUID)
     case invalidMeasurementFields(MeasurementType)
+    case sessionNotFound(UUID)
 }
 
 final class DefaultMemberPerformance: MemberPerformance {
@@ -272,6 +273,57 @@ final class DefaultMemberPerformance: MemberPerformance {
         }
 
         return history
+    }
+
+    func deleteSession(id: UUID, memberId: UUID) throws {
+        guard let session = try performanceDataAccess.fetchSession(id: id) else {
+            throw MemberPerformanceError.sessionNotFound(id)
+        }
+
+        guard session.memberId == memberId else {
+            throw MemberPerformanceError.sessionNotFound(id)
+        }
+
+        guard let store = performanceDataAccess as? SwiftDataPerformanceDataAccess else {
+            throw MemberPerformanceError.sessionNotFound(id)
+        }
+
+        let entries = try performanceDataAccess.fetchExerciseEntries(sessionId: id)
+
+        for entry in entries {
+            let sets = try performanceDataAccess.fetchSets(exerciseEntryId: entry.id)
+
+            for set in sets {
+                try handlePersonalBestForDeletedSet(
+                    set: set,
+                    memberId: memberId,
+                    exerciseId: entry.exerciseId,
+                    store: store
+                )
+                try store.removeSet(set)
+            }
+
+            try store.removeExerciseEntry(entry)
+        }
+
+        try store.removeSession(session)
+    }
+
+    private func handlePersonalBestForDeletedSet(
+        set: ModelSet,
+        memberId: UUID,
+        exerciseId: UUID,
+        store: SwiftDataPerformanceDataAccess
+    ) throws {
+        let allPBs = try performanceDataAccess.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
+        guard let pb = allPBs.first(where: { $0.setId == set.id }) else { return }
+
+        let others = allPBs.filter { $0.id != pb.id }
+        try store.removePersonalBest(pb)
+
+        if let previous = others.max(by: { $0.achievedAt < $1.achievedAt }) {
+            try store.setPersonalBestCurrent(id: previous.id, isCurrent: true)
+        }
     }
 
     private func bestSet(from sets: [ModelSet], exercise: ExerciseModel) -> ModelSet? {
