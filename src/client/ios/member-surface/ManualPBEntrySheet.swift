@@ -17,50 +17,58 @@ struct ManualPBEntrySheet: View {
         case error(String)
     }
 
+    private var canSave: Bool {
+        draft.manualPBValues(for: exercise) != nil
+    }
+
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    if let currentPB {
-                        Text("Current PB: \(PBFormatter.formatPB(currentPB, exercise: exercise))")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("No PB recorded yet")
-                            .foregroundStyle(.secondary)
-                    }
-                }
+            VStack(spacing: 0) {
+                Capsule()
+                    .fill(Color(.tertiarySystemFill))
+                    .frame(width: 36, height: 4)
+                    .padding(.top, 8)
 
-                Section {
-                    SetInputRow(value: $draft, exercise: exercise)
-                }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: .sectionSpacing) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(exercise.name)
+                                .font(.system(.title3, design: .rounded).weight(.semibold))
 
-                if let feedback {
-                    Section {
-                        switch feedback {
-                        case .success:
-                            Label("New PB saved", systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                        case .notPB(let current):
-                            Text("This doesn't beat your current PB of \(current). Not saved.")
-                                .foregroundStyle(.secondary)
-                        case .error(let message):
-                            Text(message)
-                                .foregroundStyle(.red)
+                            if let currentPB {
+                                Text("Current PB")
+                                    .sectionLabelStyle()
+                                Text(PBFormatter.formatPB(currentPB, exercise: exercise))
+                                    .pbValueStyle(size: 28)
+                                    .foregroundStyle(Color.wolfBlue)
+                            } else {
+                                Text("No PB recorded yet")
+                                    .captionLabelStyle()
+                            }
                         }
-                    }
-                }
 
-                Section {
-                    Button("Save PB") { save() }
-                        .frame(maxWidth: .infinity)
-                        .bold()
+                        VStack(alignment: .leading, spacing: .cardSpacing) {
+                            Text("New PB")
+                                .sectionLabelStyle()
+                            SetInputRow(value: $draft, exercise: exercise)
+                        }
+                        .standardCard()
+
+                        if let feedback {
+                            feedbackView(for: feedback)
+                        }
+
+                        Button("Save PB") { save() }
+                            .primaryButtonStyle(isEnabled: canSave)
+                            .disabled(!canSave)
+                    }
+                    .padding()
                 }
             }
-            .navigationTitle(exercise.name)
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
+                        .foregroundStyle(Color.wolfBlue)
                 }
             }
             .onAppear {
@@ -69,6 +77,34 @@ struct ManualPBEntrySheet: View {
             .task(id: dependencies.refreshID) {
                 await loadCurrentPB()
             }
+        }
+    }
+
+    @ViewBuilder
+    private func feedbackView(for feedback: Feedback) -> some View {
+        switch feedback {
+        case .success:
+            Label("New PB saved", systemImage: "checkmark.circle.fill")
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(.green)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .standardCard()
+        case .notPB(let current):
+            Label {
+                Text("This doesn't beat your current PB of \(current). Not saved.")
+            } icon: {
+                Image(systemName: "info.circle")
+            }
+            .font(.system(.subheadline, design: .rounded))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .standardCard()
+        case .error(let message):
+            Text(message)
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .standardCard()
         }
     }
 

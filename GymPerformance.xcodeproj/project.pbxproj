@@ -13,6 +13,7 @@
 		12C7B93C6A642AD3A3885640 /* ProgressionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4D416316E2F3EA30C65D30B /* ProgressionView.swift */; };
 		208379842571284F7C4A175C /* ManualPBEntrySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D6826BD4BBC66947633FE5 /* ManualPBEntrySheet.swift */; };
 		2187E5B4EB726C8B44AEAF11 /* MemberPerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C2AC98914E314222E077351 /* MemberPerformanceTests.swift */; };
+		302111D4D6857443A17DFCEF /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56B4BE2055C58C5037634E8F /* DesignSystem.swift */; };
 		32BA60677699E54CF5DC8DC0 /* MemberPerformanceTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDA2A879D67328015BA268BB /* MemberPerformanceTypes.swift */; };
 		451E50C20109698A453EA588 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA27300B3318E79C840C0BEF /* OnboardingView.swift */; };
 		474C7C8FFB4F669B4097E166 /* SwiftDataPerformanceDataAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3FA96B5D0EA3ACD0AA00F2B /* SwiftDataPerformanceDataAccess.swift */; };
@@ -43,6 +44,7 @@
 		D6D49D0469C217823ED564C8 /* PersonalBestModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36BE2728A6BDA7604895E84B /* PersonalBestModel.swift */; };
 		DB997FFBF98C206DF2DEA2FC /* GymPerformanceTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13B6A7CFE878E48B3B39878C /* GymPerformanceTabView.swift */; };
 		DCAAADA5EF40F9051150B1F5 /* ExerciseCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 528062A893B50BCF8A06D050 /* ExerciseCard.swift */; };
+		E8AC4EEC9BA76336E430BC15 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DC5E7D316524B668207E5F80 /* Assets.xcassets */; };
 		EB1CBE450FA33FA413032118 /* ConfigurationDataAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132DEDFB8CAF5526D016FC6D /* ConfigurationDataAccess.swift */; };
 		F0414934551B76A7E486A151 /* Enums.swift in Sources */ = {isa = PBXBuildFile; fileRef = 790FCF30B8E4AFEBE2685A3E /* Enums.swift */; };
 		F9D2E81ABEA726BE726C293B /* GymPerformanceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C54D29598A13B60B67B7065 /* GymPerformanceApp.swift */; };
@@ -76,6 +78,7 @@
 		41FB71DACC7EE243EEAF2E60 /* ExerciseSeedData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseSeedData.swift; sourceTree = "<group>"; };
 		4CB185095E8EC33A1B97F644 /* TestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestHelpers.swift; sourceTree = "<group>"; };
 		528062A893B50BCF8A06D050 /* ExerciseCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseCard.swift; sourceTree = "<group>"; };
+		56B4BE2055C58C5037634E8F /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		577FD312811613515036B584 /* GymPerformance.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GymPerformance.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		57A44DA68CCF7E29D0D5988E /* AppDependencies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDependencies.swift; sourceTree = "<group>"; };
 		5915C45DAF68D4D12004DA65 /* ExerciseRegistryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseRegistryTests.swift; sourceTree = "<group>"; };
@@ -98,6 +101,7 @@
 		CDA2A879D67328015BA268BB /* MemberPerformanceTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberPerformanceTypes.swift; sourceTree = "<group>"; };
 		CE74AA649D925CA4B5FE7BC7 /* LogSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogSessionView.swift; sourceTree = "<group>"; };
 		D47A03D4731A1E1970A4FD7E /* ExerciseRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseRegistry.swift; sourceTree = "<group>"; };
+		DC5E7D316524B668207E5F80 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E11A528687D1B9160707B705 /* ExerciseEntryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseEntryModel.swift; sourceTree = "<group>"; };
 		E6D7A698768F1FA17483CB90 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E9A784911534D45210F4F7DD /* BoardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardView.swift; sourceTree = "<group>"; };
@@ -144,6 +148,7 @@
 			children = (
 				57A44DA68CCF7E29D0D5988E /* AppDependencies.swift */,
 				E9A784911534D45210F4F7DD /* BoardView.swift */,
+				56B4BE2055C58C5037634E8F /* DesignSystem.swift */,
 				528062A893B50BCF8A06D050 /* ExerciseCard.swift */,
 				0115F62B918A92BD474D6A56 /* ExercisePickerSheet.swift */,
 				13B6A7CFE878E48B3B39878C /* GymPerformanceTabView.swift */,
@@ -245,6 +250,7 @@
 		81EB214107AF577E8D315DD5 /* GymPerformance */ = {
 			isa = PBXGroup;
 			children = (
+				DC5E7D316524B668207E5F80 /* Assets.xcassets */,
 				0C54D29598A13B60B67B7065 /* GymPerformanceApp.swift */,
 				E6D7A698768F1FA17483CB90 /* Info.plist */,
 				E18FC8FADD9B164CFE228469 /* PreviewContent */,
@@ -337,6 +343,7 @@
 			buildConfigurationList = 61CDEE730D91A50E36840033 /* Build configuration list for PBXNativeTarget "GymPerformance" */;
 			buildPhases = (
 				D2BD25C8F0C7E32C292D1D26 /* Sources */,
+				CF612612F8EFDA6B1D800B60 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -380,6 +387,17 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		CF612612F8EFDA6B1D800B60 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E8AC4EEC9BA76336E430BC15 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		245125B65DCCBB3E074AC3B7 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -403,6 +421,7 @@
 				EB1CBE450FA33FA413032118 /* ConfigurationDataAccess.swift in Sources */,
 				580126B24230D98126D2EAED /* DefaultExerciseRegistry.swift in Sources */,
 				BABB521D3C59A10F245BC35F /* DefaultMemberPerformance.swift in Sources */,
+				302111D4D6857443A17DFCEF /* DesignSystem.swift in Sources */,
 				F0414934551B76A7E486A151 /* Enums.swift in Sources */,
 				DCAAADA5EF40F9051150B1F5 /* ExerciseCard.swift in Sources */,
 				0A80735A75777AB83725144F /* ExerciseEntryModel.swift in Sources */,
@@ -467,8 +486,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				DEVELOPMENT_ASSET_PATHS = GymPerformance/PreviewContent;
+				GENERATE_APPICONS = YES;
 				INFOPLIST_FILE = GymPerformance/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -485,8 +506,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				DEVELOPMENT_ASSET_PATHS = GymPerformance/PreviewContent;
+				GENERATE_APPICONS = YES;
 				INFOPLIST_FILE = GymPerformance/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (

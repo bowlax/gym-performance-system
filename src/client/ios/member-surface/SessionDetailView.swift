@@ -17,40 +17,68 @@ struct SessionDetailView: View {
                         Section {
                             if let notes = session.notes, !notes.isEmpty {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("Notes").font(.caption).foregroundStyle(.secondary)
+                                    Text("Notes").sectionLabelStyle()
                                     Text(notes)
+                                        .font(.system(.body, design: .rounded))
                                 }
+                                .standardCard()
                             }
                             if let calories = session.caloriesBurned {
                                 HStack {
                                     Text("Calories")
+                                        .exerciseTitleStyle()
                                     Spacer()
-                                    Text("\(calories) kcal").foregroundStyle(.secondary)
+                                    Text("\(calories) kcal")
+                                        .captionLabelStyle()
                                 }
+                                .standardCard()
                             }
                         }
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                     }
 
                     ForEach(entries) { entry in
-                        Section(entry.exercise.name) {
+                        Section {
+                            Text(entry.exercise.name)
+                                .exerciseTitleStyle()
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+
                             ForEach(Array(entry.sets.enumerated()), id: \.offset) { index, set in
                                 HStack {
                                     Text("Set \(index + 1)")
-                                        .foregroundStyle(.secondary)
+                                        .captionLabelStyle()
                                     Spacer()
                                     Text(PBFormatter.formatSet(set, exercise: entry.exercise))
-                                        .font(.body.monospacedDigit())
+                                        .inputValueStyle()
+                                        .font(Font.system(.body, design: .rounded).weight(.medium))
                                     if entry.pbSetIds.contains(set.id) {
                                         Text("PB")
-                                            .font(.caption2.bold())
-                                            .padding(.horizontal, 6).padding(.vertical, 2)
-                                            .background(.yellow.opacity(0.25), in: Capsule())
+                                            .font(.system(.caption2, design: .rounded).weight(.semibold))
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.pbYellow.opacity(0.25), in: Capsule())
                                     }
+                                }
+                                .padding(.vertical, 4)
+
+                                if index < entry.sets.count - 1 {
+                                    Divider()
+                                        .overlay(Color.primary.opacity(0.06))
                                 }
                             }
                         }
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .background(Color(.secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: .cardRadius, style: .continuous))
                     }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
         .navigationTitle(session.date.formatted(date: .abbreviated, time: .omitted))

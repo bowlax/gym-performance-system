@@ -6,13 +6,18 @@ struct GymPerformanceTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             BoardView()
-                .tabItem { Label("Board", systemImage: "trophy.fill") }
+                .tabItem {
+                    Label("Board", systemImage: selectedTab == 0 ? "list.bullet.rectangle.portrait.fill" : "list.bullet.rectangle.portrait")
+                }
                 .tag(0)
 
             LogSessionView(switchToBoard: { selectedTab = 0 })
-                .tabItem { Label("Log Session", systemImage: "plus.square.fill") }
+                .tabItem {
+                    Label("Log Session", systemImage: selectedTab == 1 ? "plus.circle.fill" : "plus.circle")
+                }
                 .tag(1)
         }
+        .tint(Color.wolfBlue)
     }
 }
 

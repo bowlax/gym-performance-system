@@ -8,9 +8,10 @@ struct ExerciseCard: View {
     private let maxSets = 3
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: .cardSpacing) {
             HStack {
-                Text(draft.exercise.name).font(.headline)
+                Text(draft.exercise.name)
+                    .exerciseTitleStyle()
                 Spacer()
                 Button(role: .destructive) {
                     onRemove()
@@ -21,14 +22,18 @@ struct ExerciseCard: View {
             }
 
             Text(currentPBText)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(currentPB == nil ? Color.secondary : Color.wolfBlue)
 
             ForEach(Array(draft.sets.enumerated()), id: \.offset) { index, _ in
+                if index > 0 {
+                    Divider()
+                        .overlay(Color.primary.opacity(0.06))
+                }
+
                 HStack(spacing: 8) {
                     Text("Set \(index + 1)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .captionLabelStyle()
                         .frame(width: 44, alignment: .leading)
 
                     SetInputRow(value: $draft.sets[index], exercise: draft.exercise)
@@ -40,16 +45,15 @@ struct ExerciseCard: View {
                     draft.sets.append(SetDraftValue.initial(for: draft.exercise))
                 } label: {
                     Label("Add set", systemImage: "plus")
-                        .font(.subheadline)
+                        .font(.system(.subheadline, design: .rounded))
                 }
                 .buttonStyle(.borderless)
+                .foregroundStyle(Color.wolfBlue)
             }
         }
-        .padding(12)
-        .background(
-            Color(.secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 12)
-        )
+        .padding(.cardPadding)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: .cardRadius, style: .continuous))
     }
 
     private var currentPBText: String {
@@ -111,9 +115,10 @@ struct SetInputRow: View {
                 format: .number
             )
             .keyboardType(.decimalPad)
-            .textFieldStyle(.roundedBorder)
+            .inputValueStyle()
+            .inputFieldSurface()
             .selectAllOnFocus()
-            Text("kg").font(.caption).foregroundStyle(.secondary)
+            Text("kg").captionLabelStyle()
         }
     }
 
@@ -122,14 +127,10 @@ struct SetInputRow: View {
         if let fixedReps {
             HStack(spacing: 4) {
                 Text("\(fixedReps)")
+                    .inputValueStyle()
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
-                    .background(Color(.systemBackground))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color(.separator), lineWidth: 0.5)
-                    )
-                Text("reps").font(.caption).foregroundStyle(.secondary)
+                    .inputFieldSurface()
+                Text("reps").captionLabelStyle()
             }
         } else {
             HStack(spacing: 4) {
@@ -142,9 +143,10 @@ struct SetInputRow: View {
                     format: .number
                 )
                 .keyboardType(.numberPad)
-                .textFieldStyle(.roundedBorder)
+                .inputValueStyle()
+                .inputFieldSurface()
                 .selectAllOnFocus()
-                Text("reps").font(.caption).foregroundStyle(.secondary)
+                Text("reps").captionLabelStyle()
             }
         }
     }
@@ -160,9 +162,10 @@ struct SetInputRow: View {
                 format: .number
             )
             .keyboardType(.numberPad)
-            .textFieldStyle(.roundedBorder)
+            .inputValueStyle()
+            .inputFieldSurface()
             .selectAllOnFocus()
-            Text("m").font(.caption).foregroundStyle(.secondary)
+            Text("m").captionLabelStyle()
         }
     }
 
@@ -176,7 +179,8 @@ struct SetInputRow: View {
             format: .number
         )
         .keyboardType(.numberPad)
-        .textFieldStyle(.roundedBorder)
+        .inputValueStyle()
+        .inputFieldSurface()
         .selectAllOnFocus()
     }
 
@@ -191,9 +195,10 @@ struct SetInputRow: View {
                 format: .number
             )
             .keyboardType(.numberPad)
-            .textFieldStyle(.roundedBorder)
+            .inputValueStyle()
+            .inputFieldSurface()
             .selectAllOnFocus()
-            Text("s").font(.caption).foregroundStyle(.secondary)
+            Text("s").captionLabelStyle()
         }
     }
 
@@ -211,7 +216,8 @@ struct SetInputRow: View {
                 format: .number
             )
             .keyboardType(.numberPad)
-            .textFieldStyle(.roundedBorder)
+            .inputValueStyle()
+            .inputFieldSurface()
             .frame(maxWidth: 60)
             .selectAllOnFocus()
             Text(":")
@@ -227,7 +233,8 @@ struct SetInputRow: View {
                 format: .number
             )
             .keyboardType(.numberPad)
-            .textFieldStyle(.roundedBorder)
+            .inputValueStyle()
+            .inputFieldSurface()
             .frame(maxWidth: 60)
             .selectAllOnFocus()
         }

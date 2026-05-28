@@ -27,26 +27,45 @@ struct LogSessionView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Session") {
+                Section {
+                    Text("Session")
+                        .sectionLabelStyle()
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+
                     HStack {
                         Text("Date")
+                            .captionLabelStyle()
                         Spacer()
-                        Text(today, style: .date).foregroundStyle(.secondary)
+                        Text(today, style: .date)
+                            .captionLabelStyle()
                     }
+                    .listRowBackground(Color.clear)
+
                     TextField("Notes (optional)", text: $notes, axis: .vertical)
                         .lineLimit(1...4)
+                        .listRowBackground(Color.clear)
+
                     HStack {
                         TextField("Calories", text: $calories)
                             .keyboardType(.numberPad)
+                            .inputValueStyle()
                             .selectAllOnFocus()
-                        Text("kcal").foregroundStyle(.secondary)
+                        Text("kcal").captionLabelStyle()
                     }
+                    .listRowBackground(Color.clear)
                 }
 
-                Section("Exercises") {
+                Section {
+                    Text("Exercises")
+                        .sectionLabelStyle()
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+
                     if draftExercises.isEmpty {
                         Text("No exercises added")
-                            .foregroundStyle(.secondary)
+                            .captionLabelStyle()
+                            .listRowBackground(Color.clear)
                     } else {
                         ForEach($draftExercises) { $draft in
                             ExerciseCard(
@@ -55,7 +74,9 @@ struct LogSessionView: View {
                             ) {
                                 draftExercises.removeAll { $0.id == draft.id }
                             }
-                            .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
+                            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                         }
                     }
 
@@ -63,29 +84,35 @@ struct LogSessionView: View {
                         showPicker = true
                     } label: {
                         Label("Add Exercise", systemImage: "plus.circle.fill")
+                            .foregroundStyle(Color.wolfBlue)
                     }
+                    .listRowBackground(Color.clear)
                 }
 
                 if let saveError {
                     Section {
                         Text(saveError)
                             .foregroundStyle(.red)
+                            .listRowBackground(Color.clear)
                     }
                 }
 
                 Section {
                     Button(action: save) {
                         Text("Save Session")
-                            .frame(maxWidth: .infinity)
-                            .bold()
+                            .primaryButtonStyle(isEnabled: canSave)
                     }
                     .disabled(!canSave)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
                 }
             }
+            .scrollContentBackground(.hidden)
             .navigationTitle("Log Session")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("History") { showHistory = true }
+                        .foregroundStyle(Color.wolfBlue)
                 }
             }
             .sheet(isPresented: $showPicker) {
@@ -107,10 +134,12 @@ struct LogSessionView: View {
             }) {
                 PBCelebrationSheet(newPBs: celebrationPBs)
             }
+            .sensoryFeedback(.success, trigger: showCelebration)
             .task(id: dependencies.refreshID) {
                 await loadCurrentPBs()
             }
         }
+        .tint(.wolfBlue)
     }
 
     @MainActor
@@ -182,20 +211,30 @@ struct PBCelebrationSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppDependencies.self) private var dependencies
 
-    var body: some View {
-        VStack(spacing: 24) {
-            Text("New Personal Bests! 🎉")
-                .font(.title.bold())
-                .multilineTextAlignment(.center)
-                .padding(.top, 32)
+    @State private var trophyScale: CGFloat = 0.5
 
-            VStack(alignment: .leading, spacing: 12) {
+    var body: some View {
+        VStack(spacing: .sectionSpacing) {
+            ZStack {
+                Circle()
+                    .fill(Color.pbYellow.opacity(0.15))
+                    .frame(width: 100, height: 100)
+                    .blur(radius: 20)
+
+                Image(systemName: "trophy.fill")
+                    .font(.system(size: 60))
+                    .foregroundStyle(Color.pbYellow)
+                    .scaleEffect(trophyScale)
+            }
+            .padding(.top, 24)
+
+            Text("New Personal Bests!")
+                .font(.system(.title2, design: .rounded).weight(.semibold))
+                .multilineTextAlignment(.center)
+
+            VStack(spacing: .cardSpacing) {
                 ForEach(newPBs, id: \.id) { pb in
-                    Text(rowText(for: pb))
-                        .font(.body.monospacedDigit())
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                        .background(.yellow.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+                    celebrationRow(for: pb)
                 }
             }
             .padding(.horizontal)
@@ -206,23 +245,35 @@ struct PBCelebrationSheet: View {
                 dismiss()
             } label: {
                 Text("Done")
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(.tint, in: RoundedRectangle(cornerRadius: 12))
-                    .foregroundStyle(.white)
-                    .bold()
+                    .primaryButtonStyle()
             }
-            .padding()
+            .padding(.horizontal)
+            .padding(.bottom)
         }
         .presentationDetents([.medium, .large])
+        .onAppear {
+            withAnimation(.spring(duration: 0.4)) {
+                trophyScale = 1.0
+            }
+        }
     }
 
-    private func rowText(for pb: PersonalBestModel) -> String {
-        guard let exercise = try? dependencies.exerciseRegistry.exercise(id: pb.exerciseId) else {
-            return "• Unknown exercise"
+    @ViewBuilder
+    private func celebrationRow(for pb: PersonalBestModel) -> some View {
+        if let exercise = try? dependencies.exerciseRegistry.exercise(id: pb.exerciseId) {
+            HStack {
+                Text(exercise.name)
+                    .exerciseTitleStyle()
+                Spacer()
+                Text(PBFormatter.formatPB(pb, exercise: exercise))
+                    .font(.system(.body, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Color.wolfBlue)
+                    .monospacedDigit()
+            }
+            .padding(.cardPadding)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: .cardRadius, style: .continuous))
         }
-        let formattedValue = PBFormatter.formatPB(pb, exercise: exercise)
-        return "• \(exercise.name): \(formattedValue)"
     }
 }
 

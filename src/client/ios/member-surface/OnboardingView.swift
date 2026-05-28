@@ -24,17 +24,19 @@ struct OnboardingView: View {
                 await loadExercises()
             }
         }
+        .tint(.wolfBlue)
     }
 
     private var welcome: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: .sectionSpacing) {
             Spacer()
             Image(systemName: "trophy.fill")
                 .font(.system(size: 64))
-                .foregroundStyle(.yellow)
+                .foregroundStyle(Color.pbYellow)
             Text("GymPerformance")
-                .font(.largeTitle.bold())
+                .font(.system(.largeTitle, design: .rounded).weight(.bold))
             Text("Track your personal bests and training sessions. Your digital PB board.")
+                .font(.system(.body, design: .rounded))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 32)
@@ -43,11 +45,7 @@ struct OnboardingView: View {
                 stage = .setPBs
             } label: {
                 Text("Get started")
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(.tint, in: RoundedRectangle(cornerRadius: 12))
-                    .foregroundStyle(.white)
-                    .bold()
+                    .primaryButtonStyle()
             }
             .padding()
         }
@@ -57,19 +55,28 @@ struct OnboardingView: View {
         Form {
             Section {
                 Text("What are your current PBs?")
-                    .font(.title2.bold())
+                    .font(.system(.title2, design: .rounded).weight(.bold))
                 Text("Add what you know. You can always update these later.")
-                    .foregroundStyle(.secondary)
+                    .captionLabelStyle()
             }
             .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
 
             ForEach(exercises, id: \.id) { exercise in
-                Section(exercise.name) {
-                    SetInputRow(
-                        value: binding(for: exercise),
-                        exercise: exercise
-                    )
+                Section {
+                    VStack(alignment: .leading, spacing: .cardSpacing) {
+                        Text(exercise.name)
+                            .exerciseTitleStyle()
+                        SetInputRow(
+                            value: binding(for: exercise),
+                            exercise: exercise
+                        )
+                    }
+                    .standardCard()
                 }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
             }
 
             Section {
@@ -77,19 +84,21 @@ struct OnboardingView: View {
                     completeOnboarding()
                 } label: {
                     Text(isSaving ? "Saving..." : "Done")
-                        .frame(maxWidth: .infinity)
-                        .bold()
+                        .primaryButtonStyle(isEnabled: !isSaving)
                 }
                 .disabled(isSaving)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
             }
         }
+        .scrollContentBackground(.hidden)
         .navigationTitle("Set Your PBs")
         .navigationBarTitleDisplayMode(.inline)
     }
 
     private func binding(for exercise: ExerciseModel) -> Binding<SetDraftValue> {
         Binding(
-            get: { drafts[exercise.id] ?? SetDraftValue.empty },
+            get: { drafts[exercise.id] ?? SetDraftValue.initial(for: exercise) },
             set: { drafts[exercise.id] = $0 }
         )
     }

@@ -67,9 +67,10 @@ struct SessionHistoryView: View {
                 Spacer()
                 if sessionHasPB[session.id] == true {
                     Text("PB")
-                        .font(.caption2.bold())
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(.yellow.opacity(0.25), in: Capsule())
+                        .font(.system(.caption2, design: .rounded).weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.pbYellow.opacity(0.25), in: Capsule())
                 }
             }
             Text(sessionExerciseNames[session.id] ?? "")
@@ -81,14 +82,10 @@ struct SessionHistoryView: View {
     }
 
     private var emptyState: some View {
-        VStack {
-            Spacer()
-            Text("No sessions logged yet — start by logging your first session")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding()
-            Spacer()
-        }
+        EmptyStateView(
+            symbol: "calendar.badge.clock",
+            message: "No sessions logged yet"
+        )
     }
 
     private func deleteSession(_ session: SessionModel) {

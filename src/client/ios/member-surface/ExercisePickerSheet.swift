@@ -23,18 +23,22 @@ struct ExercisePickerSheet: View {
 
                             HStack {
                                 Text(exercise.name)
+                                    .exerciseTitleStyle()
                                     .foregroundStyle(isAdded ? .secondary : .primary)
                                 Spacer()
                                 if isAdded {
-                                    Text("Added").font(.caption).foregroundStyle(.secondary)
+                                    Text("Added").captionLabelStyle()
                                 } else if isSelected {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.tint)
+                                        .foregroundStyle(Color.wolfBlue)
                                 } else {
                                     Image(systemName: "circle")
                                         .foregroundStyle(.secondary)
                                 }
                             }
+                            .padding(.cardPadding)
+                            .background(Color(.secondarySystemBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: .cardRadius, style: .continuous))
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 guard !isAdded else { return }
@@ -44,9 +48,13 @@ struct ExercisePickerSheet: View {
                                     selected.insert(exercise.id)
                                 }
                             }
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                         }
                     }
                     .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
                 }
             }
             .navigationTitle("Add Exercises")
@@ -54,6 +62,7 @@ struct ExercisePickerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
+                        .foregroundStyle(Color.wolfBlue)
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -67,11 +76,7 @@ struct ExercisePickerSheet: View {
                             ? "Select exercises"
                             : "Add \(selected.count) exercise\(selected.count == 1 ? "" : "s")"
                     )
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(.tint, in: RoundedRectangle(cornerRadius: 12))
-                    .foregroundStyle(.white)
-                    .bold()
+                    .primaryButtonStyle(isEnabled: !selected.isEmpty)
                 }
                 .disabled(selected.isEmpty)
                 .padding()

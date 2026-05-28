@@ -9,14 +9,21 @@ struct ProgressionView: View {
     @State private var showManualPB = false
     @State private var currentPB: PersonalBestModel?
     @State private var entries: [ProgressionEntry] = []
+    @State private var chartScrollPosition = Date()
+    @State private var visibleDomainLength: TimeInterval = 3 * 30 * 24 * 60 * 60
+    @State private var magnificationBase: TimeInterval?
 
-    private var historyPoints: [ProgressionEntry] {
-        entries
+    private var mostRecentPBPoint: ProgressionEntry? {
+        entries.filter(\.isPB).max(by: { $0.date < $1.date })
+    }
+
+    private var progressionChartConfiguration: ScrollableDateChartConfiguration? {
+        ScrollableDateChartConfiguration.make(earliestDataPoint: entries.first?.date)
     }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: .sectionSpacing) {
                 currentPBSection
                 chartSection
                 historySection
@@ -28,6 +35,7 @@ struct ProgressionView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Add PB manually") { showManualPB = true }
+                    .foregroundStyle(Color.wolfBlue)
             }
         }
         .sheet(isPresented: $showManualPB) {
@@ -39,71 +47,145 @@ struct ProgressionView: View {
     }
 
     private var currentPBSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Current PB").font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Current PB")
+                .sectionLabelStyle()
+
             if let currentPB {
                 Text(PBFormatter.formatPB(currentPB, exercise: exercise))
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                    .pbValueStyle(size: 44)
+                    .foregroundStyle(Color.wolfBlue)
             } else {
                 Text("No PB yet")
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                    .pbValueStyle(size: 44)
                     .foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
     private var chartSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Last 6 months").font(.headline)
-            if historyPoints.isEmpty {
-                Text("No sessions logged in the last 6 months")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 200)
-            } else {
-                Chart(historyPoints) { point in
+        VStack(alignment: .leading, spacing: .cardSpacing) {
+            Text("Exercise History")
+                .exerciseTitleStyle()
+
+            if entries.isEmpty {
+                EmptyStateView(
+                    symbol: "chart.line.uptrend.xyaxis",
+                    message: "No exercise history yet"
+                )
+            } else if let configuration = progressionChartConfiguration {
+                Chart(entries) { point in
+                    AreaMark(
+                        x: .value("Date", point.date),
+                        y: .value("Value", point.chartValue)
+                    )
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color.wolfBlue.opacity(0.3), Color.clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+
                     LineMark(
                         x: .value("Date", point.date),
                         y: .value("Value", point.chartValue)
                     )
+                    .foregroundStyle(Color.wolfBlue)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+
                     PointMark(
                         x: .value("Date", point.date),
                         y: .value("Value", point.chartValue)
                     )
-                    .foregroundStyle(point.isPB ? .yellow : .blue)
-                    .symbolSize(point.isPB ? 120 : 60)
+                    .foregroundStyle(point.isPB ? Color.pbYellow : Color.wolfBlue.opacity(0.5))
+                    .symbolSize(point.isPB ? 64 : 25)
                 }
                 .frame(height: 220)
+                .scrollableDateChart(
+                    scrollPosition: $chartScrollPosition,
+                    visibleDomainLength: $visibleDomainLength,
+                    magnificationBase: $magnificationBase,
+                    configuration: configuration
+                )
+                .chartYAxis {
+                    AxisMarks(position: .leading) { _ in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 1))
+                            .foregroundStyle(Color.primary.opacity(0.08))
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .month)) { _ in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 1))
+                            .foregroundStyle(Color.primary.opacity(0.08))
+                        AxisValueLabel(format: .dateTime.month(.abbreviated).year(.twoDigits))
+                    }
+                }
+                .chartPlotStyle { plotArea in
+                    plotArea.background(.clear)
+                }
+                .chartOverlay { proxy in
+                    GeometryReader { geometry in
+                        if let recent = mostRecentPBPoint,
+                           let xPosition = proxy.position(forX: recent.date),
+                           let yPosition = proxy.position(forY: recent.chartValue) {
+                            Text(recent.formattedValue)
+                                .font(.system(.caption2, design: .rounded).weight(.semibold))
+                                .foregroundStyle(Color.wolfBlue)
+                                .position(x: xPosition, y: max(yPosition - 14, 12))
+                        }
+                    }
+                }
             }
         }
     }
 
     private var historySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("History").font(.headline)
+        VStack(alignment: .leading, spacing: .cardSpacing) {
+            Text("History")
+                .exerciseTitleStyle()
+
             ForEach(entries.reversed()) { entry in
-                HStack {
-                    Text(PBFormatter.shortDate.string(from: entry.date))
-                    Spacer()
-                    Text(entry.formattedValue)
-                        .font(.body.monospacedDigit())
-                    if entry.isPB {
-                        Text("PB")
-                            .font(.caption2.bold())
-                            .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(.yellow.opacity(0.25), in: Capsule())
-                    }
-                }
-                .padding(.vertical, 4)
-                Divider()
+                historyRow(entry)
             }
         }
+    }
+
+    private func historyRow(_ entry: ProgressionEntry) -> some View {
+        HStack(spacing: 0) {
+            if entry.isPB {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(Color.pbYellow)
+                    .frame(width: 3)
+            }
+
+            HStack {
+                Text(PBFormatter.shortDate.string(from: entry.date))
+                    .captionLabelStyle()
+                Spacer()
+                Text(entry.formattedValue)
+                    .font(Font.system(.body, design: .rounded).weight(.medium))
+                    .monospacedDigit()
+                if entry.isPB {
+                    Text("PB")
+                        .font(.system(.caption2, design: .rounded).weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.pbYellow.opacity(0.25), in: Capsule())
+                }
+            }
+            .padding(.cardPadding)
+        }
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: .cardRadius, style: .continuous))
     }
 
     @MainActor
     private func loadProgression() async {
         do {
-            let from = AppDependencies.sixMonthsAgo
+            let from = Date.distantPast
             currentPB = try dependencies.performanceDataAccess.fetchCurrentPB(
                 memberId: dependencies.memberId,
                 exerciseId: exercise.id
@@ -122,6 +204,7 @@ struct ProgressionView: View {
                 personalBests: personalBests,
                 from: from
             )
+            configureProgressionChartViewport()
         } catch {
             currentPB = nil
             entries = []
@@ -154,9 +237,7 @@ struct ProgressionView: View {
             let day = calendar.startOfDay(for: pb.achievedAt)
 
             if pb.entryType == .manualEntry {
-                if sessionDates.contains(day) {
-                    continue
-                }
+                if sessionDates.contains(day) { continue }
                 merged.append(
                     ProgressionEntry(
                         id: pb.id,
@@ -167,9 +248,7 @@ struct ProgressionView: View {
                     )
                 )
             } else if pb.setId == nil {
-                if sessionDates.contains(day) {
-                    continue
-                }
+                if sessionDates.contains(day) { continue }
                 merged.append(
                     ProgressionEntry(
                         id: pb.id,
@@ -183,6 +262,12 @@ struct ProgressionView: View {
         }
 
         return merged.sorted { $0.date < $1.date }
+    }
+
+    private func configureProgressionChartViewport() {
+        guard let configuration = progressionChartConfiguration else { return }
+        visibleDomainLength = configuration.visibleDomainLength
+        chartScrollPosition = configuration.initialScrollPosition
     }
 }
 

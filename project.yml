@@ -41,6 +41,9 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.gymperformance.GymPerformance
         INFOPLIST_FILE: GymPerformance/Info.plist
         DEVELOPMENT_ASSET_PATHS: GymPerformance/PreviewContent
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_APPICONS: YES
     info:
       path: GymPerformance/Info.plist
       properties:
