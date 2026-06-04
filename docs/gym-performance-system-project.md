@@ -2,7 +2,7 @@
 
 **Methodology:** Righting Software (The Method)  
 **Phase:** 1 -- iOS, On-Device, Members Only  
-**Status:** Phase 1 complete -- 76 tests passing  
+**Status:** Phase 1 complete -- TestFlight build submitted, awaiting review  
 **Last updated:** May 2026
 
 > At the start of every session, provide both this document and `gym-performance-system-design.md` as context.  
@@ -139,6 +139,7 @@ Sessions are variable in length and intensity. Two to three sessions per week is
 | 6 | May 2026 | E1, E2, E3, E4 | Conditioning exercises deferred to phase 2. bestWeightAndReps PB rule defined with per-exercise minimum rep threshold. weightAndTime measurement type added for plank. Plank PB rule (heaviestWeight) flagged for coach confirmation. | MP1 -- Define session recording and PB evaluation rules |
 | 7 | May 2026 | MP1, MP2, MP3, MP4 | PersonalBest.setId made optional to support manual PB entry. PBEntryType enum added (sessionDerived, manualEntry). Manual PB backdating deferred to phase 2. Progression default window is 6 months, passed as parameter. | MS1 -- Define screen flows and interactions |
 | 8 | May 2026 | MS1, MS2, MS3, MS4, MS5 | Session deletion added with cascading PB restoration. weightAndTime exercises display time in seconds (e.g. 45s). timeOnly exercises display time in mm:ss (e.g. 1:52). Fixed rep exercises show pre-filled locked reps field. Session consistency chart moved to Board screen top. Progression screen shows all entries including manual PBs. Conditioning exercises confirmed out of scope for phase 1. | Phase 1 complete -- begin phase 2 scoping |
+| 9 | May 2026 | Full phase 1 delivery including UI polish, app icon, launch screen, privacy policy, TestFlight submission | Bundle ID set to uk.co.wayoflifefitness.gymperformance. App published under Wolf Way of Life Fitness developer account. Privacy policy included in-app rather than hosted externally. White wolf head on black chosen for app icon. TestFlight selected as initial distribution method. | Await TestFlight review approval, then onboard gym members as testers. Begin phase 2 scoping |
 
 ---
 
@@ -152,4 +153,4 @@ Sessions are variable in length and intensity. Two to three sessions per week is
 
 ## Phase 2
 
-Not yet scoped. Return to Claude with both context documents to begin phase 2 design using the same methodology.
+Not yet scoped. Return to Claude with both context documents to begin phase 2 design using the same methodology. Key items confirmed for phase 2: Central Data Store, Coach Surface, Owner Surface, Member Web Surface, Insight Engine, Aggregation Service, Goal Management, Notification Manager, Sensitive Data Manager.
