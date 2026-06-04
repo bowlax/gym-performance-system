@@ -491,7 +491,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.gymperformance.GymPerformanceTests;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.wayoflifefitness.gymperformanceTests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GymPerformance.app/GymPerformance";
@@ -512,7 +512,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.gymperformance.GymPerformance;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.wayoflifefitness.gymperformance;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -532,7 +532,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.gymperformance.GymPerformance;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.wayoflifefitness.gymperformance;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -672,7 +672,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.gymperformance.GymPerformanceTests;
+				PRODUCT_BUNDLE_IDENTIFIER = uk.co.wayoflifefitness.gymperformanceTests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GymPerformance.app/GymPerformance";
