@@ -24,7 +24,7 @@ struct OnboardingView: View {
                 await loadExercises()
             }
         }
-        .tint(.wolfBlue)
+        .tint(Color.wolfBlue)
     }
 
     private var welcome: some View {
@@ -47,7 +47,16 @@ struct OnboardingView: View {
                 Text("Get started")
                     .primaryButtonStyle()
             }
-            .padding()
+            .padding(.horizontal)
+
+            NavigationLink {
+                PrivacyPolicyView()
+            } label: {
+                Text("Privacy Policy")
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(Color.wolfBlue)
+            }
+            .padding(.bottom)
         }
     }
 

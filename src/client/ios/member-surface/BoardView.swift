@@ -13,6 +13,7 @@ struct BoardView: View {
     @State private var consistencyScrollPosition = Date()
     @State private var consistencyVisibleDomainLength: TimeInterval = 3 * 30 * 24 * 60 * 60
     @State private var consistencyMagnificationBase: TimeInterval?
+    @State private var showInfoSheet = false
 
     private var hasAnyPB: Bool { !pbByExerciseId.isEmpty }
 
@@ -53,6 +54,19 @@ struct BoardView: View {
                 }
             }
             .navigationTitle("Personal Bests")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showInfoSheet = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                    }
+                    .accessibilityLabel("About and privacy")
+                }
+            }
+            .sheet(isPresented: $showInfoSheet) {
+                AppInfoSheet()
+            }
             .task(id: dependencies.refreshID) {
                 await loadBoard()
             }
