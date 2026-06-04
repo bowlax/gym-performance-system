@@ -35,9 +35,11 @@
 		917D23C9A3C9FA3FB50C5DFD /* LogSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE74AA649D925CA4B5FE7BC7 /* LogSessionView.swift */; };
 		97AE6DA32B11A816A6D93F12 /* SelectAllOnFocusModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29721ED66C096FC2199E1393 /* SelectAllOnFocusModifier.swift */; };
 		997A8D10469B4E3BA60F1BC0 /* PerformanceDataAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 034EBCC39DFCD23117C548BE /* PerformanceDataAccess.swift */; };
+		B635100016479F0F8D6EE39A /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 01AFA7CEADAE0D731B70E051 /* LaunchScreen.storyboard */; };
 		B945BEFB6DC7350D99F86FF2 /* SessionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98F86F8B8845C8A787B96E0F /* SessionModel.swift */; };
 		BABB521D3C59A10F245BC35F /* DefaultMemberPerformance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F17A3EE86D8F7AB4DC19D7F /* DefaultMemberPerformance.swift */; };
 		BCA3AE52863ACBB29E9AC06A /* PerformanceDataAccessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 659A9D59B79BD19A2BB466F9 /* PerformanceDataAccessTests.swift */; };
+		C084127FF3B77AFFB08534C7 /* wolf.png in Resources */ = {isa = PBXBuildFile; fileRef = 1C8DD5976A06EDFC5E371EE9 /* wolf.png */; };
 		C56252D3274FCEF231E3C191 /* ExerciseModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CED46F03DC95E00BC59B901 /* ExerciseModel.swift */; };
 		C7C380131F889DF62F8B4CDA /* PrivacyPolicyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D2A9AD6BED1368C463C18D /* PrivacyPolicyView.swift */; };
 		C8FE0FB50DA0D02EA93A535B /* SetDraftValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AC8A390664E2B0C76D9E0AD /* SetDraftValue.swift */; };
@@ -64,6 +66,7 @@
 
 /* Begin PBXFileReference section */
 		0115F62B918A92BD474D6A56 /* ExercisePickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExercisePickerSheet.swift; sourceTree = "<group>"; };
+		01AFA7CEADAE0D731B70E051 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		034EBCC39DFCD23117C548BE /* PerformanceDataAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceDataAccess.swift; sourceTree = "<group>"; };
 		07AC0CF1145E610B1E874BF4 /* UserIdentityModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserIdentityModel.swift; sourceTree = "<group>"; };
 		082090F6A7FC0B0BA38AC4F0 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
@@ -72,6 +75,7 @@
 		132DEDFB8CAF5526D016FC6D /* ConfigurationDataAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationDataAccess.swift; sourceTree = "<group>"; };
 		13B6A7CFE878E48B3B39878C /* GymPerformanceTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GymPerformanceTabView.swift; sourceTree = "<group>"; };
 		1C2AC98914E314222E077351 /* MemberPerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberPerformanceTests.swift; sourceTree = "<group>"; };
+		1C8DD5976A06EDFC5E371EE9 /* wolf.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = wolf.png; sourceTree = "<group>"; };
 		29721ED66C096FC2199E1393 /* SelectAllOnFocusModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectAllOnFocusModifier.swift; sourceTree = "<group>"; };
 		2D681DD67C21113352AC1948 /* ValueFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValueFormatting.swift; sourceTree = "<group>"; };
 		36BE2728A6BDA7604895E84B /* PersonalBestModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalBestModel.swift; sourceTree = "<group>"; };
@@ -259,6 +263,8 @@
 				DC5E7D316524B668207E5F80 /* Assets.xcassets */,
 				0C54D29598A13B60B67B7065 /* GymPerformanceApp.swift */,
 				E6D7A698768F1FA17483CB90 /* Info.plist */,
+				01AFA7CEADAE0D731B70E051 /* LaunchScreen.storyboard */,
+				1C8DD5976A06EDFC5E371EE9 /* wolf.png */,
 				E18FC8FADD9B164CFE228469 /* PreviewContent */,
 			);
 			path = GymPerformance;
@@ -399,6 +405,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				E8AC4EEC9BA76336E430BC15 /* Assets.xcassets in Resources */,
+				B635100016479F0F8D6EE39A /* LaunchScreen.storyboard in Resources */,
+				C084127FF3B77AFFB08534C7 /* wolf.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

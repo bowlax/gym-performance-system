@@ -48,8 +48,9 @@ targets:
       path: GymPerformance/Info.plist
       properties:
         CFBundleDisplayName: GymPerformance
+        UILaunchStoryboardName: LaunchScreen
         UILaunchScreen:
-          UIColorName: ""
+          UIColorName: LaunchScreenBackground
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
           UISceneConfigurations:
