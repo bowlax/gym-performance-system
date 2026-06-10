@@ -5,23 +5,24 @@ struct LogSessionView: View {
 
     @Environment(AppDependencies.self) private var dependencies
 
+    @State private var sessionDate = Date()
     @State private var notes: String = ""
     @State private var calories: String = ""
     @State private var draftExercises: [DraftExercise] = []
 
     @State private var showPicker = false
     @State private var showHistory = false
+    @State private var showDiscardAlert = false
     @State private var celebrationPBs: [PersonalBestModel] = []
     @State private var showCelebration = false
     @State private var saveError: String?
     @State private var pbByExerciseId: [UUID: PersonalBestModel] = [:]
 
-    private let today = Date()
-
-    var canSave: Bool {
-        draftExercises.contains { draft in
-            draft.sets.contains { !$0.isEmpty(for: draft.exercise) }
-        }
+    private var hasUnsavedChanges: Bool {
+        !notes.isEmpty
+            || !calories.isEmpty
+            || !draftExercises.isEmpty
+            || !Calendar.current.isDate(sessionDate, inSameDayAs: Date())
     }
 
     var body: some View {
@@ -37,13 +38,20 @@ struct LogSessionView: View {
                         Text("Date")
                             .captionLabelStyle()
                         Spacer()
-                        Text(today, style: .date)
-                            .captionLabelStyle()
+                        DatePicker(
+                            "Session date",
+                            selection: $sessionDate,
+                            in: ...Date(),
+                            displayedComponents: .date
+                        )
+                        .labelsHidden()
+                        .datePickerStyle(.compact)
                     }
                     .listRowBackground(Color.clear)
 
                     TextField("Notes (optional)", text: $notes, axis: .vertical)
                         .lineLimit(1...4)
+                        .selectAllOnFocus()
                         .listRowBackground(Color.clear)
 
                     HStack {
@@ -63,7 +71,7 @@ struct LogSessionView: View {
                         .listRowSeparator(.hidden)
 
                     if draftExercises.isEmpty {
-                        Text("No exercises added")
+                        Text("No exercises added -- tap Add Exercise to log your sets for the board, or save this session as an attendance record.")
                             .captionLabelStyle()
                             .listRowBackground(Color.clear)
                     } else {
@@ -100,20 +108,33 @@ struct LogSessionView: View {
                 Section {
                     Button(action: save) {
                         Text("Save Session")
-                            .primaryButtonStyle(isEnabled: canSave)
+                            .primaryButtonStyle()
                     }
-                    .disabled(!canSave)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets())
                 }
             }
             .scrollContentBackground(.hidden)
+            .selectAllOnFocus()
+            .keyboardDismissible()
             .navigationTitle("Log Session")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { handleCancel() }
+                        .foregroundStyle(Color.wolfBlue)
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("History") { showHistory = true }
                         .foregroundStyle(Color.wolfBlue)
                 }
+            }
+            .alert("Discard session?", isPresented: $showDiscardAlert) {
+                Button("Keep Editing", role: .cancel) {}
+                Button("Discard", role: .destructive) {
+                    cancelSession()
+                }
+            } message: {
+                Text("Your changes will be lost.")
             }
             .sheet(isPresented: $showPicker) {
                 ExercisePickerSheet(
@@ -157,7 +178,7 @@ struct LogSessionView: View {
 
         let session = SessionModel(
             memberId: dependencies.memberId,
-            date: today,
+            date: sessionDate,
             notes: notes.isEmpty ? nil : notes,
             caloriesBurned: Int(calories)
         )
@@ -171,11 +192,6 @@ struct LogSessionView: View {
             guard !sets.isEmpty else { continue }
             entries.append(entry)
             setsByEntryId[entry.id] = sets
-        }
-
-        guard !entries.isEmpty else {
-            saveError = "Add at least one exercise with a completed set."
-            return
         }
 
         do {
@@ -198,7 +214,21 @@ struct LogSessionView: View {
         }
     }
 
+    private func handleCancel() {
+        if hasUnsavedChanges {
+            showDiscardAlert = true
+        } else {
+            cancelSession()
+        }
+    }
+
+    private func cancelSession() {
+        resetSession()
+        switchToBoard()
+    }
+
     private func resetSession() {
+        sessionDate = Date()
         notes = ""
         calories = ""
         draftExercises = []

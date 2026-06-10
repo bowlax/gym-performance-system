@@ -65,6 +65,8 @@ struct ManualPBEntrySheet: View {
                     .padding()
                 }
             }
+            .selectAllOnFocus()
+            .keyboardDismissible()
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }

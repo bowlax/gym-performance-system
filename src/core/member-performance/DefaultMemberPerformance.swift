@@ -23,8 +23,9 @@ final class DefaultMemberPerformance: MemberPerformance {
         entries: [ExerciseEntryModel],
         sets: [UUID: [ModelSet]]
     ) throws -> SessionResult {
-        guard !entries.isEmpty else {
-            throw MemberPerformanceError.emptySession
+        if entries.isEmpty {
+            try performanceDataAccess.saveSession(session)
+            return SessionResult(session: session, newPBs: [])
         }
 
         var exercisesByEntryId: [UUID: ExerciseModel] = [:]

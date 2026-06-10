@@ -20,6 +20,7 @@ struct OnboardingView: View {
                 case .setPBs: setPBs
                 }
             }
+            .keyboardDismissible()
             .task {
                 await loadExercises()
             }
@@ -90,9 +91,10 @@ struct OnboardingView: View {
 
             Section {
                 Button {
+                    KeyboardDismissal.dismiss()
                     completeOnboarding()
                 } label: {
-                    Text(isSaving ? "Saving..." : "Done")
+                    Text(isSaving ? "Saving..." : "Continue")
                         .primaryButtonStyle(isEnabled: !isSaving)
                 }
                 .disabled(isSaving)
@@ -101,6 +103,7 @@ struct OnboardingView: View {
             }
         }
         .scrollContentBackground(.hidden)
+        .selectAllOnFocus()
         .navigationTitle("Set Your PBs")
         .navigationBarTitleDisplayMode(.inline)
     }

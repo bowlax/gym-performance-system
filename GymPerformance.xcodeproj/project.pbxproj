@@ -43,6 +43,7 @@
 		C56252D3274FCEF231E3C191 /* ExerciseModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CED46F03DC95E00BC59B901 /* ExerciseModel.swift */; };
 		C7C380131F889DF62F8B4CDA /* PrivacyPolicyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D2A9AD6BED1368C463C18D /* PrivacyPolicyView.swift */; };
 		C8FE0FB50DA0D02EA93A535B /* SetDraftValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AC8A390664E2B0C76D9E0AD /* SetDraftValue.swift */; };
+		CC011E5531AC92F3FF65188B /* KeyboardDismissal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 553A7F49FDF85D10BD0AEA11 /* KeyboardDismissal.swift */; };
 		D06D3D6DC063EA379F9EC702 /* SwiftDataConfigurationDataAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115A626B4140D7BE919FBF70 /* SwiftDataConfigurationDataAccess.swift */; };
 		D382C13FD649E5C290CD04D4 /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE2EE6D688B39A221FEA7E64 /* SessionDetailView.swift */; };
 		D6D49D0469C217823ED564C8 /* PersonalBestModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36BE2728A6BDA7604895E84B /* PersonalBestModel.swift */; };
@@ -84,6 +85,7 @@
 		41FB71DACC7EE243EEAF2E60 /* ExerciseSeedData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseSeedData.swift; sourceTree = "<group>"; };
 		4CB185095E8EC33A1B97F644 /* TestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestHelpers.swift; sourceTree = "<group>"; };
 		528062A893B50BCF8A06D050 /* ExerciseCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseCard.swift; sourceTree = "<group>"; };
+		553A7F49FDF85D10BD0AEA11 /* KeyboardDismissal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardDismissal.swift; sourceTree = "<group>"; };
 		56B4BE2055C58C5037634E8F /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		577FD312811613515036B584 /* GymPerformance.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GymPerformance.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		57A44DA68CCF7E29D0D5988E /* AppDependencies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDependencies.swift; sourceTree = "<group>"; };
@@ -161,6 +163,7 @@
 				528062A893B50BCF8A06D050 /* ExerciseCard.swift */,
 				0115F62B918A92BD474D6A56 /* ExercisePickerSheet.swift */,
 				13B6A7CFE878E48B3B39878C /* GymPerformanceTabView.swift */,
+				553A7F49FDF85D10BD0AEA11 /* KeyboardDismissal.swift */,
 				CE74AA649D925CA4B5FE7BC7 /* LogSessionView.swift */,
 				C7D6826BD4BBC66947633FE5 /* ManualPBEntrySheet.swift */,
 				AA27300B3318E79C840C0BEF /* OnboardingView.swift */,
@@ -446,6 +449,7 @@
 				6CE52ECB89B4665E9A5682A9 /* ExerciseSeedData.swift in Sources */,
 				F9D2E81ABEA726BE726C293B /* GymPerformanceApp.swift in Sources */,
 				DB997FFBF98C206DF2DEA2FC /* GymPerformanceTabView.swift in Sources */,
+				CC011E5531AC92F3FF65188B /* KeyboardDismissal.swift in Sources */,
 				917D23C9A3C9FA3FB50C5DFD /* LogSessionView.swift in Sources */,
 				208379842571284F7C4A175C /* ManualPBEntrySheet.swift in Sources */,
 				002E6BDF2E144D6C89E7E6ED /* MemberPerformance.swift in Sources */,
@@ -504,6 +508,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = GymPerformance/PreviewContent;
 				GENERATE_APPICONS = YES;
 				INFOPLIST_FILE = GymPerformance/Info.plist;
@@ -512,6 +517,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.wayoflifefitness.gymperformance;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -524,6 +530,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = GymPerformance/PreviewContent;
 				GENERATE_APPICONS = YES;
 				INFOPLIST_FILE = GymPerformance/Info.plist;
@@ -532,6 +539,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.wayoflifefitness.gymperformance;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";

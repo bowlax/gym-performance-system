@@ -251,16 +251,15 @@ struct MemberPerformanceTests {
     }
 
     @Test
-    func testTC_MP6_RejectASessionWithNoExerciseEntries() throws {
+    func testTC_MP6_SaveASessionWithNoExerciseEntriesAsAttendanceRecord() throws {
         let test = try makeMemberPerformance()
-        let session = makeSession()
+        let session = SessionModel(memberId: testMemberId, date: Date(), notes: "Attendance only")
 
-        #expect(throws: MemberPerformanceError.emptySession) {
-            _ = try test.memberPerformance.saveSession(session, entries: [], sets: [:])
-        }
+        let result = try test.memberPerformance.saveSession(session, entries: [], sets: [:])
 
-        let storedSessions = try test.context.fetch(FetchDescriptor<SessionModel>())
-        #expect(storedSessions.isEmpty)
+        #expect(result.newPBs.isEmpty)
+        #expect(try test.performanceDataAccess.fetchSession(id: session.id) != nil)
+        #expect(try test.performanceDataAccess.fetchExerciseEntries(sessionId: session.id).isEmpty)
     }
 
     @Test
@@ -1111,9 +1110,16 @@ final class MemberPerformanceTests: XCTestCase {
         XCTAssertTrue(result.newPBs.isEmpty)
     }
 
-    func testTC_MP6_RejectASessionWithNoExerciseEntries() throws {
+    func testTC_MP6_SaveASessionWithNoExerciseEntriesAsAttendanceRecord() throws {
         let test = try makeMemberPerformance()
-        XCTAssertThrowsError(try test.memberPerformance.saveSession(makeSession(), entries: [], sets: [:]))
+        let session = makeSession()
+        session.notes = "Attendance only"
+
+        let result = try test.memberPerformance.saveSession(session, entries: [], sets: [:])
+
+        XCTAssertTrue(result.newPBs.isEmpty)
+        XCTAssertNotNil(try test.performanceDataAccess.fetchSession(id: session.id))
+        XCTAssertTrue(try test.performanceDataAccess.fetchExerciseEntries(sessionId: session.id).isEmpty)
     }
 
     func testTC_MP7_RejectASetWithMissingRequiredMeasurementFields() throws {
