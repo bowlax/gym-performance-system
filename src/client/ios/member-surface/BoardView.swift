@@ -8,40 +8,14 @@ struct BoardView: View {
     @State private var pbByExerciseId: [UUID: PersonalBestModel] = [:]
     @State private var pbEntryExerciseId: UUID?
     @State private var progressionExerciseId: UUID?
-    @State private var weeklySessions: [WeeklySessionCount] = []
-    @State private var selectedMonth: Date?
-    @State private var consistencyScrollPosition = Date()
-    @State private var consistencyVisibleDomainLength: TimeInterval = 3 * 30 * 24 * 60 * 60
-    @State private var consistencyMagnificationBase: TimeInterval?
+    @State private var sessions: [SessionModel] = []
     @State private var showInfoSheet = false
 
     private var hasAnyPB: Bool { !pbByExerciseId.isEmpty }
 
-    private var chartWeeklySessions: [WeeklySessionCount] {
-        guard let firstIndex = weeklySessions.firstIndex(where: { $0.count > 0 }) else {
-            return []
-        }
-        return Array(weeklySessions[firstIndex...])
-    }
-
-    private var chartMonthlySessions: [MonthlySessionCount] {
-        aggregateMonthlySessions(from: chartWeeklySessions)
-    }
-
-    private var consistencyChartConfiguration: ScrollableDateChartConfiguration? {
-        ScrollableDateChartConfiguration.make(earliestDataPoint: chartWeeklySessions.first?.weekStarting)
-    }
-
-    private var weeklySessionsForSelectedMonth: [WeeklySessionCount] {
-        guard let selectedMonth else { return [] }
-        let calendar = Calendar.current
-        guard let monthInterval = calendar.dateInterval(of: .month, for: selectedMonth) else {
-            return []
-        }
-
-        return chartWeeklySessions.filter { week in
-            week.weekStarting >= monthInterval.start && week.weekStarting < monthInterval.end
-        }
+    private var trainingChartXDomain: ClosedRange<Date>? {
+        guard let earliestSessionDate = sessions.first?.date else { return nil }
+        return earliestSessionDate...Date()
     }
 
     var body: some View {
@@ -88,7 +62,7 @@ struct BoardView: View {
     private var list: some View {
         List {
             Section {
-                consistencySection
+                trainingSection
             }
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
@@ -164,79 +138,49 @@ struct BoardView: View {
     }
 
     @ViewBuilder
-    private var consistencySection: some View {
+    private var trainingSection: some View {
         VStack(alignment: .leading, spacing: .cardSpacing) {
             Text("Training Consistency")
                 .sectionLabelStyle()
 
-            if chartMonthlySessions.isEmpty {
+            if sessions.isEmpty {
                 Text("No sessions logged yet")
                     .captionLabelStyle()
-                    .frame(maxWidth: .infinity, minHeight: 120)
-            } else if let configuration = consistencyChartConfiguration {
-                Chart(chartMonthlySessions) { month in
-                    BarMark(
-                        x: .value("Month", month.monthStart, unit: .month),
-                        y: .value("Sessions", month.count)
+            } else {
+                Chart(sessions, id: \.id) { session in
+                    PointMark(
+                        x: .value("Date", session.date),
+                        y: .value("Training", 1.0)
                     )
-                    .foregroundStyle(
-                        selectedMonth.map {
-                            Calendar.current.isDate($0, equalTo: month.monthStart, toGranularity: .month)
-                                ? Color.wolfBlue
-                                : Color.wolfBlue.opacity(0.55)
-                        } ?? Color.wolfBlue
-                    )
+                    .foregroundStyle(Color.wolfBlue)
+                    .symbolSize(64)
                 }
-                .frame(height: 180)
-                .chartXSelection(value: $selectedMonth)
-                .scrollableDateChart(
-                    scrollPosition: $consistencyScrollPosition,
-                    visibleDomainLength: $consistencyVisibleDomainLength,
-                    magnificationBase: $consistencyMagnificationBase,
-                    configuration: configuration
-                )
-                .chartYAxis {
-                    AxisMarks(position: .leading) { _ in
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: 1))
-                            .foregroundStyle(Color.primary.opacity(0.08))
-                    }
-                }
+                .frame(height: 60)
+                .chartYScale(domain: 0...2)
+                .chartYAxis(.hidden)
+                .chartXScale(domain: trainingChartXDomain ?? Date()...Date())
                 .chartXAxis {
-                    AxisMarks(values: .stride(by: .month)) { _ in
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: 1))
-                            .foregroundStyle(Color.primary.opacity(0.08))
-                        AxisValueLabel(format: .dateTime.month(.abbreviated).year(.twoDigits))
-                    }
+                    trainingChartXAxis
                 }
                 .chartPlotStyle { plotArea in
                     plotArea.background(.clear)
                 }
-
-                if let selectedMonth {
-                    Text(selectedMonth, format: .dateTime.month(.wide).year())
-                        .captionLabelStyle()
-
-                    Chart(weeklySessionsForSelectedMonth, id: \.weekStarting) { week in
-                        BarMark(
-                            x: .value("Week", week.weekStarting, unit: .weekOfYear),
-                            y: .value("Sessions", week.count)
-                        )
-                        .foregroundStyle(Color.wolfBlue)
-                    }
-                    .frame(height: 140)
-                    .chartYAxis {
-                        AxisMarks(position: .leading) { _ in
-                            AxisGridLine(stroke: StrokeStyle(lineWidth: 1))
-                                .foregroundStyle(Color.primary.opacity(0.08))
-                        }
-                    }
-                    .chartPlotStyle { plotArea in
-                        plotArea.background(.clear)
-                    }
-                }
             }
         }
         .standardCard()
+    }
+
+    @AxisContentBuilder
+    private var trainingChartXAxis: some AxisContent {
+        if sessions.count == 1, let sessionDate = sessions.first?.date {
+            AxisMarks(values: [sessionDate]) { _ in
+                AxisValueLabel(format: .dateTime.day().month(.abbreviated).year())
+            }
+        } else {
+            AxisMarks(values: .stride(by: .month)) { _ in
+                AxisValueLabel(format: .dateTime.month(.abbreviated))
+            }
+        }
     }
 
     private var pbEntrySheetBinding: Binding<Bool> {
@@ -255,21 +199,6 @@ struct BoardView: View {
         return exercises.first { $0.id == id }
     }
 
-    private func aggregateMonthlySessions(from weekly: [WeeklySessionCount]) -> [MonthlySessionCount] {
-        let calendar = Calendar.current
-        var counts: [Date: Int] = [:]
-
-        for week in weekly {
-            let components = calendar.dateComponents([.year, .month], from: week.weekStarting)
-            guard let monthStart = calendar.date(from: components) else { continue }
-            counts[monthStart, default: 0] += week.count
-        }
-
-        return counts
-            .map { MonthlySessionCount(monthStart: $0.key, count: $0.value) }
-            .sorted { $0.monthStart < $1.monthStart }
-    }
-
     @MainActor
     private func loadBoard() async {
         do {
@@ -277,30 +206,14 @@ struct BoardView: View {
                 .sorted { $0.displayOrder < $1.displayOrder }
             let pbs = try dependencies.memberPerformance.currentPBs(memberId: dependencies.memberId)
             pbByExerciseId = Dictionary(uniqueKeysWithValues: pbs.map { ($0.exerciseId, $0) })
-            weeklySessions = try dependencies.memberPerformance.sessionConsistency(
-                memberId: dependencies.memberId,
-                from: Date.distantPast
-            )
-            configureConsistencyChartViewport()
+            sessions = try dependencies.performanceDataAccess.fetchSessions(memberId: dependencies.memberId)
+                .sorted { $0.date < $1.date }
         } catch {
             exercises = []
             pbByExerciseId = [:]
-            weeklySessions = []
+            sessions = []
         }
     }
-
-    private func configureConsistencyChartViewport() {
-        guard let configuration = consistencyChartConfiguration else { return }
-        consistencyVisibleDomainLength = configuration.visibleDomainLength
-        consistencyScrollPosition = configuration.initialScrollPosition
-    }
-}
-
-private struct MonthlySessionCount: Identifiable {
-    let monthStart: Date
-    let count: Int
-
-    var id: Date { monthStart }
 }
 
 #Preview {
