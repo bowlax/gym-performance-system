@@ -66,6 +66,55 @@ struct OnboardingPBSaverTests {
 
         #expect(draft.isEmpty(for: freeSquat) == false)
         #expect(draft.manualPBValues(for: freeSquat) != nil)
+        #expect(draft.isValidManualPB(for: freeSquat))
+    }
+
+    // MARK: -- Manual PB validation
+
+    @Test
+    func flatDumbbellPressRequiresWeightAndReps() {
+        let flatPress = exercise(named: "Flat Dumbbell Press")
+
+        let weightOnly = SetDraftValue(weight: 30, reps: nil)
+        #expect(weightOnly.isValidManualPB(for: flatPress) == false)
+
+        let complete = SetDraftValue(weight: 30, reps: 8)
+        #expect(complete.isValidManualPB(for: flatPress))
+    }
+
+    @Test
+    func flatDumbbellPressRejectsRepsBelowMinimum() {
+        let flatPress = exercise(named: "Flat Dumbbell Press")
+        let draft = SetDraftValue(weight: 30, reps: 4)
+
+        #expect(draft.isValidManualPB(for: flatPress) == false)
+        #expect(draft.manualPBValidationMessage(for: flatPress) == "This exercise requires at least 6 reps for a PB.")
+    }
+
+    @Test
+    func flatDumbbellPressCanBeSavedWhenComplete() throws {
+        let test = try makeContext()
+        let flatPress = exercise(named: "Flat Dumbbell Press")
+        let draft = SetDraftValue(weight: 30, reps: 8)
+
+        #expect(draft.isValidManualPB(for: flatPress))
+
+        let result = try test.memberPerformance.recordManualPB(
+            exerciseId: flatPress.id,
+            memberId: testMemberId,
+            weight: 30,
+            reps: 8,
+            time: nil,
+            distance: nil
+        )
+
+        #expect(result.isNewPB)
+        let pb = try test.performanceDataAccess.fetchCurrentPB(
+            memberId: testMemberId,
+            exerciseId: flatPress.id
+        )
+        #expect(pb?.weight == 30)
+        #expect(pb?.reps == 8)
     }
 
     // MARK: -- Onboarding save behaviour

@@ -76,6 +76,10 @@ struct SetInputRow: View {
         exercise.pbRule == .heaviestWeightAtReps ? exercise.targetReps : nil
     }
 
+    private var variableMinimumReps: Int? {
+        exercise.pbRule == .bestWeightAndReps ? exercise.minimumReps : nil
+    }
+
     var body: some View {
         Group {
             switch exercise.measurementType {
@@ -98,22 +102,29 @@ struct SetInputRow: View {
             }
         }
         .onAppear {
-            if let fixedReps, value.reps == nil {
-                value.reps = fixedReps
-            }
+            guard let fixedReps, value.reps == nil else { return }
+            updateValue { $0.reps = fixedReps }
         }
+    }
+
+    private func updateValue(_ transform: (inout SetDraftValue) -> Void) {
+        var updated = value
+        transform(&updated)
+        value = updated
+    }
+
+    private func optionalBinding<T>(_ keyPath: WritableKeyPath<SetDraftValue, T?>) -> Binding<T?> {
+        Binding(
+            get: { value[keyPath: keyPath] },
+            set: { newValue in
+                updateValue { $0[keyPath: keyPath] = newValue }
+            }
+        )
     }
 
     private var weightField: some View {
         HStack(spacing: 4) {
-            TextField(
-                "kg",
-                value: Binding(
-                    get: { value.weight ?? 0 },
-                    set: { value.weight = $0 == 0 ? nil : $0 }
-                ),
-                format: .number
-            )
+            TextField("kg", value: optionalBinding(\.weight), format: .number)
             .keyboardType(.decimalPad)
             .inputValueStyle()
             .inputFieldSurface()
@@ -134,33 +145,23 @@ struct SetInputRow: View {
             }
         } else {
             HStack(spacing: 4) {
-                TextField(
-                    "reps",
-                    value: Binding(
-                        get: { value.reps ?? 0 },
-                        set: { value.reps = $0 == 0 ? nil : $0 }
-                    ),
-                    format: .number
-                )
+                TextField("reps", value: optionalBinding(\.reps), format: .number)
                 .keyboardType(.numberPad)
                 .inputValueStyle()
                 .inputFieldSurface()
                 .selectAllOnFocus()
-                Text("reps").captionLabelStyle()
+                if let variableMinimumReps {
+                    Text("reps (min \(variableMinimumReps))").captionLabelStyle()
+                } else {
+                    Text("reps").captionLabelStyle()
+                }
             }
         }
     }
 
     private var distanceField: some View {
         HStack(spacing: 4) {
-            TextField(
-                "m",
-                value: Binding(
-                    get: { value.distance ?? 0 },
-                    set: { value.distance = $0 == 0 ? nil : $0 }
-                ),
-                format: .number
-            )
+            TextField("m", value: optionalBinding(\.distance), format: .number)
             .keyboardType(.numberPad)
             .inputValueStyle()
             .inputFieldSurface()
@@ -173,8 +174,10 @@ struct SetInputRow: View {
         TextField(
             "stack",
             value: Binding(
-                get: { Int(value.weight ?? 0) },
-                set: { value.weight = $0 == 0 ? nil : Double($0) }
+                get: { value.weight.map { Int($0) } },
+                set: { newValue in
+                    updateValue { $0.weight = newValue.map(Double.init) }
+                }
             ),
             format: .number
         )
@@ -186,14 +189,7 @@ struct SetInputRow: View {
 
     private var rawSecondsField: some View {
         HStack(spacing: 4) {
-            TextField(
-                "sec",
-                value: Binding(
-                    get: { value.timeSeconds ?? 0 },
-                    set: { value.timeSeconds = $0 == 0 ? nil : $0 }
-                ),
-                format: .number
-            )
+            TextField("sec", value: optionalBinding(\.timeSeconds), format: .number)
             .keyboardType(.numberPad)
             .inputValueStyle()
             .inputFieldSurface()
@@ -207,10 +203,12 @@ struct SetInputRow: View {
             TextField(
                 "mm",
                 value: Binding(
-                    get: { (value.timeSeconds ?? 0) / 60 },
+                    get: { value.timeSeconds.map { $0 / 60 } },
                     set: { minutes in
-                        let seconds = (value.timeSeconds ?? 0) % 60
-                        value.timeSeconds = minutes * 60 + seconds
+                        updateValue {
+                            let seconds = ($0.timeSeconds ?? 0) % 60
+                            $0.timeSeconds = (minutes ?? 0) * 60 + seconds
+                        }
                     }
                 ),
                 format: .number
@@ -224,10 +222,12 @@ struct SetInputRow: View {
             TextField(
                 "ss",
                 value: Binding(
-                    get: { (value.timeSeconds ?? 0) % 60 },
+                    get: { value.timeSeconds.map { $0 % 60 } },
                     set: { seconds in
-                        let minutes = (value.timeSeconds ?? 0) / 60
-                        value.timeSeconds = minutes * 60 + seconds
+                        updateValue {
+                            let minutes = ($0.timeSeconds ?? 0) / 60
+                            $0.timeSeconds = minutes * 60 + (seconds ?? 0)
+                        }
                     }
                 ),
                 format: .number

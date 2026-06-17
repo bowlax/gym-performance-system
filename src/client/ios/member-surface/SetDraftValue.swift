@@ -75,6 +75,33 @@ struct SetDraftValue: Hashable {
         }
     }
 
+    func isValidManualPB(for exercise: ExerciseModel) -> Bool {
+        guard let values = manualPBValues(for: exercise) else { return false }
+
+        if exercise.pbRule == .bestWeightAndReps,
+           let minimumReps = exercise.minimumReps,
+           let reps = values.reps {
+            return reps >= minimumReps
+        }
+
+        return true
+    }
+
+    func manualPBValidationMessage(for exercise: ExerciseModel) -> String? {
+        guard manualPBValues(for: exercise) != nil else {
+            return "Enter all required values before saving."
+        }
+
+        if exercise.pbRule == .bestWeightAndReps,
+           let minimumReps = exercise.minimumReps,
+           let reps = reps,
+           reps < minimumReps {
+            return "This exercise requires at least \(minimumReps) reps for a PB."
+        }
+
+        return nil
+    }
+
     func toModelSet(exerciseEntryId: UUID, exercise: ExerciseModel) -> ModelSet? {
         guard !isEmpty(for: exercise) else { return nil }
 

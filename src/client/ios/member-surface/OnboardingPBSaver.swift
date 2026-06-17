@@ -14,7 +14,8 @@ enum OnboardingPBSaver {
 
         for exercise in exercises {
             let draft = drafts[exercise.id] ?? SetDraftValue.initial(for: exercise)
-            guard let values = draft.manualPBValues(for: exercise) else { continue }
+            guard draft.isValidManualPB(for: exercise),
+                  let values = draft.manualPBValues(for: exercise) else { continue }
 
             let didSave = (try? memberPerformance.recordManualPB(
                 exerciseId: exercise.id,

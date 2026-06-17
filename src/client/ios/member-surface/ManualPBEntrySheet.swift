@@ -18,7 +18,7 @@ struct ManualPBEntrySheet: View {
     }
 
     private var canSave: Bool {
-        draft.manualPBValues(for: exercise) != nil
+        draft.isValidManualPB(for: exercise)
     }
 
     var body: some View {
@@ -119,8 +119,13 @@ struct ManualPBEntrySheet: View {
     }
 
     private func save() {
+        if let message = draft.manualPBValidationMessage(for: exercise) {
+            feedback = .error(message)
+            return
+        }
+
         guard let values = draft.manualPBValues(for: exercise) else {
-            feedback = .error("Enter a value before saving.")
+            feedback = .error("Enter all required values before saving.")
             return
         }
 
