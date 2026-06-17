@@ -20,7 +20,6 @@ struct OnboardingView: View {
                 case .setPBs: setPBs
                 }
             }
-            .keyboardDismissible()
             .task {
                 await loadExercises()
             }
@@ -97,6 +96,7 @@ struct OnboardingView: View {
                     Text(isSaving ? "Saving..." : "Continue")
                         .primaryButtonStyle(isEnabled: !isSaving)
                 }
+                .buttonStyle(.borderless)
                 .disabled(isSaving)
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
@@ -104,6 +104,7 @@ struct OnboardingView: View {
         }
         .scrollContentBackground(.hidden)
         .selectAllOnFocus()
+        .keyboardDismissible()
         .navigationTitle("Set Your PBs")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -126,25 +127,19 @@ struct OnboardingView: View {
     }
 
     private func completeOnboarding() {
+        guard !isSaving else { return }
         isSaving = true
 
-        do {
-            for exercise in exercises {
-                guard let values = drafts[exercise.id]?.manualPBValues(for: exercise) else { continue }
-                _ = try dependencies.memberPerformance.recordManualPB(
-                    exerciseId: exercise.id,
-                    memberId: dependencies.memberId,
-                    weight: values.weight,
-                    reps: values.reps,
-                    time: values.time,
-                    distance: values.distance
-                )
-            }
-            dependencies.refresh()
-            onComplete()
-        } catch {
-            isSaving = false
-        }
+        OnboardingPBSaver.saveDraftPBs(
+            exercises: exercises,
+            drafts: drafts,
+            memberPerformance: dependencies.memberPerformance,
+            memberId: dependencies.memberId
+        )
+
+        dependencies.refresh()
+        isSaving = false
+        onComplete()
     }
 }
 

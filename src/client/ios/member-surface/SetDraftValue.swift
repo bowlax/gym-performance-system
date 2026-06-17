@@ -30,9 +30,12 @@ struct SetDraftValue: Hashable {
     func isEmpty(for exercise: ExerciseModel) -> Bool {
         switch exercise.measurementType {
         case .weightAndReps:
-            return weight == nil
+            if exercise.pbRule == .heaviestWeightAtReps {
+                return weight == nil
+            }
+            return weight == nil || reps == nil
         case .weightAndTime:
-            return weight == nil && timeSeconds == nil
+            return weight == nil || timeSeconds == nil
         case .timeOnly:
             return timeSeconds == nil
         case .distanceOnly:
@@ -40,7 +43,7 @@ struct SetDraftValue: Hashable {
         case .repsOnly:
             return reps == nil
         case .weightAndDistance:
-            return weight == nil && distance == nil
+            return weight == nil || distance == nil
         }
     }
 
