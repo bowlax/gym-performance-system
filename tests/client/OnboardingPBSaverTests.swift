@@ -60,35 +60,27 @@ struct OnboardingPBSaverTests {
     }
 
     @Test
-    func fixedRepExerciseAcceptsWeightOnlyDraft() {
+    func barbellLiftDefaultsRepsToFiveButRequiresExplicitEntryWhenCleared() {
         let freeSquat = exercise(named: "Free Squat")
-        let draft = SetDraftValue(weight: 100, reps: nil)
+        let initial = SetDraftValue.initial(for: freeSquat)
 
-        #expect(draft.isEmpty(for: freeSquat) == false)
-        #expect(draft.manualPBValues(for: freeSquat) != nil)
-        #expect(draft.isValidManualPB(for: freeSquat))
-    }
+        #expect(initial.reps == 5)
+        #expect(initial.isEmpty(for: freeSquat))
 
-    // MARK: -- Manual PB validation
+        let complete = SetDraftValue(weight: 100, reps: 5)
+        #expect(complete.isEmpty(for: freeSquat) == false)
+        #expect(complete.isValidManualPB(for: freeSquat))
 
-    @Test
-    func flatDumbbellPressRequiresWeightAndReps() {
-        let flatPress = exercise(named: "Flat Dumbbell Press")
-
-        let weightOnly = SetDraftValue(weight: 30, reps: nil)
-        #expect(weightOnly.isValidManualPB(for: flatPress) == false)
-
-        let complete = SetDraftValue(weight: 30, reps: 8)
-        #expect(complete.isValidManualPB(for: flatPress))
+        let clearedReps = SetDraftValue(weight: 100, reps: nil)
+        #expect(clearedReps.isEmpty(for: freeSquat))
     }
 
     @Test
-    func flatDumbbellPressRejectsRepsBelowMinimum() {
+    func flatDumbbellPressAcceptsLowRepEntries() {
         let flatPress = exercise(named: "Flat Dumbbell Press")
-        let draft = SetDraftValue(weight: 30, reps: 4)
+        let draft = SetDraftValue(weight: 30, reps: 3)
 
-        #expect(draft.isValidManualPB(for: flatPress) == false)
-        #expect(draft.manualPBValidationMessage(for: flatPress) == "This exercise requires at least 6 reps for a PB.")
+        #expect(draft.isValidManualPB(for: flatPress))
     }
 
     @Test
@@ -144,7 +136,7 @@ struct OnboardingPBSaverTests {
         let savedCount = OnboardingPBSaver.saveDraftPBs(
             exercises: [freeSquat, dumbbellPress],
             drafts: [
-                freeSquat.id: SetDraftValue(weight: 100, reps: nil),
+                freeSquat.id: SetDraftValue(weight: 100, reps: 5),
                 dumbbellPress.id: SetDraftValue(weight: 30, reps: nil)
             ],
             memberPerformance: test.memberPerformance,

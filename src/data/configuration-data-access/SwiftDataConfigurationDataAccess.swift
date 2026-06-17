@@ -39,5 +39,24 @@ final class SwiftDataConfigurationDataAccess: ConfigurationDataAccess {
 
         try context.save()
     }
+
+    func syncExerciseDefinitions(with seedData: [ExerciseModel]) throws {
+        let seedById = Dictionary(uniqueKeysWithValues: seedData.map { ($0.id, $0) })
+        let existing = try fetchExercises()
+        var changed = false
+
+        for exercise in existing {
+            guard let seed = seedById[exercise.id] else { continue }
+
+            if exercise.minimumReps != seed.minimumReps {
+                exercise.minimumReps = seed.minimumReps
+                changed = true
+            }
+        }
+
+        if changed {
+            try context.save()
+        }
+    }
 }
 

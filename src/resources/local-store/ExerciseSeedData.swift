@@ -93,7 +93,7 @@ extension ExerciseModel {
                 measurementType: .weightAndReps,
                 pbRule: .bestWeightAndReps,
                 targetReps: nil,
-                minimumReps: 5,
+                minimumReps: nil,
                 parentExerciseId: nil,
                 displayOrder: 8
             ),
@@ -104,7 +104,7 @@ extension ExerciseModel {
                 measurementType: .weightAndReps,
                 pbRule: .bestWeightAndReps,
                 targetReps: nil,
-                minimumReps: 6,
+                minimumReps: nil,
                 parentExerciseId: nil,
                 displayOrder: 9
             ),
@@ -115,7 +115,7 @@ extension ExerciseModel {
                 measurementType: .weightAndReps,
                 pbRule: .bestWeightAndReps,
                 targetReps: nil,
-                minimumReps: 5,
+                minimumReps: nil,
                 parentExerciseId: nil,
                 displayOrder: 10
             ),
@@ -126,7 +126,7 @@ extension ExerciseModel {
                 measurementType: .weightAndReps,
                 pbRule: .bestWeightAndReps,
                 targetReps: nil,
-                minimumReps: 5,
+                minimumReps: nil,
                 parentExerciseId: nil,
                 displayOrder: 11
             ),
@@ -137,7 +137,7 @@ extension ExerciseModel {
                 measurementType: .weightAndReps,
                 pbRule: .bestWeightAndReps,
                 targetReps: nil,
-                minimumReps: 5,
+                minimumReps: nil,
                 parentExerciseId: nil,
                 displayOrder: 12
             ),
@@ -148,7 +148,7 @@ extension ExerciseModel {
                 measurementType: .weightAndReps,
                 pbRule: .bestWeightAndReps,
                 targetReps: nil,
-                minimumReps: 5,
+                minimumReps: nil,
                 parentExerciseId: nil,
                 displayOrder: 13
             ),
@@ -159,7 +159,7 @@ extension ExerciseModel {
                 measurementType: .weightAndReps,
                 pbRule: .bestWeightAndReps,
                 targetReps: nil,
-                minimumReps: 5,
+                minimumReps: nil,
                 parentExerciseId: nil,
                 displayOrder: 14
             ),
@@ -170,7 +170,7 @@ extension ExerciseModel {
                 measurementType: .weightAndReps,
                 pbRule: .bestWeightAndReps,
                 targetReps: nil,
-                minimumReps: 5,
+                minimumReps: nil,
                 parentExerciseId: nil,
                 displayOrder: 15
             ),

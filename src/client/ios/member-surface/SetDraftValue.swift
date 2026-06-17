@@ -30,9 +30,6 @@ struct SetDraftValue: Hashable {
     func isEmpty(for exercise: ExerciseModel) -> Bool {
         switch exercise.measurementType {
         case .weightAndReps:
-            if exercise.pbRule == .heaviestWeightAtReps {
-                return weight == nil
-            }
             return weight == nil || reps == nil
         case .weightAndTime:
             return weight == nil || timeSeconds == nil
@@ -55,13 +52,9 @@ struct SetDraftValue: Hashable {
     )? {
         guard !isEmpty(for: exercise) else { return nil }
 
-        let resolvedReps = exercise.pbRule == .heaviestWeightAtReps
-            ? (reps ?? exercise.targetReps)
-            : reps
-
         switch exercise.measurementType {
         case .weightAndReps:
-            return (weight, resolvedReps, nil, nil)
+            return (weight, reps, nil, nil)
         case .weightAndTime:
             return (weight, nil, timeSeconds.map(Double.init), nil)
         case .timeOnly:
@@ -76,27 +69,12 @@ struct SetDraftValue: Hashable {
     }
 
     func isValidManualPB(for exercise: ExerciseModel) -> Bool {
-        guard let values = manualPBValues(for: exercise) else { return false }
-
-        if exercise.pbRule == .bestWeightAndReps,
-           let minimumReps = exercise.minimumReps,
-           let reps = values.reps {
-            return reps >= minimumReps
-        }
-
-        return true
+        manualPBValues(for: exercise) != nil
     }
 
     func manualPBValidationMessage(for exercise: ExerciseModel) -> String? {
         guard manualPBValues(for: exercise) != nil else {
             return "Enter all required values before saving."
-        }
-
-        if exercise.pbRule == .bestWeightAndReps,
-           let minimumReps = exercise.minimumReps,
-           let reps = reps,
-           reps < minimumReps {
-            return "This exercise requires at least \(minimumReps) reps for a PB."
         }
 
         return nil
@@ -105,16 +83,12 @@ struct SetDraftValue: Hashable {
     func toModelSet(exerciseEntryId: UUID, exercise: ExerciseModel) -> ModelSet? {
         guard !isEmpty(for: exercise) else { return nil }
 
-        let resolvedReps = exercise.pbRule == .heaviestWeightAtReps
-            ? (reps ?? exercise.targetReps)
-            : reps
-
         switch exercise.measurementType {
         case .weightAndReps:
             return ModelSet(
                 exerciseEntryId: exerciseEntryId,
                 weight: weight,
-                reps: resolvedReps
+                reps: reps
             )
         case .weightAndTime:
             return ModelSet(

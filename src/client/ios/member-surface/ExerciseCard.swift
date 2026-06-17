@@ -72,12 +72,8 @@ struct SetInputRow: View {
         exercise.name == "Cable Row"
     }
 
-    private var fixedReps: Int? {
-        exercise.pbRule == .heaviestWeightAtReps ? exercise.targetReps : nil
-    }
-
-    private var variableMinimumReps: Int? {
-        exercise.pbRule == .bestWeightAndReps ? exercise.minimumReps : nil
+    private var defaultReps: Int? {
+        exercise.targetReps
     }
 
     var body: some View {
@@ -102,8 +98,8 @@ struct SetInputRow: View {
             }
         }
         .onAppear {
-            guard let fixedReps, value.reps == nil else { return }
-            updateValue { $0.reps = fixedReps }
+            guard let defaultReps, value.reps == nil else { return }
+            updateValue { $0.reps = defaultReps }
         }
     }
 
@@ -135,27 +131,13 @@ struct SetInputRow: View {
 
     @ViewBuilder
     private var repsField: some View {
-        if let fixedReps {
-            HStack(spacing: 4) {
-                Text("\(fixedReps)")
-                    .inputValueStyle()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .inputFieldSurface()
-                Text("reps").captionLabelStyle()
-            }
-        } else {
-            HStack(spacing: 4) {
-                TextField("reps", value: optionalBinding(\.reps), format: .number)
-                .keyboardType(.numberPad)
-                .inputValueStyle()
-                .inputFieldSurface()
-                .selectAllOnFocus()
-                if let variableMinimumReps {
-                    Text("reps (min \(variableMinimumReps))").captionLabelStyle()
-                } else {
-                    Text("reps").captionLabelStyle()
-                }
-            }
+        HStack(spacing: 4) {
+            TextField("reps", value: optionalBinding(\.reps), format: .number)
+            .keyboardType(.numberPad)
+            .inputValueStyle()
+            .inputFieldSurface()
+            .selectAllOnFocus()
+            Text("reps").captionLabelStyle()
         }
     }
 

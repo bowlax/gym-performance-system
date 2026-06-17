@@ -21,21 +21,21 @@ final class DefaultExerciseRegistry: ExerciseRegistry {
 
     func seedIfNeeded() throws {
         let exercises = try configurationDataAccess.fetchExercises()
-        guard exercises.isEmpty else { return }
-
-        try configurationDataAccess.seedExercises(ExerciseModel.seedData)
+        if exercises.isEmpty {
+            try configurationDataAccess.seedExercises(ExerciseModel.seedData)
+        } else {
+            try configurationDataAccess.syncExerciseDefinitions(with: ExerciseModel.seedData)
+        }
     }
 
     func isPB(set: ModelSet, exercise: ExerciseModel, currentPB: PersonalBestModel?) -> Bool {
         guard let pbRule = exercise.pbRule else { return false }
 
         switch pbRule {
-        case .heaviestWeightAtReps:
-            return isHeaviestWeightAtRepsPB(set: set, exercise: exercise, currentPB: currentPB)
+        case .heaviestWeightAtReps, .bestWeightAndReps:
+            return isBestWeightAndRepsPB(set: set, currentPB: currentPB)
         case .heaviestWeight:
             return isHeaviestWeightPB(set: set, currentPB: currentPB)
-        case .bestWeightAndReps:
-            return isBestWeightAndRepsPB(set: set, exercise: exercise, currentPB: currentPB)
         case .fastestTime:
             return isFastestTimePB(set: set, currentPB: currentPB)
         case .longestDistance:
@@ -45,18 +45,27 @@ final class DefaultExerciseRegistry: ExerciseRegistry {
         }
     }
 
-    private func isHeaviestWeightAtRepsPB(
+    private func isBestWeightAndRepsPB(
         set: ModelSet,
-        exercise: ExerciseModel,
         currentPB: PersonalBestModel?
     ) -> Bool {
-        guard let setReps = set.reps, setReps == exercise.targetReps else { return false }
+        guard let setReps = set.reps, setReps > 0 else { return false }
         guard let setWeight = set.weight else { return false }
 
         guard let currentPB else { return true }
 
         guard let currentWeight = currentPB.weight else { return true }
-        return setWeight > currentWeight
+
+        if setWeight < currentWeight {
+            return false
+        }
+
+        if setWeight > currentWeight {
+            return true
+        }
+
+        guard let currentReps = currentPB.reps else { return false }
+        return setReps > currentReps
     }
 
     private func isHeaviestWeightPB(set: ModelSet, currentPB: PersonalBestModel?) -> Bool {
@@ -64,33 +73,6 @@ final class DefaultExerciseRegistry: ExerciseRegistry {
         guard let currentPB else { return true }
         guard let currentWeight = currentPB.weight else { return true }
         return setWeight > currentWeight
-    }
-
-    private func isBestWeightAndRepsPB(
-        set: ModelSet,
-        exercise: ExerciseModel,
-        currentPB: PersonalBestModel?
-    ) -> Bool {
-        guard let minimumReps = exercise.minimumReps else { return false }
-        guard let setReps = set.reps, setReps >= minimumReps else { return false }
-        guard let setWeight = set.weight else { return false }
-
-        guard let currentPB else { return true }
-
-        guard let currentWeight = currentPB.weight else {
-            return setReps >= minimumReps
-        }
-
-        if setWeight < currentWeight {
-            return false
-        }
-
-        if setWeight > currentWeight, setReps >= minimumReps {
-            return true
-        }
-
-        guard let currentReps = currentPB.reps else { return false }
-        return setReps > currentReps && setWeight >= currentWeight && setReps >= minimumReps
     }
 
     private func isFastestTimePB(set: ModelSet, currentPB: PersonalBestModel?) -> Bool {

@@ -331,24 +331,9 @@ final class DefaultMemberPerformance: MemberPerformance {
         guard let pbRule = exercise.pbRule else { return nil }
 
         switch pbRule {
-        case .heaviestWeightAtReps:
+        case .heaviestWeightAtReps, .bestWeightAndReps:
             return sets
-                .filter { $0.reps == exercise.targetReps && $0.weight != nil }
-                .max { ($0.weight ?? 0) < ($1.weight ?? 0) }
-
-        case .heaviestWeight:
-            return sets
-                .filter { $0.weight != nil }
-                .max { ($0.weight ?? 0) < ($1.weight ?? 0) }
-
-        case .bestWeightAndReps:
-            guard let minimumReps = exercise.minimumReps else { return nil }
-
-            return sets
-                .filter {
-                    guard let reps = $0.reps, $0.weight != nil else { return false }
-                    return reps >= minimumReps
-                }
+                .filter { $0.weight != nil && $0.reps != nil }
                 .max {
                     let leftWeight = $0.weight ?? 0
                     let rightWeight = $1.weight ?? 0
@@ -359,6 +344,11 @@ final class DefaultMemberPerformance: MemberPerformance {
 
                     return ($0.reps ?? 0) < ($1.reps ?? 0)
                 }
+
+        case .heaviestWeight:
+            return sets
+                .filter { $0.weight != nil }
+                .max { ($0.weight ?? 0) < ($1.weight ?? 0) }
 
         case .fastestTime:
             return sets
