@@ -60,7 +60,16 @@ struct ScrollableDateChartConfiguration {
 
         let domainEnd = Date()
         let totalDataSpan = domainEnd.timeIntervalSince(domainStart)
-        guard totalDataSpan > 0 else { return nil }
+        guard totalDataSpan > 0 else {
+            let minimumSpan: TimeInterval = 24 * 60 * 60
+            return ScrollableDateChartConfiguration(
+                domainStart: domainStart,
+                domainEnd: domainEnd,
+                visibleDomainLength: minimumSpan,
+                totalDataSpan: minimumSpan,
+                initialScrollPosition: domainEnd
+            )
+        }
 
         let calendar = Calendar.current
         let threeMonthsAgo = calendar.date(byAdding: .month, value: -3, to: domainEnd) ?? domainEnd

@@ -10,12 +10,15 @@ enum ProgressionEntryMerger {
         var merged: [ProgressionEntry] = []
         var representedSetIds = Set<UUID>()
 
-        let pbBySetId = Dictionary(
-            uniqueKeysWithValues: personalBests.compactMap { pb -> (UUID, UUID)? in
-                guard let setId = pb.setId else { return nil }
-                return (setId, pb.id)
+        let pbBySetId = personalBests.reduce(into: [UUID: UUID]()) { result, pb in
+            guard let setId = pb.setId else { return }
+            if let existingId = result[setId],
+               let existing = personalBests.first(where: { $0.id == existingId }),
+               pb.achievedAt < existing.achievedAt || (!pb.isCurrent && existing.isCurrent) {
+                return
             }
-        )
+            result[setId] = pb.id
+        }
 
         for summary in sessionHistory {
             representedSetIds.insert(summary.set.id)
@@ -33,6 +36,9 @@ enum ProgressionEntryMerger {
         }
 
         for pb in personalBests where pb.achievedAt >= from {
+            if pb.entryType == .sessionDerived {
+                continue
+            }
             if let setId = pb.setId, representedSetIds.contains(setId) {
                 continue
             }
@@ -44,7 +50,7 @@ enum ProgressionEntryMerger {
                     formattedValue: PBFormatter.formatPB(pb, exercise: exercise),
                     chartValue: PBFormatter.chartValue(pb: pb, exercise: exercise),
                     isPB: true,
-                    setId: nil,
+                    setId: pb.setId,
                     personalBestId: pb.id
                 )
             )

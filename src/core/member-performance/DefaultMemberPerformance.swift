@@ -352,22 +352,24 @@ final class DefaultMemberPerformance: MemberPerformance {
         }
 
         if let setId {
-            guard let set = try resolveSet(
+            if let set = try resolveSet(
                 id: setId,
                 memberId: memberId,
                 exerciseId: exerciseId
-            ) else {
-                throw MemberPerformanceError.setNotFound(setId)
+            ) {
+                try handlePersonalBestForDeletedSet(
+                    set: set,
+                    memberId: memberId,
+                    exerciseId: exerciseId,
+                    store: store
+                )
+                try store.removeSet(set)
+                return
             }
 
-            try handlePersonalBestForDeletedSet(
-                set: set,
-                memberId: memberId,
-                exerciseId: exerciseId,
-                store: store
-            )
-            try store.removeSet(set)
-            return
+            if personalBestId == nil {
+                throw MemberPerformanceError.setNotFound(setId)
+            }
         }
 
         if let personalBestId {

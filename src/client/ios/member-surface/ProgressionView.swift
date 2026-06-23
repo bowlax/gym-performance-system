@@ -12,6 +12,7 @@ struct ProgressionView: View {
     @State private var entryPendingDelete: ProgressionEntry?
     @State private var currentPB: PersonalBestModel?
     @State private var entries: [ProgressionEntry] = []
+    @State private var loadGeneration = 0
     @State private var chartScrollPosition = Date()
     @State private var visibleDomainLength: TimeInterval = 3 * 30 * 24 * 60 * 60
     @State private var magnificationBase: TimeInterval?
@@ -70,7 +71,9 @@ struct ProgressionView: View {
             Text("This cannot be undone.")
         }
         .task(id: dependencies.refreshID) {
-            await loadProgression()
+            loadGeneration += 1
+            let generation = loadGeneration
+            await loadProgression(generation: generation)
         }
     }
 
@@ -182,7 +185,7 @@ struct ProgressionView: View {
                 )
             } else {
                 List {
-                    ForEach(entries.reversed()) { entry in
+                    ForEach(historyEntries) { entry in
                         historyRow(entry)
                             .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)
@@ -200,8 +203,13 @@ struct ProgressionView: View {
                 .listStyle(.plain)
                 .scrollDisabled(true)
                 .frame(height: historyListHeight)
+                .id(historyEntries.map(\.id))
             }
         }
+    }
+
+    private var historyEntries: [ProgressionEntry] {
+        entries.sorted { $0.date > $1.date }
     }
 
     private var historyListHeight: CGFloat {
@@ -262,6 +270,7 @@ struct ProgressionView: View {
                 exerciseId: exercise.id
             )
             dependencies.refresh()
+            reloadProgression()
         } catch {
             // No-op: invalid delete targets are ignored.
         }
@@ -270,7 +279,13 @@ struct ProgressionView: View {
     }
 
     @MainActor
-    private func loadProgression() async {
+    private func loadProgression(generation: Int) async {
+        reloadProgression()
+        guard generation == loadGeneration else { return }
+    }
+
+    @MainActor
+    private func reloadProgression() {
         do {
             let from = Date.distantPast
             currentPB = try dependencies.performanceDataAccess.fetchCurrentPB(
@@ -293,9 +308,10 @@ struct ProgressionView: View {
                 from: from
             )
             configureProgressionChartViewport()
+        } catch is CancellationError {
+            return
         } catch {
-            currentPB = nil
-            entries = []
+            // Keep existing entries visible if reload fails.
         }
     }
 
