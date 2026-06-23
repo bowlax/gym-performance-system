@@ -331,14 +331,16 @@ final class DefaultMemberPerformance: MemberPerformance {
         guard let pb = allPBs.first(where: { $0.id == id }) else { return }
         guard pb.memberId == memberId else { return }
 
-        if pb.isCurrent {
-            let others = allPBs.filter { $0.id != pb.id }
-            if let previous = others.max(by: { $0.achievedAt < $1.achievedAt }) {
-                try store.setPersonalBestCurrent(id: previous.id, isCurrent: true)
-            }
-        }
-
+        let wasCurrent = pb.isCurrent
         try store.removePersonalBest(pb)
+
+        if wasCurrent {
+            try promoteMostRecentPersonalBest(
+                memberId: memberId,
+                exerciseId: exerciseId,
+                store: store
+            )
+        }
     }
 
     func deleteHistoryEntry(
@@ -410,15 +412,37 @@ final class DefaultMemberPerformance: MemberPerformance {
         store: SwiftDataPerformanceDataAccess
     ) throws {
         let allPBs = try performanceDataAccess.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
-        guard let pb = allPBs.first(where: { $0.setId == set.id }) else { return }
+        let matchingPBs = allPBs.filter { $0.setId == set.id }
+        guard let pb = matchingPBs.first(where: \.isCurrent)
+            ?? matchingPBs.max(by: { $0.achievedAt < $1.achievedAt }) else {
+            return
+        }
 
-        let others = allPBs.filter { $0.id != pb.id }
         let wasCurrent = pb.isCurrent
         try store.removePersonalBest(pb)
 
-        if wasCurrent, let previous = others.max(by: { $0.achievedAt < $1.achievedAt }) {
-            try store.setPersonalBestCurrent(id: previous.id, isCurrent: true)
+        if wasCurrent {
+            try promoteMostRecentPersonalBest(
+                memberId: memberId,
+                exerciseId: exerciseId,
+                store: store
+            )
         }
+    }
+
+    private func promoteMostRecentPersonalBest(
+        memberId: UUID,
+        exerciseId: UUID,
+        store: SwiftDataPerformanceDataAccess
+    ) throws {
+        let remaining = try performanceDataAccess.fetchAllPBs(
+            memberId: memberId,
+            exerciseId: exerciseId
+        )
+        guard let previous = remaining.max(by: { $0.achievedAt < $1.achievedAt }) else {
+            return
+        }
+        try store.setPersonalBestCurrent(id: previous.id, isCurrent: true)
     }
 
     private func bestSet(from sets: [ModelSet], exercise: ExerciseModel) -> ModelSet? {

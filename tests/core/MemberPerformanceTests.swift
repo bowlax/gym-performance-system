@@ -1162,6 +1162,87 @@ struct MemberPerformanceTests {
             exerciseId: freeSquatId
         ).isEmpty)
     }
+
+    @Test
+    func testTC_MP37_DeleteCurrentSessionPBRestoresPreviousForBoard() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let calendar = Calendar.current
+        let earlier = calendar.date(byAdding: .day, value: -10, to: Date())!
+        let later = calendar.date(byAdding: .day, value: -5, to: Date())!
+
+        let earlierSession = makeSession(date: earlier)
+        let earlierEntry = makeEntry(sessionId: earlierSession.id, exerciseId: freeSquatId)
+        let earlierSet = makeSet(exerciseEntryId: earlierEntry.id, weight: 80.0, reps: 5)
+        _ = try test.memberPerformance.saveSession(
+            earlierSession,
+            entries: [earlierEntry],
+            sets: [earlierEntry.id: [earlierSet]]
+        )
+
+        let laterSession = makeSession(date: later)
+        let laterEntry = makeEntry(sessionId: laterSession.id, exerciseId: freeSquatId)
+        let laterSet = makeSet(exerciseEntryId: laterEntry.id, weight: 100.0, reps: 5)
+        _ = try test.memberPerformance.saveSession(
+            laterSession,
+            entries: [laterEntry],
+            sets: [laterEntry.id: [laterSet]]
+        )
+
+        let currentPB = try test.performanceDataAccess.fetchCurrentPB(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+        #expect(currentPB?.setId == laterSet.id)
+
+        try test.memberPerformance.deleteHistoryEntry(
+            setId: laterSet.id,
+            personalBestId: currentPB?.id,
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+
+        let boardPBs = try test.memberPerformance.currentPBs(memberId: testMemberId)
+        let restored = boardPBs.first { $0.exerciseId == freeSquatId }
+        #expect(restored?.weight == 80.0)
+        #expect(restored?.isCurrent == true)
+    }
+
+    @Test
+    func testTC_MP38_DeleteCurrentManualPBRestoresPreviousForBoard() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+
+        let historical = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 80.0,
+            reps: 5,
+            achievedAt: Date().addingTimeInterval(-86_400),
+            isCurrent: false,
+            entryType: .manualEntry
+        )
+        let current = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 100.0,
+            reps: 5,
+            entryType: .manualEntry
+        )
+
+        try test.memberPerformance.deleteHistoryEntry(
+            setId: nil,
+            personalBestId: current.id,
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+
+        let boardPBs = try test.memberPerformance.currentPBs(memberId: testMemberId)
+        let restored = boardPBs.first { $0.exerciseId == freeSquatId }
+        #expect(restored?.id == historical.id)
+        #expect(restored?.weight == 80.0)
+        #expect(restored?.isCurrent == true)
+    }
 }
 
 #else

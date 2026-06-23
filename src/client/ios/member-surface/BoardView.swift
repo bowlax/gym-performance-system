@@ -6,6 +6,7 @@ struct BoardView: View {
 
     @State private var exercises: [ExerciseModel] = []
     @State private var pbByExerciseId: [UUID: PersonalBestModel] = [:]
+    @State private var exerciseIdsWithHistory: Set<UUID> = []
     @State private var pbEntryExerciseId: UUID?
     @State private var progressionExerciseId: UUID?
     @State private var sessions: [SessionModel] = []
@@ -81,9 +82,14 @@ struct BoardView: View {
                 row(for: exercise)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if pbByExerciseId[exercise.id] != nil {
+                        switch BoardExerciseRouting.destination(
+                            for: exercise.id,
+                            currentPBByExerciseId: pbByExerciseId,
+                            exerciseIdsWithHistory: exerciseIdsWithHistory
+                        ) {
+                        case .progression:
                             progressionExerciseId = exercise.id
-                        } else {
+                        case .manualPBEntry:
                             pbEntryExerciseId = exercise.id
                         }
                     }
@@ -206,13 +212,49 @@ struct BoardView: View {
                 .sorted { $0.displayOrder < $1.displayOrder }
             let pbs = try dependencies.memberPerformance.currentPBs(memberId: dependencies.memberId)
             pbByExerciseId = Dictionary(uniqueKeysWithValues: pbs.map { ($0.exerciseId, $0) })
+            exerciseIdsWithHistory = try loadExerciseIdsWithHistory(
+                exercises: exercises,
+                memberId: dependencies.memberId
+            )
             sessions = try dependencies.performanceDataAccess.fetchSessions(memberId: dependencies.memberId)
                 .sorted { $0.date < $1.date }
         } catch {
             exercises = []
             pbByExerciseId = [:]
+            exerciseIdsWithHistory = []
             sessions = []
         }
+    }
+
+    private func loadExerciseIdsWithHistory(
+        exercises: [ExerciseModel],
+        memberId: UUID
+    ) throws -> Set<UUID> {
+        var ids = Set<UUID>()
+        let pbExerciseIds = Set(exercises.map(\.id))
+
+        for exercise in exercises {
+            let personalBests = try dependencies.performanceDataAccess.fetchAllPBs(
+                memberId: memberId,
+                exerciseId: exercise.id
+            )
+            if !personalBests.isEmpty {
+                ids.insert(exercise.id)
+            }
+        }
+
+        let sessions = try dependencies.performanceDataAccess.fetchSessions(memberId: memberId)
+        for session in sessions {
+            let entries = try dependencies.performanceDataAccess.fetchExerciseEntries(sessionId: session.id)
+            for entry in entries where pbExerciseIds.contains(entry.exerciseId) {
+                let sets = try dependencies.performanceDataAccess.fetchSets(exerciseEntryId: entry.id)
+                if !sets.isEmpty {
+                    ids.insert(entry.exerciseId)
+                }
+            }
+        }
+
+        return ids
     }
 }
 
