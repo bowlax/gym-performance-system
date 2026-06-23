@@ -11,12 +11,14 @@ struct BoardView: View {
     @State private var progressionExerciseId: UUID?
     @State private var sessions: [SessionModel] = []
     @State private var showInfoSheet = false
+    @State private var trainingChartScrollPosition = Date()
+    @State private var trainingChartVisibleDomainLength: TimeInterval = 3 * 30 * 24 * 60 * 60
+    @State private var trainingChartMagnificationBase: TimeInterval?
 
     private var hasAnyPB: Bool { !pbByExerciseId.isEmpty }
 
-    private var trainingChartXDomain: ClosedRange<Date>? {
-        guard let earliestSessionDate = sessions.first?.date else { return nil }
-        return earliestSessionDate...Date()
+    private var trainingChartConfiguration: ScrollableDateChartConfiguration? {
+        ScrollableDateChartConfiguration.make(earliestDataPoint: sessions.first?.date)
     }
 
     var body: some View {
@@ -152,7 +154,7 @@ struct BoardView: View {
             if sessions.isEmpty {
                 Text("No sessions logged yet")
                     .captionLabelStyle()
-            } else {
+            } else if let configuration = trainingChartConfiguration {
                 Chart(sessions, id: \.id) { session in
                     PointMark(
                         x: .value("Date", session.date),
@@ -164,7 +166,12 @@ struct BoardView: View {
                 .frame(height: 60)
                 .chartYScale(domain: 0...2)
                 .chartYAxis(.hidden)
-                .chartXScale(domain: trainingChartXDomain ?? Date()...Date())
+                .scrollableDateChart(
+                    scrollPosition: $trainingChartScrollPosition,
+                    visibleDomainLength: $trainingChartVisibleDomainLength,
+                    magnificationBase: $trainingChartMagnificationBase,
+                    configuration: configuration
+                )
                 .chartXAxis {
                     trainingChartXAxis
                 }
@@ -218,12 +225,19 @@ struct BoardView: View {
             )
             sessions = try dependencies.performanceDataAccess.fetchSessions(memberId: dependencies.memberId)
                 .sorted { $0.date < $1.date }
+            configureTrainingChartViewport()
         } catch {
             exercises = []
             pbByExerciseId = [:]
             exerciseIdsWithHistory = []
             sessions = []
         }
+    }
+
+    private func configureTrainingChartViewport() {
+        guard let configuration = trainingChartConfiguration else { return }
+        trainingChartVisibleDomainLength = configuration.visibleDomainLength
+        trainingChartScrollPosition = configuration.initialScrollPosition
     }
 
     private func loadExerciseIdsWithHistory(

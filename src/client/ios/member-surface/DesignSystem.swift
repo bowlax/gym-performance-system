@@ -55,33 +55,37 @@ struct ScrollableDateChartConfiguration {
     let totalDataSpan: TimeInterval
     let initialScrollPosition: Date
 
-    static func make(earliestDataPoint: Date?) -> ScrollableDateChartConfiguration? {
-        guard let domainStart = earliestDataPoint else { return nil }
+    private static let chartPadding: TimeInterval = 7 * 24 * 60 * 60
 
-        let domainEnd = Date()
-        let totalDataSpan = domainEnd.timeIntervalSince(domainStart)
-        guard totalDataSpan > 0 else {
-            let minimumSpan: TimeInterval = 24 * 60 * 60
+    static func make(earliestDataPoint: Date?) -> ScrollableDateChartConfiguration? {
+        guard let earliestDataPoint else { return nil }
+
+        let dataEnd = Date()
+        let calendar = Calendar.current
+        let paddedStart = calendar.date(byAdding: .day, value: -7, to: earliestDataPoint) ?? earliestDataPoint
+        let paddedEnd = calendar.date(byAdding: .day, value: 7, to: dataEnd) ?? dataEnd
+        let paddedSpan = paddedEnd.timeIntervalSince(paddedStart)
+
+        guard paddedSpan > 0 else {
             return ScrollableDateChartConfiguration(
-                domainStart: domainStart,
-                domainEnd: domainEnd,
-                visibleDomainLength: minimumSpan,
-                totalDataSpan: minimumSpan,
-                initialScrollPosition: domainEnd
+                domainStart: paddedStart,
+                domainEnd: paddedEnd,
+                visibleDomainLength: paddedSpan,
+                totalDataSpan: paddedSpan,
+                initialScrollPosition: dataEnd
             )
         }
 
-        let calendar = Calendar.current
-        let threeMonthsAgo = calendar.date(byAdding: .month, value: -3, to: domainEnd) ?? domainEnd
-        let visibleStart = max(threeMonthsAgo, domainStart)
-        let visibleDomainLength = domainEnd.timeIntervalSince(visibleStart)
+        let threeMonthsAgo = calendar.date(byAdding: .month, value: -3, to: dataEnd) ?? dataEnd
+        let visibleStart = max(threeMonthsAgo, earliestDataPoint)
+        let visibleDomainLength = dataEnd.timeIntervalSince(visibleStart)
 
         return ScrollableDateChartConfiguration(
-            domainStart: domainStart,
-            domainEnd: domainEnd,
+            domainStart: paddedStart,
+            domainEnd: paddedEnd,
             visibleDomainLength: visibleDomainLength,
-            totalDataSpan: totalDataSpan,
-            initialScrollPosition: domainEnd
+            totalDataSpan: paddedSpan,
+            initialScrollPosition: dataEnd
         )
     }
 }
