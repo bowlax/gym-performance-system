@@ -10,6 +10,7 @@ struct ProgressionView: View {
     @State private var showResetAlert = false
     @State private var showDeleteAlert = false
     @State private var entryPendingDelete: ProgressionEntry?
+    @State private var deleteAlertMessage = ""
     @State private var currentPB: PersonalBestModel?
     @State private var entries: [ProgressionEntry] = []
     @State private var loadGeneration = 0
@@ -68,7 +69,7 @@ struct ProgressionView: View {
             Button("Delete", role: .destructive) { deletePendingEntry() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This cannot be undone.")
+            Text(deleteAlertMessage)
         }
         .task(id: dependencies.refreshID) {
             loadGeneration += 1
@@ -193,6 +194,7 @@ struct ProgressionView: View {
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(role: .destructive) {
                                     entryPendingDelete = entry
+                                    deleteAlertMessage = deleteConfirmationMessage(for: entry)
                                     showDeleteAlert = true
                                 } label: {
                                     Text("Delete")
@@ -225,8 +227,15 @@ struct ProgressionView: View {
             }
 
             HStack {
-                Text(PBFormatter.shortDate.string(from: entry.date))
-                    .captionLabelStyle()
+                HStack(spacing: 6) {
+                    Text(PBFormatter.shortDate.string(from: entry.date))
+                        .captionLabelStyle()
+                    if entry.wasReset {
+                        Text("Reset")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(Color(.tertiaryLabel))
+                    }
+                }
                 Spacer()
                 Text(entry.formattedValue)
                     .font(Font.system(.body, design: .rounded).weight(.medium))
@@ -241,8 +250,50 @@ struct ProgressionView: View {
             }
             .padding(.cardPadding)
         }
-        .background(Color(.secondarySystemBackground))
+        .background(entry.wasReset ? Color(.systemGray6) : Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: .cardRadius, style: .continuous))
+    }
+
+    private func deleteConfirmationMessage(for entry: ProgressionEntry) -> String {
+        do {
+            let currentPB = try dependencies.performanceDataAccess.fetchCurrentPB(
+                memberId: dependencies.memberId,
+                exerciseId: exercise.id
+            )
+            let allPBs = try dependencies.performanceDataAccess.fetchAllPBs(
+                memberId: dependencies.memberId,
+                exerciseId: exercise.id
+            )
+
+            let removesCurrent: Bool = {
+                guard let currentPB else { return false }
+                if entry.personalBestId == currentPB.id { return true }
+                if let setId = entry.setId, currentPB.setId == setId { return true }
+                if let setId = entry.setId,
+                   let linkedPB = allPBs.first(where: { $0.setId == setId }),
+                   linkedPB.id == currentPB.id {
+                    return true
+                }
+                return false
+            }()
+
+            guard removesCurrent else {
+                return "This cannot be undone."
+            }
+
+            if let projected = try dependencies.memberPerformance.projectedCurrentPBAfterDeletingHistoryEntry(
+                setId: entry.setId,
+                personalBestId: entry.personalBestId,
+                memberId: dependencies.memberId,
+                exerciseId: exercise.id
+            ) {
+                return "Delete this entry? Your current PB will revert to \(PBFormatter.formatPB(projected, exercise: exercise))."
+            }
+
+            return "Delete this entry? Your board will show No PB yet for this exercise."
+        } catch {
+            return "This cannot be undone."
+        }
     }
 
     @MainActor

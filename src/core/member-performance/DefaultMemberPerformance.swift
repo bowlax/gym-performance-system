@@ -319,7 +319,11 @@ final class DefaultMemberPerformance: MemberPerformance {
             return
         }
 
-        try performanceDataAccess.markPBAsSuperseded(id: currentPB.id)
+        guard let store = performanceDataAccess as? SwiftDataPerformanceDataAccess else {
+            return
+        }
+
+        try store.markPBAsReset(id: currentPB.id)
     }
 
     func deletePersonalBest(id: UUID, memberId: UUID, exerciseId: UUID) throws {
@@ -335,12 +339,52 @@ final class DefaultMemberPerformance: MemberPerformance {
         try store.removePersonalBest(pb)
 
         if wasCurrent {
-            try promoteMostRecentPersonalBest(
+            try promoteBestRestorablePersonalBest(
                 memberId: memberId,
                 exerciseId: exerciseId,
                 store: store
             )
         }
+    }
+
+    func projectedCurrentPBAfterDeletingHistoryEntry(
+        setId: UUID?,
+        personalBestId: UUID?,
+        memberId: UUID,
+        exerciseId: UUID
+    ) throws -> PersonalBestModel? {
+        guard let exercise = try exerciseRegistry.exercise(id: exerciseId) else { return nil }
+        let allPBs = try performanceDataAccess.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
+        let currentPB = allPBs.first(where: \.isCurrent)
+
+        guard deletionRemovesCurrentPB(
+            setId: setId,
+            personalBestId: personalBestId,
+            currentPB: currentPB,
+            allPBs: allPBs
+        ) else {
+            return currentPB
+        }
+
+        var excludingIds = Set<UUID>()
+        var excludingSetIds = Set<UUID>()
+
+        if let personalBestId {
+            excludingIds.insert(personalBestId)
+        }
+        if let setId {
+            excludingSetIds.insert(setId)
+            if let linkedPB = allPBs.first(where: { $0.setId == setId }) {
+                excludingIds.insert(linkedPB.id)
+            }
+        }
+
+        return PersonalBestRanking.bestRestorable(
+            from: allPBs,
+            exercise: exercise,
+            excludingIds: excludingIds,
+            excludingSetIds: excludingSetIds
+        )
     }
 
     func deleteHistoryEntry(
@@ -422,7 +466,7 @@ final class DefaultMemberPerformance: MemberPerformance {
         try store.removePersonalBest(pb)
 
         if wasCurrent {
-            try promoteMostRecentPersonalBest(
+            try promoteBestRestorablePersonalBest(
                 memberId: memberId,
                 exerciseId: exerciseId,
                 store: store
@@ -430,19 +474,37 @@ final class DefaultMemberPerformance: MemberPerformance {
         }
     }
 
-    private func promoteMostRecentPersonalBest(
+    private func promoteBestRestorablePersonalBest(
         memberId: UUID,
         exerciseId: UUID,
         store: SwiftDataPerformanceDataAccess
     ) throws {
+        guard let exercise = try exerciseRegistry.exercise(id: exerciseId) else { return }
         let remaining = try performanceDataAccess.fetchAllPBs(
             memberId: memberId,
             exerciseId: exerciseId
         )
-        guard let previous = remaining.max(by: { $0.achievedAt < $1.achievedAt }) else {
+        guard let previous = PersonalBestRanking.bestRestorable(from: remaining, exercise: exercise) else {
             return
         }
         try store.setPersonalBestCurrent(id: previous.id, isCurrent: true)
+    }
+
+    private func deletionRemovesCurrentPB(
+        setId: UUID?,
+        personalBestId: UUID?,
+        currentPB: PersonalBestModel?,
+        allPBs: [PersonalBestModel]
+    ) -> Bool {
+        guard let currentPB else { return false }
+        if personalBestId == currentPB.id { return true }
+        if let setId, currentPB.setId == setId { return true }
+        if let setId,
+           let linkedPB = allPBs.first(where: { $0.setId == setId }),
+           linkedPB.id == currentPB.id {
+            return true
+        }
+        return false
     }
 
     private func bestSet(from sets: [ModelSet], exercise: ExerciseModel) -> ModelSet? {

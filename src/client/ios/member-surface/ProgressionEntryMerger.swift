@@ -19,9 +19,12 @@ enum ProgressionEntryMerger {
             }
             result[setId] = pb.id
         }
+        let pbById = Dictionary(uniqueKeysWithValues: personalBests.map { ($0.id, $0) })
 
         for summary in sessionHistory {
             representedSetIds.insert(summary.set.id)
+            let personalBestId = pbBySetId[summary.set.id]
+            let linkedPB = personalBestId.flatMap { pbById[$0] }
             merged.append(
                 ProgressionEntry(
                     id: summary.set.id,
@@ -29,8 +32,9 @@ enum ProgressionEntryMerger {
                     formattedValue: PBFormatter.formatSet(summary.set, exercise: exercise),
                     chartValue: PBFormatter.chartValue(set: summary.set, exercise: exercise),
                     isPB: summary.isPB,
+                    wasReset: linkedPB?.wasReset ?? false,
                     setId: summary.set.id,
-                    personalBestId: pbBySetId[summary.set.id]
+                    personalBestId: personalBestId
                 )
             )
         }
@@ -50,6 +54,7 @@ enum ProgressionEntryMerger {
                     formattedValue: PBFormatter.formatPB(pb, exercise: exercise),
                     chartValue: PBFormatter.chartValue(pb: pb, exercise: exercise),
                     isPB: true,
+                    wasReset: pb.wasReset,
                     setId: pb.setId,
                     personalBestId: pb.id
                 )

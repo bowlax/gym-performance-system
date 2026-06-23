@@ -119,6 +119,18 @@ final class SwiftDataPerformanceDataAccess: PerformanceDataAccess {
         }
     }
 
+    func markPBAsReset(id: UUID) throws {
+        let descriptor = FetchDescriptor<PersonalBestModel>(
+            predicate: #Predicate { $0.id == id }
+        )
+
+        if let pb = try context.fetch(descriptor).first {
+            pb.isCurrent = false
+            pb.wasReset = true
+            try context.save()
+        }
+    }
+
     func removeSession(_ session: SessionModel) throws {
         context.delete(session)
         try context.save()

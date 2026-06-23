@@ -74,6 +74,7 @@ struct MemberPerformanceTests {
         distance: Double? = nil,
         achievedAt: Date = Date(),
         isCurrent: Bool = true,
+        wasReset: Bool = false,
         entryType: PBEntryType = .sessionDerived
     ) throws -> PersonalBestModel {
         let pb = PersonalBestModel(
@@ -86,6 +87,7 @@ struct MemberPerformanceTests {
             distance: distance,
             achievedAt: achievedAt,
             isCurrent: isCurrent,
+            wasReset: wasReset,
             entryType: entryType
         )
         try performanceDataAccess.savePersonalBest(pb)
@@ -947,6 +949,7 @@ struct MemberPerformanceTests {
         )
         #expect(history.contains { $0.id == pb.id })
         #expect(history.first { $0.id == pb.id }?.isCurrent == false)
+        #expect(history.first { $0.id == pb.id }?.wasReset == true)
     }
 
     @Test
@@ -1243,6 +1246,154 @@ struct MemberPerformanceTests {
         #expect(restored?.weight == 80.0)
         #expect(restored?.isCurrent == true)
     }
+
+    // MARK: -- Reset and cascade transparency
+
+    @Test
+    func testTC_MP39_ResetCurrentPBSetsWasResetToTrue() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let pb = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 85.0,
+            reps: 5
+        )
+
+        try test.memberPerformance.resetCurrentPB(memberId: testMemberId, exerciseId: freeSquatId)
+
+        let history = try test.performanceDataAccess.fetchAllPBs(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+        #expect(history.first { $0.id == pb.id }?.wasReset == true)
+        #expect(history.first { $0.id == pb.id }?.isCurrent == false)
+    }
+
+    @Test
+    func testTC_MP40_CascadeAfterDeletionSkipsResetRecords() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let calendar = Calendar.current
+
+        _ = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 100.0,
+            reps: 5,
+            achievedAt: calendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!,
+            isCurrent: false,
+            wasReset: true
+        )
+        let febPB = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 80.0,
+            reps: 5,
+            achievedAt: calendar.date(from: DateComponents(year: 2024, month: 2, day: 1))!,
+            isCurrent: false
+        )
+        let marPB = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 60.0,
+            reps: 5,
+            achievedAt: calendar.date(from: DateComponents(year: 2024, month: 3, day: 1))!,
+            isCurrent: true
+        )
+
+        try test.memberPerformance.deletePersonalBest(
+            id: marPB.id,
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+
+        let currentPB = try test.performanceDataAccess.fetchCurrentPB(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+        #expect(currentPB?.id == febPB.id)
+        #expect(currentPB?.weight == 80.0)
+    }
+
+    @Test
+    func testTC_MP41_CascadeRestoresBestNonResetRecordNotMostRecent() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let calendar = Calendar.current
+
+        let janPB = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 80.0,
+            reps: 5,
+            achievedAt: calendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!,
+            isCurrent: false
+        )
+        _ = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 60.0,
+            reps: 5,
+            achievedAt: calendar.date(from: DateComponents(year: 2024, month: 2, day: 1))!,
+            isCurrent: false
+        )
+        let marPB = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 70.0,
+            reps: 5,
+            achievedAt: calendar.date(from: DateComponents(year: 2024, month: 3, day: 1))!,
+            isCurrent: true
+        )
+
+        try test.memberPerformance.deletePersonalBest(
+            id: marPB.id,
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+
+        let currentPB = try test.performanceDataAccess.fetchCurrentPB(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+        #expect(currentPB?.id == janPB.id)
+        #expect(currentPB?.weight == 80.0)
+    }
+
+    @Test
+    func testTC_MP42_CascadeShowsNoCurrentPBWhenOnlyResetRecordsRemain() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+
+        _ = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 100.0,
+            reps: 5,
+            achievedAt: Date().addingTimeInterval(-86_400),
+            isCurrent: false,
+            wasReset: true
+        )
+        let currentReset = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 90.0,
+            reps: 5,
+            wasReset: true
+        )
+
+        try test.memberPerformance.deletePersonalBest(
+            id: currentReset.id,
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+
+        #expect(try test.performanceDataAccess.fetchCurrentPB(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        ) == nil)
+    }
 }
 
 #else
@@ -1320,6 +1471,7 @@ final class MemberPerformanceTests: XCTestCase {
         distance: Double? = nil,
         achievedAt: Date = Date(),
         isCurrent: Bool = true,
+        wasReset: Bool = false,
         entryType: PBEntryType = .sessionDerived
     ) throws -> PersonalBestModel {
         let pb = PersonalBestModel(
@@ -1332,6 +1484,7 @@ final class MemberPerformanceTests: XCTestCase {
             distance: distance,
             achievedAt: achievedAt,
             isCurrent: isCurrent,
+            wasReset: wasReset,
             entryType: entryType
         )
         try performanceDataAccess.savePersonalBest(pb)

@@ -13,6 +13,7 @@ final class PersonalBestModel {
     var distance: Double?
     var achievedAt: Date
     var isCurrent: Bool
+    var wasReset: Bool = false
     var entryType: PBEntryType
     var createdAt: Date
 
@@ -27,6 +28,7 @@ final class PersonalBestModel {
         distance: Double? = nil,
         achievedAt: Date,
         isCurrent: Bool = true,
+        wasReset: Bool = false,
         entryType: PBEntryType = .sessionDerived,
         createdAt: Date = Date()
     ) {
@@ -40,6 +42,7 @@ final class PersonalBestModel {
         self.distance = distance
         self.achievedAt = achievedAt
         self.isCurrent = isCurrent
+        self.wasReset = wasReset
         self.entryType = entryType
         self.createdAt = createdAt
     }

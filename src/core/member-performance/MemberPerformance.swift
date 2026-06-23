@@ -77,4 +77,12 @@ protocol MemberPerformance {
         memberId: UUID,
         exerciseId: UUID
     ) throws
+
+    /// Returns the PB that would become current after deleting a history entry.
+    func projectedCurrentPBAfterDeletingHistoryEntry(
+        setId: UUID?,
+        personalBestId: UUID?,
+        memberId: UUID,
+        exerciseId: UUID
+    ) throws -> PersonalBestModel?
 }
