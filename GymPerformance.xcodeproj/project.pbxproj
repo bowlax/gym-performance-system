@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		002E6BDF2E144D6C89E7E6ED /* MemberPerformance.swift in Sources */ = {isa = PBXBuildFile; fileRef = B791B1AFDCBD4BD6CC360393 /* MemberPerformance.swift */; };
 		014733182C3078AB2C520F70 /* AppInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B054483B2B762F3465AE278C /* AppInfoSheet.swift */; };
+		051A81918D62AEACF787C95D /* ProgressionEntryMergerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30CC0C4FDB684B73161C6D8A /* ProgressionEntryMergerTests.swift */; };
 		08FF4297F27FFDE674CDDEB8 /* ExercisePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0115F62B918A92BD474D6A56 /* ExercisePickerSheet.swift */; };
 		0A80735A75777AB83725144F /* ExerciseEntryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E11A528687D1B9160707B705 /* ExerciseEntryModel.swift */; };
 		12C7B93C6A642AD3A3885640 /* ProgressionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4D416316E2F3EA30C65D30B /* ProgressionView.swift */; };
@@ -32,6 +33,7 @@
 		77DBE0360D88E063B818D0E9 /* ModelContainer+Setup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ECCB46AB275863E71D70ED4 /* ModelContainer+Setup.swift */; };
 		7ADEC7EFB24078DF482DA583 /* ExerciseRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = D47A03D4731A1E1970A4FD7E /* ExerciseRegistry.swift */; };
 		7E0692095686924872545397 /* SessionHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5C7E65AA5231AF7B1EEF9B5 /* SessionHistoryView.swift */; };
+		8D3386233C756032DC4CF286 /* ProgressionEntryMerger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0281D2A39933C3F64A471D /* ProgressionEntryMerger.swift */; };
 		917D23C9A3C9FA3FB50C5DFD /* LogSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE74AA649D925CA4B5FE7BC7 /* LogSessionView.swift */; };
 		97AE6DA32B11A816A6D93F12 /* SelectAllOnFocusModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29721ED66C096FC2199E1393 /* SelectAllOnFocusModifier.swift */; };
 		997A8D10469B4E3BA60F1BC0 /* PerformanceDataAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 034EBCC39DFCD23117C548BE /* PerformanceDataAccess.swift */; };
@@ -79,9 +81,11 @@
 		13B6A7CFE878E48B3B39878C /* GymPerformanceTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GymPerformanceTabView.swift; sourceTree = "<group>"; };
 		1C2AC98914E314222E077351 /* MemberPerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberPerformanceTests.swift; sourceTree = "<group>"; };
 		1C8DD5976A06EDFC5E371EE9 /* wolf.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = wolf.png; sourceTree = "<group>"; };
+		1D0281D2A39933C3F64A471D /* ProgressionEntryMerger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressionEntryMerger.swift; sourceTree = "<group>"; };
 		29721ED66C096FC2199E1393 /* SelectAllOnFocusModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectAllOnFocusModifier.swift; sourceTree = "<group>"; };
 		2D681DD67C21113352AC1948 /* ValueFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValueFormatting.swift; sourceTree = "<group>"; };
 		2F286F57BE7E98862DA1A619 /* OnboardingPBSaver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingPBSaver.swift; sourceTree = "<group>"; };
+		30CC0C4FDB684B73161C6D8A /* ProgressionEntryMergerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressionEntryMergerTests.swift; sourceTree = "<group>"; };
 		36BE2728A6BDA7604895E84B /* PersonalBestModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalBestModel.swift; sourceTree = "<group>"; };
 		3CED46F03DC95E00BC59B901 /* ExerciseModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseModel.swift; sourceTree = "<group>"; };
 		3ECCB46AB275863E71D70ED4 /* ModelContainer+Setup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ModelContainer+Setup.swift"; sourceTree = "<group>"; };
@@ -154,6 +158,7 @@
 			children = (
 				082090F6A7FC0B0BA38AC4F0 /* .gitkeep */,
 				FC425C28DE2C188873EBB467 /* OnboardingPBSaverTests.swift */,
+				30CC0C4FDB684B73161C6D8A /* ProgressionEntryMergerTests.swift */,
 			);
 			path = client;
 			sourceTree = "<group>";
@@ -174,6 +179,7 @@
 				2F286F57BE7E98862DA1A619 /* OnboardingPBSaver.swift */,
 				AA27300B3318E79C840C0BEF /* OnboardingView.swift */,
 				C0D2A9AD6BED1368C463C18D /* PrivacyPolicyView.swift */,
+				1D0281D2A39933C3F64A471D /* ProgressionEntryMerger.swift */,
 				C4D416316E2F3EA30C65D30B /* ProgressionView.swift */,
 				29721ED66C096FC2199E1393 /* SelectAllOnFocusModifier.swift */,
 				FE2EE6D688B39A221FEA7E64 /* SessionDetailView.swift */,
@@ -434,6 +440,7 @@
 				2187E5B4EB726C8B44AEAF11 /* MemberPerformanceTests.swift in Sources */,
 				DD1392EB9AFC3CB660F0FDB3 /* OnboardingPBSaverTests.swift in Sources */,
 				BCA3AE52863ACBB29E9AC06A /* PerformanceDataAccessTests.swift in Sources */,
+				051A81918D62AEACF787C95D /* ProgressionEntryMergerTests.swift in Sources */,
 				6FF06C25AC50039B3160D500 /* TestHelpers.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -471,6 +478,7 @@
 				997A8D10469B4E3BA60F1BC0 /* PerformanceDataAccess.swift in Sources */,
 				D6D49D0469C217823ED564C8 /* PersonalBestModel.swift in Sources */,
 				C7C380131F889DF62F8B4CDA /* PrivacyPolicyView.swift in Sources */,
+				8D3386233C756032DC4CF286 /* ProgressionEntryMerger.swift in Sources */,
 				12C7B93C6A642AD3A3885640 /* ProgressionView.swift in Sources */,
 				97AE6DA32B11A816A6D93F12 /* SelectAllOnFocusModifier.swift in Sources */,
 				D382C13FD649E5C290CD04D4 /* SessionDetailView.swift in Sources */,

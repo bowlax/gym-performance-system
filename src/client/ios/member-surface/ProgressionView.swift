@@ -290,9 +290,10 @@ struct ProgressionView: View {
                 memberId: dependencies.memberId,
                 exerciseId: exercise.id
             )
-            entries = mergeProgressionEntries(
+            entries = ProgressionEntryMerger.merge(
                 sessionHistory: sessionHistory,
                 personalBests: personalBests,
+                exercise: exercise,
                 from: from
             )
             configureProgressionChartViewport()
@@ -300,68 +301,6 @@ struct ProgressionView: View {
             currentPB = nil
             entries = []
         }
-    }
-
-    private func mergeProgressionEntries(
-        sessionHistory: [ExerciseSetSummary],
-        personalBests: [PersonalBestModel],
-        from: Date
-    ) -> [ProgressionEntry] {
-        let calendar = Calendar.current
-        var merged: [ProgressionEntry] = []
-        var sessionDates = Set<Date>()
-        let pbBySetId = Dictionary(
-            uniqueKeysWithValues: personalBests.compactMap { pb -> (UUID, UUID)? in
-                guard let setId = pb.setId else { return nil }
-                return (setId, pb.id)
-            }
-        )
-
-        for summary in sessionHistory {
-            sessionDates.insert(calendar.startOfDay(for: summary.sessionDate))
-            merged.append(
-                ProgressionEntry(
-                    id: summary.set.id,
-                    date: summary.sessionDate,
-                    formattedValue: PBFormatter.formatSet(summary.set, exercise: exercise),
-                    chartValue: PBFormatter.chartValue(set: summary.set, exercise: exercise),
-                    isPB: summary.isPB,
-                    personalBestId: pbBySetId[summary.set.id]
-                )
-            )
-        }
-
-        for pb in personalBests where pb.achievedAt >= from {
-            let day = calendar.startOfDay(for: pb.achievedAt)
-
-            if pb.entryType == .manualEntry {
-                if sessionDates.contains(day) { continue }
-                merged.append(
-                    ProgressionEntry(
-                        id: pb.id,
-                        date: pb.achievedAt,
-                        formattedValue: PBFormatter.formatPB(pb, exercise: exercise),
-                        chartValue: PBFormatter.chartValue(pb: pb, exercise: exercise),
-                        isPB: true,
-                        personalBestId: pb.id
-                    )
-                )
-            } else if pb.setId == nil {
-                if sessionDates.contains(day) { continue }
-                merged.append(
-                    ProgressionEntry(
-                        id: pb.id,
-                        date: pb.achievedAt,
-                        formattedValue: PBFormatter.formatPB(pb, exercise: exercise),
-                        chartValue: PBFormatter.chartValue(pb: pb, exercise: exercise),
-                        isPB: true,
-                        personalBestId: pb.id
-                    )
-                )
-            }
-        }
-
-        return merged.sorted { $0.date < $1.date }
     }
 
     private func configureProgressionChartViewport() {
