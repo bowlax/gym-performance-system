@@ -112,6 +112,7 @@ struct ProgressionEntryMergerTests {
         #expect(entries.count == 1)
         #expect(entries.first?.id == set.id)
         #expect(entries.first?.personalBestId == sessionPB.id)
+        #expect(entries.first?.setId == set.id)
     }
 }
 #endif

@@ -1049,6 +1049,119 @@ struct MemberPerformanceTests {
             exerciseId: freeSquatId
         ).isEmpty)
     }
+
+    // MARK: -- History entry deletion
+
+    @Test
+    func testTC_MP34_DeleteNonPBSessionSetRemovesSetOnly() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+
+        _ = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 100,
+            reps: 5
+        )
+
+        let session = makeSession()
+        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
+        let set = makeSet(exerciseEntryId: entry.id, weight: 80.0, reps: 5)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [entry],
+            sets: [entry.id: [set]]
+        )
+
+        try test.memberPerformance.deleteHistoryEntry(
+            setId: set.id,
+            personalBestId: nil,
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+
+        #expect(try test.performanceDataAccess.fetchSession(id: session.id) != nil)
+        #expect(try test.performanceDataAccess.fetchSets(exerciseEntryId: entry.id).isEmpty)
+        let currentPB = try test.performanceDataAccess.fetchCurrentPB(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+        #expect(currentPB?.weight == 100)
+    }
+
+    @Test
+    func testTC_MP35_DeleteSessionDerivedPBRemovesSetAndRestoresPreviousPB() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+
+        let previousPB = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 80.0,
+            reps: 5,
+            achievedAt: Date().addingTimeInterval(-86_400),
+            isCurrent: false
+        )
+
+        let session = makeSession()
+        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
+        let set = makeSet(exerciseEntryId: entry.id, weight: 85.0, reps: 5)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [entry],
+            sets: [entry.id: [set]]
+        )
+
+        let currentPB = try test.performanceDataAccess.fetchCurrentPB(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+        #expect(currentPB?.setId == set.id)
+
+        try test.memberPerformance.deleteHistoryEntry(
+            setId: set.id,
+            personalBestId: currentPB?.id,
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+
+        #expect(try test.performanceDataAccess.fetchSets(exerciseEntryId: entry.id).isEmpty)
+        let restoredPB = try test.performanceDataAccess.fetchCurrentPB(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+        #expect(restoredPB?.id == previousPB.id)
+        #expect(restoredPB?.weight == 80.0)
+    }
+
+    @Test
+    func testTC_MP36_DeleteManualPBViaHistoryEntryRemovesPBRecord() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let manualPB = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 85.0,
+            reps: 5,
+            entryType: .manualEntry
+        )
+
+        try test.memberPerformance.deleteHistoryEntry(
+            setId: nil,
+            personalBestId: manualPB.id,
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+
+        #expect(try test.performanceDataAccess.fetchCurrentPB(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        ) == nil)
+        #expect(try test.performanceDataAccess.fetchAllPBs(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        ).isEmpty)
+    }
 }
 
 #else

@@ -69,4 +69,12 @@ protocol MemberPerformance {
 
     /// Permanently deletes a PB record, promoting the previous PB if needed.
     func deletePersonalBest(id: UUID, memberId: UUID, exerciseId: UUID) throws
+
+    /// Deletes a progression history entry (session set, session PB, or manual PB).
+    func deleteHistoryEntry(
+        setId: UUID?,
+        personalBestId: UUID?,
+        memberId: UUID,
+        exerciseId: UUID
+    ) throws
 }

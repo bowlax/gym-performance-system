@@ -26,6 +26,7 @@ enum ProgressionEntryMerger {
                     formattedValue: PBFormatter.formatSet(summary.set, exercise: exercise),
                     chartValue: PBFormatter.chartValue(set: summary.set, exercise: exercise),
                     isPB: summary.isPB,
+                    setId: summary.set.id,
                     personalBestId: pbBySetId[summary.set.id]
                 )
             )
@@ -43,6 +44,7 @@ enum ProgressionEntryMerger {
                     formattedValue: PBFormatter.formatPB(pb, exercise: exercise),
                     chartValue: PBFormatter.chartValue(pb: pb, exercise: exercise),
                     isPB: true,
+                    setId: nil,
                     personalBestId: pb.id
                 )
             )

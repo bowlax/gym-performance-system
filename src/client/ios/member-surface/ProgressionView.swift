@@ -67,7 +67,7 @@ struct ProgressionView: View {
             Button("Delete", role: .destructive) { deletePendingEntry() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This PB entry will be permanently removed. This cannot be undone.")
+            Text("This cannot be undone.")
         }
         .task(id: dependencies.refreshID) {
             await loadProgression()
@@ -188,13 +188,11 @@ struct ProgressionView: View {
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                if entry.personalBestId != nil {
-                                    Button(role: .destructive) {
-                                        entryPendingDelete = entry
-                                        showDeleteAlert = true
-                                    } label: {
-                                        Text("Delete")
-                                    }
+                                Button(role: .destructive) {
+                                    entryPendingDelete = entry
+                                    showDeleteAlert = true
+                                } label: {
+                                    Text("Delete")
                                 }
                             }
                     }
@@ -254,14 +252,12 @@ struct ProgressionView: View {
 
     @MainActor
     private func deletePendingEntry() {
-        guard let entryPendingDelete,
-              let personalBestId = entryPendingDelete.personalBestId else {
-            return
-        }
+        guard let entryPendingDelete else { return }
 
         do {
-            try dependencies.memberPerformance.deletePersonalBest(
-                id: personalBestId,
+            try dependencies.memberPerformance.deleteHistoryEntry(
+                setId: entryPendingDelete.setId,
+                personalBestId: entryPendingDelete.personalBestId,
                 memberId: dependencies.memberId,
                 exerciseId: exercise.id
             )

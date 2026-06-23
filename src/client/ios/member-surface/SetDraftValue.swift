@@ -148,5 +148,6 @@ struct ProgressionEntry: Identifiable {
     let formattedValue: String
     let chartValue: Double
     let isPB: Bool
+    let setId: UUID?
     let personalBestId: UUID?
 }

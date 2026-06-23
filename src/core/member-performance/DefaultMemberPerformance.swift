@@ -7,6 +7,7 @@ enum MemberPerformanceError: Error, Equatable {
     case inactiveExercise(UUID)
     case invalidMeasurementFields(MeasurementType)
     case sessionNotFound(UUID)
+    case setNotFound(UUID)
 }
 
 final class DefaultMemberPerformance: MemberPerformance {
@@ -340,6 +341,66 @@ final class DefaultMemberPerformance: MemberPerformance {
         try store.removePersonalBest(pb)
     }
 
+    func deleteHistoryEntry(
+        setId: UUID?,
+        personalBestId: UUID?,
+        memberId: UUID,
+        exerciseId: UUID
+    ) throws {
+        guard let store = performanceDataAccess as? SwiftDataPerformanceDataAccess else {
+            return
+        }
+
+        if let setId {
+            guard let set = try resolveSet(
+                id: setId,
+                memberId: memberId,
+                exerciseId: exerciseId
+            ) else {
+                throw MemberPerformanceError.setNotFound(setId)
+            }
+
+            try handlePersonalBestForDeletedSet(
+                set: set,
+                memberId: memberId,
+                exerciseId: exerciseId,
+                store: store
+            )
+            try store.removeSet(set)
+            return
+        }
+
+        if let personalBestId {
+            try deletePersonalBest(
+                id: personalBestId,
+                memberId: memberId,
+                exerciseId: exerciseId
+            )
+        }
+    }
+
+    private func resolveSet(
+        id: UUID,
+        memberId: UUID,
+        exerciseId: UUID
+    ) throws -> ModelSet? {
+        let sessions = try performanceDataAccess.fetchSessions(memberId: memberId)
+
+        for session in sessions {
+            let entries = try performanceDataAccess.fetchExerciseEntries(sessionId: session.id)
+                .filter { $0.exerciseId == exerciseId }
+
+            for entry in entries {
+                if let set = try performanceDataAccess.fetchSets(exerciseEntryId: entry.id)
+                    .first(where: { $0.id == id }) {
+                    return set
+                }
+            }
+        }
+
+        return nil
+    }
+
     private func handlePersonalBestForDeletedSet(
         set: ModelSet,
         memberId: UUID,
@@ -350,9 +411,10 @@ final class DefaultMemberPerformance: MemberPerformance {
         guard let pb = allPBs.first(where: { $0.setId == set.id }) else { return }
 
         let others = allPBs.filter { $0.id != pb.id }
+        let wasCurrent = pb.isCurrent
         try store.removePersonalBest(pb)
 
-        if let previous = others.max(by: { $0.achievedAt < $1.achievedAt }) {
+        if wasCurrent, let previous = others.max(by: { $0.achievedAt < $1.achievedAt }) {
             try store.setPersonalBestCurrent(id: previous.id, isCurrent: true)
         }
     }
