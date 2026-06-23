@@ -37,8 +37,21 @@ struct ProgressionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Add PB manually") { showManualPB = true }
-                    .foregroundStyle(Color.wolfBlue)
+                Menu {
+                    Button("Add PB Manually") {
+                        showManualPB = true
+                    }
+
+                    if currentPB != nil {
+                        Button("Reset Current PB", role: .destructive) {
+                            showResetAlert = true
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .foregroundStyle(Color.wolfBlue)
+                }
+                .accessibilityLabel("Progression actions")
             }
         }
         .sheet(isPresented: $showManualPB) {
@@ -70,13 +83,6 @@ struct ProgressionView: View {
                 Text(PBFormatter.formatPB(currentPB, exercise: exercise))
                     .pbValueStyle(size: 44)
                     .foregroundStyle(Color.wolfBlue)
-
-                Button("Reset current PB") {
-                    showResetAlert = true
-                }
-                .font(.system(.subheadline, design: .rounded))
-                .foregroundStyle(.secondary)
-                .buttonStyle(.plain)
             } else {
                 Text("No PB yet")
                     .pbValueStyle(size: 44)
