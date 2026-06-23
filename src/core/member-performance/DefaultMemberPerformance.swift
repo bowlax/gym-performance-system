@@ -310,6 +310,36 @@ final class DefaultMemberPerformance: MemberPerformance {
         try store.removeSession(session)
     }
 
+    func resetCurrentPB(memberId: UUID, exerciseId: UUID) throws {
+        guard let currentPB = try performanceDataAccess.fetchCurrentPB(
+            memberId: memberId,
+            exerciseId: exerciseId
+        ) else {
+            return
+        }
+
+        try performanceDataAccess.markPBAsSuperseded(id: currentPB.id)
+    }
+
+    func deletePersonalBest(id: UUID, memberId: UUID, exerciseId: UUID) throws {
+        guard let store = performanceDataAccess as? SwiftDataPerformanceDataAccess else {
+            return
+        }
+
+        let allPBs = try performanceDataAccess.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
+        guard let pb = allPBs.first(where: { $0.id == id }) else { return }
+        guard pb.memberId == memberId else { return }
+
+        if pb.isCurrent {
+            let others = allPBs.filter { $0.id != pb.id }
+            if let previous = others.max(by: { $0.achievedAt < $1.achievedAt }) {
+                try store.setPersonalBestCurrent(id: previous.id, isCurrent: true)
+            }
+        }
+
+        try store.removePersonalBest(pb)
+    }
+
     private func handlePersonalBestForDeletedSet(
         set: ModelSet,
         memberId: UUID,

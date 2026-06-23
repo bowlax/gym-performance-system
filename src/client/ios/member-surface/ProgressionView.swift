@@ -7,6 +7,9 @@ struct ProgressionView: View {
     @Environment(AppDependencies.self) private var dependencies
 
     @State private var showManualPB = false
+    @State private var showResetAlert = false
+    @State private var showDeleteAlert = false
+    @State private var entryPendingDelete: ProgressionEntry?
     @State private var currentPB: PersonalBestModel?
     @State private var entries: [ProgressionEntry] = []
     @State private var chartScrollPosition = Date()
@@ -41,6 +44,18 @@ struct ProgressionView: View {
         .sheet(isPresented: $showManualPB) {
             ManualPBEntrySheet(exercise: exercise)
         }
+        .alert("Reset Personal Best?", isPresented: $showResetAlert) {
+            Button("Reset", role: .destructive) { resetCurrentPB() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will clear your current \(exercise.name) PB. Your history will be preserved.")
+        }
+        .alert("Delete this entry?", isPresented: $showDeleteAlert) {
+            Button("Delete", role: .destructive) { deletePendingEntry() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This PB entry will be permanently removed. This cannot be undone.")
+        }
         .task(id: dependencies.refreshID) {
             await loadProgression()
         }
@@ -55,6 +70,13 @@ struct ProgressionView: View {
                 Text(PBFormatter.formatPB(currentPB, exercise: exercise))
                     .pbValueStyle(size: 44)
                     .foregroundStyle(Color.wolfBlue)
+
+                Button("Reset current PB") {
+                    showResetAlert = true
+                }
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
             } else {
                 Text("No PB yet")
                     .pbValueStyle(size: 44)
@@ -147,10 +169,39 @@ struct ProgressionView: View {
             Text("History")
                 .exerciseTitleStyle()
 
-            ForEach(entries.reversed()) { entry in
-                historyRow(entry)
+            if entries.isEmpty {
+                EmptyStateView(
+                    symbol: "clock.arrow.circlepath",
+                    message: "No exercise history yet"
+                )
+            } else {
+                List {
+                    ForEach(entries.reversed()) { entry in
+                        historyRow(entry)
+                            .listRowInsets(EdgeInsets())
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                if entry.personalBestId != nil {
+                                    Button(role: .destructive) {
+                                        entryPendingDelete = entry
+                                        showDeleteAlert = true
+                                    } label: {
+                                        Text("Delete")
+                                    }
+                                }
+                            }
+                    }
+                }
+                .listStyle(.plain)
+                .scrollDisabled(true)
+                .frame(height: historyListHeight)
             }
         }
+    }
+
+    private var historyListHeight: CGFloat {
+        CGFloat(entries.count) * 56
     }
 
     private func historyRow(_ entry: ProgressionEntry) -> some View {
@@ -180,6 +231,40 @@ struct ProgressionView: View {
         }
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: .cardRadius, style: .continuous))
+    }
+
+    @MainActor
+    private func resetCurrentPB() {
+        do {
+            try dependencies.memberPerformance.resetCurrentPB(
+                memberId: dependencies.memberId,
+                exerciseId: exercise.id
+            )
+            dependencies.refresh()
+        } catch {
+            // No-op: reset is safe when no current PB exists.
+        }
+    }
+
+    @MainActor
+    private func deletePendingEntry() {
+        guard let entryPendingDelete,
+              let personalBestId = entryPendingDelete.personalBestId else {
+            return
+        }
+
+        do {
+            try dependencies.memberPerformance.deletePersonalBest(
+                id: personalBestId,
+                memberId: dependencies.memberId,
+                exerciseId: exercise.id
+            )
+            dependencies.refresh()
+        } catch {
+            // No-op: invalid delete targets are ignored.
+        }
+
+        self.entryPendingDelete = nil
     }
 
     @MainActor
@@ -219,6 +304,12 @@ struct ProgressionView: View {
         let calendar = Calendar.current
         var merged: [ProgressionEntry] = []
         var sessionDates = Set<Date>()
+        let pbBySetId = Dictionary(
+            uniqueKeysWithValues: personalBests.compactMap { pb -> (UUID, UUID)? in
+                guard let setId = pb.setId else { return nil }
+                return (setId, pb.id)
+            }
+        )
 
         for summary in sessionHistory {
             sessionDates.insert(calendar.startOfDay(for: summary.sessionDate))
@@ -228,7 +319,8 @@ struct ProgressionView: View {
                     date: summary.sessionDate,
                     formattedValue: PBFormatter.formatSet(summary.set, exercise: exercise),
                     chartValue: PBFormatter.chartValue(set: summary.set, exercise: exercise),
-                    isPB: summary.isPB
+                    isPB: summary.isPB,
+                    personalBestId: pbBySetId[summary.set.id]
                 )
             )
         }
@@ -244,7 +336,8 @@ struct ProgressionView: View {
                         date: pb.achievedAt,
                         formattedValue: PBFormatter.formatPB(pb, exercise: exercise),
                         chartValue: PBFormatter.chartValue(pb: pb, exercise: exercise),
-                        isPB: true
+                        isPB: true,
+                        personalBestId: pb.id
                     )
                 )
             } else if pb.setId == nil {
@@ -255,7 +348,8 @@ struct ProgressionView: View {
                         date: pb.achievedAt,
                         formattedValue: PBFormatter.formatPB(pb, exercise: exercise),
                         chartValue: PBFormatter.chartValue(pb: pb, exercise: exercise),
-                        isPB: true
+                        isPB: true,
+                        personalBestId: pb.id
                     )
                 )
             }

@@ -61,4 +61,12 @@ protocol MemberPerformance {
 
     /// Deletes a session and cascades removal of entries, sets, and affected PBs.
     func deleteSession(id: UUID, memberId: UUID) throws
+
+    // MARK: -- PB Management
+
+    /// Clears the current PB for an exercise while preserving history.
+    func resetCurrentPB(memberId: UUID, exerciseId: UUID) throws
+
+    /// Permanently deletes a PB record, promoting the previous PB if needed.
+    func deletePersonalBest(id: UUID, memberId: UUID, exerciseId: UUID) throws
 }

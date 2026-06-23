@@ -921,6 +921,134 @@ struct MemberPerformanceTests {
         #expect(currentPB?.isCurrent == true)
         #expect(currentPB?.weight == 80.0)
     }
+
+    // MARK: -- PB Management
+
+    @Test
+    func testTC_MP29_ResetCurrentPBSetsIsCurrentToFalse() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let pb = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 85.0,
+            reps: 5
+        )
+
+        try test.memberPerformance.resetCurrentPB(memberId: testMemberId, exerciseId: freeSquatId)
+
+        #expect(try test.performanceDataAccess.fetchCurrentPB(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        ) == nil)
+        let history = try test.performanceDataAccess.fetchAllPBs(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+        #expect(history.contains { $0.id == pb.id })
+        #expect(history.first { $0.id == pb.id }?.isCurrent == false)
+    }
+
+    @Test
+    func testTC_MP30_ResetCurrentPBHasNoEffectWhenNoCurrentPBExists() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+
+        try test.memberPerformance.resetCurrentPB(memberId: testMemberId, exerciseId: freeSquatId)
+
+        #expect(try test.performanceDataAccess.fetchAllPBs(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        ).isEmpty)
+    }
+
+    @Test
+    func testTC_MP31_DeletePersonalBestRemovesTheRecord() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let pb = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 85.0,
+            reps: 5,
+            isCurrent: false
+        )
+
+        try test.memberPerformance.deletePersonalBest(
+            id: pb.id,
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+
+        #expect(try test.performanceDataAccess.fetchAllPBs(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        ).isEmpty)
+    }
+
+    @Test
+    func testTC_MP32_DeletePersonalBestRestoresPreviousPBWhenDeletingCurrent() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let historical = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 80.0,
+            reps: 5,
+            achievedAt: Date().addingTimeInterval(-86_400),
+            isCurrent: false
+        )
+        let current = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 85.0,
+            reps: 5
+        )
+
+        try test.memberPerformance.deletePersonalBest(
+            id: current.id,
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+
+        let restored = try test.performanceDataAccess.fetchCurrentPB(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+        #expect(restored?.id == historical.id)
+        #expect(restored?.isCurrent == true)
+        #expect(try test.performanceDataAccess.fetchAllPBs(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        ).contains { $0.id == historical.id })
+    }
+
+    @Test
+    func testTC_MP33_DeletePersonalBestLeavesNoCurrentPBWhenDeletingOnlyRecord() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let pb = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 85.0,
+            reps: 5
+        )
+
+        try test.memberPerformance.deletePersonalBest(
+            id: pb.id,
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+
+        #expect(try test.performanceDataAccess.fetchCurrentPB(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        ) == nil)
+        #expect(try test.performanceDataAccess.fetchAllPBs(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        ).isEmpty)
+    }
 }
 
 #else
@@ -1551,6 +1679,105 @@ final class MemberPerformanceTests: XCTestCase {
         XCTAssertEqual(currentPB?.id, oldPB.id)
         XCTAssertTrue(currentPB?.isCurrent == true)
         XCTAssertEqual(currentPB?.weight, 80.0)
+    }
+
+    func testTC_MP29_ResetCurrentPBSetsIsCurrentToFalse() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let pb = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 85.0,
+            reps: 5
+        )
+
+        try test.memberPerformance.resetCurrentPB(memberId: testMemberId, exerciseId: freeSquatId)
+
+        XCTAssertNil(try test.performanceDataAccess.fetchCurrentPB(memberId: testMemberId, exerciseId: freeSquatId))
+        let history = try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId)
+        XCTAssertTrue(history.contains { $0.id == pb.id })
+        XCTAssertFalse(history.first { $0.id == pb.id }?.isCurrent == true)
+    }
+
+    func testTC_MP30_ResetCurrentPBHasNoEffectWhenNoCurrentPBExists() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+
+        try test.memberPerformance.resetCurrentPB(memberId: testMemberId, exerciseId: freeSquatId)
+
+        XCTAssertTrue(try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId).isEmpty)
+    }
+
+    func testTC_MP31_DeletePersonalBestRemovesTheRecord() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let pb = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 85.0,
+            reps: 5,
+            isCurrent: false
+        )
+
+        try test.memberPerformance.deletePersonalBest(
+            id: pb.id,
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+
+        XCTAssertTrue(try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId).isEmpty)
+    }
+
+    func testTC_MP32_DeletePersonalBestRestoresPreviousPBWhenDeletingCurrent() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let historical = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 80.0,
+            reps: 5,
+            achievedAt: Date().addingTimeInterval(-86_400),
+            isCurrent: false
+        )
+        let current = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 85.0,
+            reps: 5
+        )
+
+        try test.memberPerformance.deletePersonalBest(
+            id: current.id,
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+
+        let restored = try test.performanceDataAccess.fetchCurrentPB(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+        XCTAssertEqual(restored?.id, historical.id)
+        XCTAssertTrue(restored?.isCurrent == true)
+    }
+
+    func testTC_MP33_DeletePersonalBestLeavesNoCurrentPBWhenDeletingOnlyRecord() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let pb = try saveExistingPB(
+            performanceDataAccess: test.performanceDataAccess,
+            exerciseId: freeSquatId,
+            weight: 85.0,
+            reps: 5
+        )
+
+        try test.memberPerformance.deletePersonalBest(
+            id: pb.id,
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+
+        XCTAssertNil(try test.performanceDataAccess.fetchCurrentPB(memberId: testMemberId, exerciseId: freeSquatId))
+        XCTAssertTrue(try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId).isEmpty)
     }
 }
 #endif
