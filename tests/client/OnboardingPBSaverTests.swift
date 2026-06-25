@@ -97,7 +97,8 @@ struct OnboardingPBSaverTests {
             weight: 30,
             reps: 8,
             time: nil,
-            distance: nil
+            distance: nil,
+            achievedAt: Date()
         )
 
         #expect(result.isNewPB)

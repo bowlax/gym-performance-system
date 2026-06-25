@@ -8,6 +8,7 @@ struct ManualPBEntrySheet: View {
     @Environment(AppDependencies.self) private var dependencies
 
     @State private var draft = SetDraftValue.empty
+    @State private var selectedDate = Date()
     @State private var feedback: Feedback?
     @State private var currentPB: PersonalBestModel?
 
@@ -46,6 +47,14 @@ struct ManualPBEntrySheet: View {
                                     .captionLabelStyle()
                             }
                         }
+
+                        DatePicker(
+                            "Date",
+                            selection: $selectedDate,
+                            in: ...Date(),
+                            displayedComponents: .date
+                        )
+                        .datePickerStyle(.compact)
 
                         VStack(alignment: .leading, spacing: .cardSpacing) {
                             Text("New PB")
@@ -136,7 +145,8 @@ struct ManualPBEntrySheet: View {
                 weight: values.weight,
                 reps: values.reps,
                 time: values.time,
-                distance: values.distance
+                distance: values.distance,
+                achievedAt: selectedDate
             )
 
             if result.isNewPB {

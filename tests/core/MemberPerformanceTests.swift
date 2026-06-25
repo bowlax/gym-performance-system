@@ -334,7 +334,8 @@ struct MemberPerformanceTests {
             weight: 80.0,
             reps: 5,
             time: nil,
-            distance: nil
+            distance: nil,
+            achievedAt: Date()
         )
 
         #expect(result.isNewPB == true)
@@ -366,7 +367,8 @@ struct MemberPerformanceTests {
             weight: 85.0,
             reps: 5,
             time: nil,
-            distance: nil
+            distance: nil,
+            achievedAt: Date()
         )
 
         #expect(result.isNewPB == true)
@@ -397,7 +399,8 @@ struct MemberPerformanceTests {
             weight: 75.0,
             reps: 5,
             time: nil,
-            distance: nil
+            distance: nil,
+            achievedAt: Date()
         )
 
         #expect(result.isNewPB == false)
@@ -423,7 +426,8 @@ struct MemberPerformanceTests {
                 weight: 80.0,
                 reps: nil,
                 time: nil,
-                distance: nil
+                distance: nil,
+                achievedAt: Date()
             )
         }
     }
@@ -439,7 +443,8 @@ struct MemberPerformanceTests {
             weight: 80.0,
             reps: 5,
             time: nil,
-            distance: nil
+            distance: nil,
+            achievedAt: Date()
         )
 
         let session = makeSession()
@@ -1394,6 +1399,58 @@ struct MemberPerformanceTests {
             exerciseId: freeSquatId
         ) == nil)
     }
+
+    @Test
+    func testTC_MP43_ManualPBUsesSpecifiedDateNotToday() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let calendar = Calendar.current
+        let specifiedDate = calendar.date(from: DateComponents(year: 2025, month: 1, day: 1))!
+
+        let result = try test.memberPerformance.recordManualPB(
+            exerciseId: freeSquatId,
+            memberId: testMemberId,
+            weight: 80.0,
+            reps: 5,
+            time: nil,
+            distance: nil,
+            achievedAt: specifiedDate
+        )
+
+        #expect(result.isNewPB == true)
+        #expect(calendar.isDate(result.personalBest!.achievedAt, inSameDayAs: specifiedDate))
+        #expect(!calendar.isDate(result.personalBest!.achievedAt, inSameDayAs: Date()))
+    }
+
+    @Test
+    func testTC_MP44_ManualPBWithPastDateAppearsInProgressionHistory() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let calendar = Calendar.current
+        let now = Date()
+        let sixMonthsAgo = calendar.date(byAdding: .month, value: -6, to: now)!
+        let oneYearAgo = calendar.date(byAdding: .year, value: -1, to: now)!
+
+        let result = try test.memberPerformance.recordManualPB(
+            exerciseId: freeSquatId,
+            memberId: testMemberId,
+            weight: 80.0,
+            reps: 5,
+            time: nil,
+            distance: nil,
+            achievedAt: sixMonthsAgo
+        )
+
+        let progression = try test.memberPerformance.pbProgression(
+            memberId: testMemberId,
+            exerciseId: freeSquatId,
+            from: oneYearAgo
+        )
+
+        #expect(progression.count == 1)
+        #expect(progression[0].id == result.personalBest!.id)
+        #expect(calendar.isDate(progression[0].achievedAt, inSameDayAs: sixMonthsAgo))
+    }
 }
 
 #else
@@ -1635,7 +1692,8 @@ final class MemberPerformanceTests: XCTestCase {
             weight: 80.0,
             reps: 5,
             time: nil,
-            distance: nil
+            distance: nil,
+            achievedAt: Date()
         )
         XCTAssertTrue(result.isNewPB)
         XCTAssertEqual(result.personalBest?.entryType, .manualEntry)
@@ -1652,7 +1710,8 @@ final class MemberPerformanceTests: XCTestCase {
             weight: 85.0,
             reps: 5,
             time: nil,
-            distance: nil
+            distance: nil,
+            achievedAt: Date()
         )
         XCTAssertTrue(result.isNewPB)
         let superseded = try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId)
@@ -1670,7 +1729,8 @@ final class MemberPerformanceTests: XCTestCase {
             weight: 75.0,
             reps: 5,
             time: nil,
-            distance: nil
+            distance: nil,
+            achievedAt: Date()
         )
         XCTAssertFalse(result.isNewPB)
         XCTAssertNil(result.personalBest)
@@ -1685,7 +1745,8 @@ final class MemberPerformanceTests: XCTestCase {
                 weight: 80.0,
                 reps: nil,
                 time: nil,
-                distance: nil
+                distance: nil,
+                achievedAt: Date()
             )
         )
     }
@@ -1699,7 +1760,8 @@ final class MemberPerformanceTests: XCTestCase {
             weight: 80.0,
             reps: 5,
             time: nil,
-            distance: nil
+            distance: nil,
+            achievedAt: Date()
         )
         let session = makeSession()
         let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)

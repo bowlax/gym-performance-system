@@ -23,7 +23,8 @@ enum OnboardingPBSaver {
                 weight: values.weight,
                 reps: values.reps,
                 time: values.time,
-                distance: values.distance
+                distance: values.distance,
+                achievedAt: Date()
             )) != nil
 
             if didSave {

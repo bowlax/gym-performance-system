@@ -120,7 +120,8 @@ final class DefaultMemberPerformance: MemberPerformance {
         weight: Double?,
         reps: Int?,
         time: Double?,
-        distance: Double?
+        distance: Double?,
+        achievedAt: Date
     ) throws -> ManualPBResult {
         guard let exercise = try exerciseRegistry.exercise(id: exerciseId) else {
             throw MemberPerformanceError.invalidExercise(exerciseId)
@@ -167,7 +168,7 @@ final class DefaultMemberPerformance: MemberPerformance {
             reps: reps,
             time: time,
             distance: distance,
-            achievedAt: Date(),
+            achievedAt: achievedAt,
             isCurrent: true,
             entryType: .manualEntry
         )

@@ -30,7 +30,8 @@ protocol MemberPerformance {
         weight: Double?,
         reps: Int?,
         time: Double?,
-        distance: Double?
+        distance: Double?,
+        achievedAt: Date
     ) throws -> ManualPBResult
 
     // MARK: -- Progression Views
