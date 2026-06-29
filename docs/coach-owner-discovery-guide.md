@@ -23,7 +23,7 @@
 Send these one at a time, ideally letting him answer each before sending the next. Each is designed to invite a story rather than a short answer.
 
 ### 1. The normal week
-> Talk me through a normal week at the gym for you. What are you actually doing day to day -- not the big picture stuff, just the ordinary running of it?
+> Talk me through how you set up a normal week at the gym. What are you doing each week and each day -- not the big picture stuff, just the ordinary running of it?
 
 *(Draws out the rhythm of how he works and where the app might fit.)*
 
