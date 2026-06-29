@@ -433,3 +433,135 @@ The iOS app retains its Swift business logic and local SwiftData store. The only
 - Business logic exists in two implementations -- mitigated by shared specs and tests
 - Supabase costs scale with usage -- generous low tiers, small current scale
 - Row-level security rules require careful design to enforce the sync privacy model
+
+
+---
+
+## 14. Phase 2 Use Case Capture
+
+**Status as of June 2026 scoping session.**
+
+| Surface | Status |
+|---|---|
+| Registration and Sync | Complete -- 15 use cases |
+| Connected Member (Group 1 -- sync-independent of coach) | Complete -- 11 use cases |
+| Connected Member (Group 2 -- coach-dependent) | Parked -- needs coach input |
+| Coach Surface | Parked -- needs coach input |
+| Owner Surface | Parked -- needs owner input |
+| Administrator | Partial -- GDPR deletion defined, support tooling deferred to phase 3 |
+
+### Phase 2 Stakeholders
+
+| Stakeholder | Description |
+|---|---|
+| Anonymous members | iOS only. Local store only, not synced, invisible to coaches |
+| Connected members | Synced via TeamUp, visible to coaches |
+| Coaches | TeamUp providers. Member-facing operational web surface |
+| Owner | TeamUp provider with full strategic access |
+| Administrator | Developer/support. Raw Supabase access in phase 2. Dedicated Admin Surface deferred to phase 3. GDPR deletion is a defined requirement |
+| TeamUp | External identity and membership system. Source of truth for member identity |
+| Sync process | System actor managing local-to-central data flow |
+
+### iOS vs Web Member Distinction
+
+A foundational phase 2 distinction:
+
+**iOS members:**
+- Local-first, offline-capable
+- Can be anonymous (local-only) or connected (synced)
+- Connection is a deliberate choice (the registration step)
+
+**Web members (primarily Android):**
+- Connected by definition -- no local store
+- Always authenticated via TeamUp
+- Inherently connectivity-dependent
+- The anonymous/local-only option does not apply -- it is an iOS-only capability
+
+### Registration and Sync Use Cases
+
+**Connection:**
+1. A member connects their TeamUp account, enabling sync
+2. A member skips connection and remains anonymous/local-only (iOS only)
+3. A previously anonymous member connects later from settings
+4. A connected member disconnects, reverting to local-only (central data retained by default)
+5. A member requests deletion of their central data (GDPR right to erasure)
+
+**Syncing:**
+6. A connected member's local data syncs to the central store
+7. A connected member's data syncs down to a new device
+8. A member logs data offline; the system syncs when connectivity returns
+9. Local and central data merge using UUID identity, last-write-wins on conflict (by updatedAt)
+
+**Migration:**
+10. An existing phase 1 member connects for the first time; local history merges up to central
+
+**Token management:**
+11. A member's TeamUp token expires and is refreshed transparently
+12. Token refresh fails; the member is prompted to reconnect
+
+**Sync behaviour:**
+13. Sync happens automatically in the background when connectivity allows
+14. A member triggers a manual sync via a "sync now" action
+15. A member views their sync status (last synced, syncing now, offline, error)
+
+### Connected Member Use Cases -- Group 1
+
+**Data protection and portability (iOS):**
+1. A connected iOS member's data is automatically backed up to the central store
+2. A connected iOS member restores their data on a new device by connecting
+3. A connected iOS member's local and central data stay in sync
+
+**Web access (all members, primarily Android):**
+4. A member signs in to the web surface using TeamUp
+5. A web member views their current PBs, progression, session history, and consistency
+6. A web member logs a training session in the browser
+7. A web member records a manual PB in the browser
+8. A web member edits or deletes their data in the browser
+9. A web member's actions write directly to the central store
+
+**Data control:**
+10. A member requests deletion of their central data (GDPR)
+11. A connected iOS member disconnects, keeping local data, optionally retaining central data
+
+### First Buildable Slice of Phase 2
+
+Sync infrastructure plus member web access to own data. This delivers real member value (cloud backup, browser access, Android support) without requiring any coach use cases, and proves the entire sync infrastructure end to end -- de-risking everything that follows.
+
+---
+
+## 15. Business Logic Dual-Implementation Strategy
+
+**Full web parity for Android members requires the member business logic to run server-side as well as on iOS.**
+
+Because web members (primarily Android) have no local Swift app, the server must run PB evaluation, progression calculation, and all member business logic for them. This means the business logic exists in two implementations:
+
+- **Swift on device** -- iOS members, offline-capable (existing phase 1 implementation)
+- **TypeScript server-side** -- web members, runs in Supabase Edge Functions
+
+### Divergence risk and mitigation
+
+The risk: two implementations of the same rules drifting apart, so an iOS member and a web member could lift the same weight and get different PB results. This would destroy trust.
+
+The mitigation: **shared, language-neutral test vectors.**
+
+- Existing PB evaluation test scenarios are extracted into language-neutral JSON test vectors
+- Each vector specifies inputs and expected result (e.g. currentPB, newSet, minimumReps, expectedResult)
+- The Swift test suite loads and runs against these vectors
+- The TypeScript test suite loads and runs against the SAME vectors
+- Both must pass identically -- divergence is caught automatically
+- The JSON vectors become the executable specification and single source of truth
+
+### Why not a single shared implementation
+
+Single-implementation approaches (Kotlin Multiplatform, Rust core with bindings) were considered and ruled out:
+
+- **Kotlin Multiplatform** -- would require extracting business logic from the shipped Swift app into Kotlin, adds a third language, weaker AI tooling support, fiddly iOS integration
+- **Rust core with WASM/bindings** -- steep learning curve, complex binding layer, massive overkill for simple comparison logic, weakest AI tooling support
+
+The business logic is simple (a handful of comparisons that rarely change). The divergence risk is mild and well-bounded. Test vectors are proportionate to the actual risk. Single-implementation approaches would be a sledgehammer requiring skills deliberately not being invested in.
+
+**Future consideration:** If the phase 3 Insight Engine grows into genuinely complex shared computation, a shared Rust core for that specific part could be reconsidered. Not warranted for phase 2 PB and progression logic.
+
+### Early phase 2 activity
+
+Extract existing Swift PB evaluation test scenarios into language-neutral JSON test vectors. This is a reformatting of existing work, not new thinking, and must happen before or alongside the TypeScript business logic implementation.
