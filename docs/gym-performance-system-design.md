@@ -374,3 +374,62 @@ When a second gym is onboarded, `gymId` will be added to all entities. The local
 ---
 
 *This document is the authoritative design record for the Gym Performance System. All build decisions should trace back to the architecture and use cases captured here. When starting a new session, provide this document as context before proceeding.*
+
+---
+
+## 13. Phase 2 Technology Stack
+
+**Confirmed during phase 2 scoping (June 2026).**
+
+These technology choices slot into the architectural component slots already defined. They do not change the logical architecture -- they realise it.
+
+| Architectural Slot | Technology | Rationale |
+|---|---|---|
+| Identity / Authentication (Access Control utility) | TeamUp OAuth | Every gym member already has a TeamUp account. No custom authentication, password storage, or registration database needed |
+| Central Data Store (Resource) | Supabase (PostgreSQL) | Database, auto-generated API, real-time sync, row-level security, and hosting in one platform |
+| Server-side business logic | TypeScript (Supabase Edge Functions) | Same language as web surfaces, strong AI tooling support |
+| Coach Surface (Client) | React | Lovable generates natively |
+| Owner Surface (Client) | React | Lovable generates natively |
+| Member Web Surface (Client) | React | Lovable generates natively. Covers Android and web users |
+| iOS Member Surface (Client) | Swift / SwiftData (unchanged) | Preserves local-first, offline-capable operation |
+
+### TeamUp as the identity source
+
+Every gym member already has a TeamUp account. TeamUp becomes the single source of truth for member identity:
+
+- Member identity comes from TeamUp via OAuth -- the TeamUp customer ID is the member's identity in the system
+- Coach and owner identity maps to TeamUp's Provider role
+- Anonymous/local-only members map to TeamUp's Unregistered Customer concept
+- The "Connect your account?" registration step becomes "Connect your TeamUp account"
+- The app never handles TeamUp passwords -- OAuth bearer token only
+- Attendance data may be available directly from TeamUp, connecting to consistency tracking
+- TeamUp's `TeamUp-Provider-ID` header supports multi-location businesses -- effectively becoming gymId for multi-gym scenarios
+
+**Dependency note:** This creates a dependency on TeamUp for identity. A future gym not using TeamUp would need an alternative identity path. Acceptable given current and near-term gyms all use TeamUp.
+
+### Supabase responsibilities
+
+- PostgreSQL database -- the Central Data Store
+- Auto-generated REST and real-time APIs
+- Row-level security -- enforces the sync privacy model (members see own data, coaches see all synced members, non-syncing members invisible)
+- Hosting -- no servers to manage
+- Edge Functions -- server-side business logic for web surfaces and owner aggregation
+
+### Business logic in two implementations
+
+The business logic exists in two runtime environments:
+- **Swift on device** -- for local-first, offline operation (existing phase 1 implementation)
+- **TypeScript server-side** -- for web surfaces and owner aggregation working with synced data
+
+Both are validated against the same specifications and test scenarios documented in this design and the project specs. The specifications are the contract -- not either implementation. This is consistent with The Method: the business logic is conceptually identical, implemented for two runtime environments.
+
+### Local-first preserved
+
+The iOS app retains its Swift business logic and local SwiftData store. The only addition is the sync layer (Sync Manager + Sync Service Access) that pushes and pulls data to Supabase when a member has connected their TeamUp account. The app continues to function fully offline. The local store remains the source of truth on the device.
+
+### Trade-offs accepted
+
+- Vendor dependency on TeamUp (identity) and Supabase (data, sync)
+- Business logic exists in two implementations -- mitigated by shared specs and tests
+- Supabase costs scale with usage -- generous low tiers, small current scale
+- Row-level security rules require careful design to enforce the sync privacy model
