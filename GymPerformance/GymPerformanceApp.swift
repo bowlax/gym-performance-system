@@ -10,7 +10,13 @@ struct GymPerformanceApp: App {
         do {
             let container = try ModelContainer.gymPerformanceContainer()
             self.modelContainer = container
-            self.dependencies = try AppDependencies(modelContext: ModelContext(container))
+            let modelContext = ModelContext(container)
+            let performanceDataAccess = SwiftDataPerformanceDataAccess(context: modelContext)
+            try MemberIdentityMigration.runMigrationIfNeeded(
+                context: modelContext,
+                performanceDataAccess: performanceDataAccess
+            )
+            self.dependencies = try AppDependencies(modelContext: modelContext)
         } catch {
             fatalError("Failed to create SwiftData ModelContainer: \(error)")
         }
