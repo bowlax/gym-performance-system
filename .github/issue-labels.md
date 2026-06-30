@@ -23,3 +23,13 @@ Labels used to triage feedback from TestFlight testers and internal issue tracki
 5. Close declined items with `wont-fix`.
 
 Labels are managed on GitHub via `gh label create` (see repository settings → Labels).
+
+## Phase assignments (enhancements)
+
+| Issue | Title | Phase |
+|-------|-------|-------|
+| #3 | Reset personal bests (PBs) | `phase-1` |
+| #4 | Apple Health integration | `phase-3` |
+| #5 | Export my data | `phase-1` |
+| #6 | Import my data | `phase-2` |
+| #7 | TeamUp integration | `phase-3` |
