@@ -565,3 +565,47 @@ The business logic is simple (a handful of comparisons that rarely change). The 
 ### Early phase 2 activity
 
 Extract existing Swift PB evaluation test scenarios into language-neutral JSON test vectors. This is a reformatting of existing work, not new thinking, and must happen before or alongside the TypeScript business logic implementation.
+
+
+---
+
+## 16. Multi-Gym Decision (Phase 2 Scoping)
+
+**A second gym is a "maybe, not now" goal. Phase 2 keeps the door open without building multi-gym infrastructure.**
+
+### Key realisation
+
+A second gym is not just a data problem -- it is a configuration and branding problem:
+- Different exercises, PB rules, and gym operations
+- Different branding (Wolf identity is baked into icon, colours, launch screen, app name)
+- Possibly different integrations (not every gym uses TeamUp)
+- Possibly a separate App Store listing
+
+The realistic multi-gym path is therefore one of:
+- A separate branded app per gym, sharing codebase and backend
+- A white-label configuration system (branding and exercises configured per deployment)
+- A genuinely multi-tenant app with gym selection at login
+
+Which is right is deferred to a dedicated design session when a second gym is real.
+
+### What phase 2 does now (cheap, future-proofing only)
+
+1. `gym_id` on every entity in the central store -- keeps every multi-gym path open at near-zero cost
+2. Wolf's exercises bundled in the app -- preserves offline-first, works today
+3. Central store exercises table seeded with Wolf's 19 exercises, same UUIDs, tagged with Wolf's gym_id
+
+### What phase 2 explicitly defers
+
+- Per-gym exercise configuration and sync
+- Branding/white-label systems
+- Multi-tenancy infrastructure
+- Per-gym integration configuration
+
+None of this is built until a second gym is a real, committed requirement, at which point it receives its own scoping session.
+
+### Exercise definition strategy for phase 2 (single gym)
+
+- App ships with Wolf's 19 exercises bundled (offline-first preserved for anonymous and connected members)
+- Central store exercises table seeded with the same 19, identical UUIDs, tagged with Wolf's gym_id
+- Member PBs sync up referencing exercise UUIDs that exist in both the bundle and the central store -- clean referential integrity
+- When a second gym arrives, gym-specific exercise definitions and the mechanism to deliver them to connected members is designed then, not now
