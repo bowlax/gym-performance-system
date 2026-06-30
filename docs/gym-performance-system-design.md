@@ -609,3 +609,126 @@ None of this is built until a second gym is a real, committed requirement, at wh
 - Central store exercises table seeded with the same 19, identical UUIDs, tagged with Wolf's gym_id
 - Member PBs sync up referencing exercise UUIDs that exist in both the bundle and the central store -- clean referential integrity
 - When a second gym arrives, gym-specific exercise definitions and the mechanism to deliver them to connected members is designed then, not now
+
+
+---
+
+## 17. Authentication Design (Phase 2)
+
+**Authentication is provided entirely by TeamUp OAuth. The system maintains no passwords and no separate coach list.**
+
+### TeamUp request modes map to stakeholders
+
+TeamUp's OAuth request modes correspond directly to the system's roles:
+
+| TeamUp Mode | System Role | Access |
+|---|---|---|
+| Customer | Member | Own data only |
+| Provider | Coach / Owner | All members in the gym (with customers or admin permission) |
+| Unregistered Customer | Not used | No account yet -- not relevant |
+
+Role is determined by TeamUp, not maintained separately. When a user authenticates, their TeamUp mode tells the system whether they are a member or staff.
+
+### One OAuth flow for all users
+
+- Members and coaches authenticate the same way -- a single TeamUp OAuth flow
+- No separate admin login, no manually maintained coach list
+- TeamUp itself enforces whether a user can act as a Provider, based on their staff status
+
+### Dual role handled by surface
+
+The owner (and any staff who also train) are both Provider and Customer in TeamUp. The system resolves this by surface, not by asking the user to choose:
+
+| Surface | TeamUp Request Mode | Context |
+|---|---|---|
+| iOS member app | Customer | Person as member, own data |
+| Member web surface | Customer | Person as member, own data |
+| Coach web surface | Provider | Person as staff, all members |
+| Owner web surface | Provider (admin) | Person as owner, full gym view |
+
+The surface sets the `TeamUp-Request-Mode` header. The member app never requests Provider mode; the coach surface always does. The owner uses both surfaces with one TeamUp account, getting the right capability in each automatically. Their own training data is a normal member record, visible in the coach surface like any other member's.
+
+### Security benefit
+
+Because TeamUp decides whether to grant Provider mode based on actual staff status, a member cannot gain coach access simply by pointing at the coach surface -- TeamUp will not issue them a Provider-capable token. RLS in Supabase becomes a second enforcement layer on top of TeamUp's own role control, not the sole barrier.
+
+### Multi-gym and background reporting
+
+- `TeamUp-Provider-ID` header selects the gym for multi-location tokens -- maps to gym_id
+- M2M tokens (Provider mode, admin permission) are available for background server-side reporting that does not involve a user login -- a candidate mechanism for the owner's gym-wide aggregation
+
+### Configuration to confirm with the gym owner
+
+- The three coaches are set up as staff/providers in TeamUp with customers or admin permission
+- Regular members are customers
+- This is a TeamUp configuration check, not a build task
+
+
+---
+
+## 18. TeamUp-to-Supabase Auth Mapping (Phase 2)
+
+**The bridge between TeamUp identity and Supabase sessions is a token broker implemented as a Supabase Edge Function.**
+
+### Why a token broker (Pattern A)
+
+Supabase RLS works with Supabase JWTs and their claims, not TeamUp tokens. A broker translates one into the other. Chosen over Supabase custom OAuth provider (less control over the customer-ID-to-UUID mapping and dual-role handling) and over per-request Postgres verification (calls TeamUp on every request -- slow, fragile, rate-limited).
+
+The broker is the single place that understands TeamUp. It owns:
+- TeamUp token verification
+- The TeamUp-customer-ID to member-UUID mapping
+- Create-or-adopt of the member record
+- Role assignment by surface
+- Minting the Supabase JWT
+
+### The two identities and how they relate
+
+| Identity | Role | Stability |
+|---|---|---|
+| Member UUID | Canonical identity in the data model. Primary key on members and FK on all member data | Stable once established. The per-install UUID becomes this |
+| TeamUp customer ID | The cross-device anchor. The same person has the same TeamUp ID on every device | Stable across devices, owned by TeamUp |
+
+The member UUID is the identity *within* the data model. The TeamUp customer ID is the identity *across devices*. The broker reconciles them at connection time.
+
+### Connection flow (create-or-adopt)
+
+1. Member taps "Connect your TeamUp account", authenticates via TeamUp OAuth
+2. App sends the broker: the TeamUp token AND its local member UUID, AND the surface (to set mode/role)
+3. Broker verifies the TeamUp token, extracts customer ID, provider/gym, and mode
+4. Broker looks up members by (gym_id, teamup_customer_id):
+   - **No existing record** → CREATE a members row using the device's local UUID as primary key, storing the TeamUp customer ID. The local UUID becomes canonical
+   - **Existing record** → ADOPT it. Return the existing member UUID. The device adopts this UUID going forward and merges its local data under it (second-device or returning-member case)
+5. Broker mints a Supabase JWT with claims: member_id (the canonical UUID), gym_id, role (from surface/mode)
+6. App uses the Supabase JWT for all sync requests; RLS reads the claims
+7. App syncs local data up under the canonical member identity
+
+### Second-device reconciliation
+
+When a member connects on a second device:
+- The second device has its own different local UUID
+- But the same TeamUp customer ID
+- The broker finds the existing members row by TeamUp customer ID and returns the FIRST device's UUID
+- The second device adopts that UUID -- its local data is re-tagged to the canonical UUID before/during sync (same mechanism as the phase 1 legacy-ID migration)
+- Both devices now operate under one canonical member UUID
+
+This is why the member record is create-or-adopt, not always-create. TeamUp customer ID is the stable anchor that prevents a member fragmenting into multiple identities across devices.
+
+### Role assignment
+
+The broker sets the role claim based on the surface that initiated auth:
+- iOS member app / member web surface → role: member (Customer mode)
+- Coach web surface → role: coach (Provider mode)
+- Owner web surface → role: owner (Provider mode, admin)
+
+TeamUp's own enforcement means a non-staff member cannot obtain a Provider-capable token even if they target the coach surface -- the broker will not be able to mint a coach JWT for them.
+
+### What RLS then enforces
+
+The Supabase JWT carries member_id, gym_id, and role. RLS policies use these:
+- Every query scoped to the JWT's gym_id
+- role = member → rows where member_id matches the JWT
+- role = coach/owner → all member rows within gym_id
+- Soft-deleted rows excluded from normal reads
+- GDPR hard-delete is a privileged operation not exposed to member or coach roles
+
+With the auth mapping defined, the deferred RLS policy SQL (supabase-schema.md section) can now be written against these claims.
