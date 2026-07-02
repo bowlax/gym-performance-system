@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "vectors": [
+    {
+      "id": "TC-E5",
+      "description": "First set with correct reps is a PB",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "currentPB": null,
+      "newSet": { "weight": 80, "reps": 5 },
+      "expectedResult": "isPB"
+    },
+    {
+      "id": "TC-E6",
+      "description": "Heavier weight at correct reps is a PB",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "currentPB": { "weight": 80, "reps": 5 },
+      "newSet": { "weight": 85, "reps": 5 },
+      "expectedResult": "isPB"
+    },
+    {
+      "id": "TC-E7",
+      "description": "Same weight at correct reps is not a PB",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "currentPB": { "weight": 80, "reps": 5 },
+      "newSet": { "weight": 80, "reps": 5 },
+      "expectedResult": "notPB"
+    },
+    {
+      "id": "TC-E8",
+      "description": "Heavier weight at any rep count is a PB",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "currentPB": { "weight": 80, "reps": 5 },
+      "newSet": { "weight": 85, "reps": 3 },
+      "expectedResult": "isPB"
+    },
+    {
+      "id": "TC-E9",
+      "description": "First set at any rep count is a PB",
+      "rule": "bestWeightAndReps",
+      "exerciseName": "45-Degree Dumbbell Press",
+      "targetReps": null,
+      "minimumReps": null,
+      "currentPB": null,
+      "newSet": { "weight": 20, "reps": 5 },
+      "expectedResult": "isPB"
+    },
+    {
+      "id": "TC-E10",
+      "description": "First set below former minimum reps is a PB",
+      "rule": "bestWeightAndReps",
+      "exerciseName": "45-Degree Dumbbell Press",
+      "targetReps": null,
+      "minimumReps": null,
+      "currentPB": null,
+      "newSet": { "weight": 20, "reps": 4 },
+      "expectedResult": "isPB"
+    },
+    {
+      "id": "TC-E11",
+      "description": "Weight increase at any reps is a PB",
+      "rule": "bestWeightAndReps",
+      "exerciseName": "45-Degree Dumbbell Press",
+      "targetReps": null,
+      "minimumReps": null,
+      "currentPB": { "weight": 20, "reps": 8 },
+      "newSet": { "weight": 22, "reps": 5 },
+      "expectedResult": "isPB"
+    },
+    {
+      "id": "TC-E12",
+      "description": "Reps increase at current best weight is a PB",
+      "rule": "bestWeightAndReps",
+      "exerciseName": "45-Degree Dumbbell Press",
+      "targetReps": null,
+      "minimumReps": null,
+      "currentPB": { "weight": 20, "reps": 8 },
+      "newSet": { "weight": 20, "reps": 10 },
+      "expectedResult": "isPB"
+    },
+    {
+      "id": "TC-E13",
+      "description": "Lower weight is not a PB regardless of reps",
+      "rule": "bestWeightAndReps",
+      "exerciseName": "45-Degree Dumbbell Press",
+      "targetReps": null,
+      "minimumReps": null,
+      "currentPB": { "weight": 22, "reps": 5 },
+      "newSet": { "weight": 20, "reps": 12 },
+      "expectedResult": "notPB"
+    },
+    {
+      "id": "TC-E14",
+      "description": "Weight increase at low reps is a PB",
+      "rule": "bestWeightAndReps",
+      "exerciseName": "45-Degree Dumbbell Press",
+      "targetReps": null,
+      "minimumReps": null,
+      "currentPB": { "weight": 20, "reps": 8 },
+      "newSet": { "weight": 22, "reps": 4 },
+      "expectedResult": "isPB"
+    },
+    {
+      "id": "TC-E15",
+      "description": "More reps is a PB",
+      "rule": "mostReps",
+      "exerciseName": "Chin-ups",
+      "targetReps": null,
+      "minimumReps": null,
+      "currentPB": { "reps": 10 },
+      "newSet": { "reps": 11 },
+      "expectedResult": "isPB"
+    },
+    {
+      "id": "TC-E16",
+      "description": "Same reps is not a PB",
+      "rule": "mostReps",
+      "exerciseName": "Chin-ups",
+      "targetReps": null,
+      "minimumReps": null,
+      "currentPB": { "reps": 10 },
+      "newSet": { "reps": 10 },
+      "expectedResult": "notPB"
+    },
+    {
+      "id": "TC-E17",
+      "description": "Lower time is a PB",
+      "rule": "fastestTime",
+      "exerciseName": "Ski 500m",
+      "targetReps": null,
+      "minimumReps": null,
+      "currentPB": { "time": 120 },
+      "newSet": { "time": 118.5 },
+      "expectedResult": "isPB"
+    },
+    {
+      "id": "TC-E18",
+      "description": "Higher time is not a PB",
+      "rule": "fastestTime",
+      "exerciseName": "Ski 500m",
+      "targetReps": null,
+      "minimumReps": null,
+      "currentPB": { "time": 120 },
+      "newSet": { "time": 122 },
+      "expectedResult": "notPB"
+    },
+    {
+      "id": "TC-E19",
+      "description": "Longer distance is a PB",
+      "rule": "longestDistance",
+      "exerciseName": "Bike 60s",
+      "targetReps": null,
+      "minimumReps": null,
+      "currentPB": { "distance": 400 },
+      "newSet": { "distance": 420 },
+      "expectedResult": "isPB"
+    },
+    {
+      "id": "TC-E20",
+      "description": "Shorter distance is not a PB",
+      "rule": "longestDistance",
+      "exerciseName": "Bike 60s",
+      "targetReps": null,
+      "minimumReps": null,
+      "currentPB": { "distance": 400 },
+      "newSet": { "distance": 390 },
+      "expectedResult": "notPB"
+    }
+  ]
+}

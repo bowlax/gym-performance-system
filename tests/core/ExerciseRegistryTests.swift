@@ -19,47 +19,6 @@ struct ExerciseRegistryTests {
         return registry
     }
 
-    private func exercise(named name: String) -> ExerciseModel {
-        guard let exercise = ExerciseModel.seedData.first(where: { $0.name == name }) else {
-            fatalError("Missing seed exercise: \(name)")
-        }
-        return exercise
-    }
-
-    private func makeSet(
-        weight: Double? = nil,
-        reps: Int? = nil,
-        time: Double? = nil,
-        distance: Double? = nil
-    ) -> ModelSet {
-        ModelSet(
-            exerciseEntryId: UUID(),
-            weight: weight,
-            reps: reps,
-            time: time,
-            distance: distance
-        )
-    }
-
-    private func makeCurrentPB(
-        exerciseId: UUID,
-        weight: Double? = nil,
-        reps: Int? = nil,
-        time: Double? = nil,
-        distance: Double? = nil
-    ) -> PersonalBestModel {
-        PersonalBestModel(
-            memberId: UUID(),
-            exerciseId: exerciseId,
-            setId: UUID(),
-            weight: weight,
-            reps: reps,
-            time: time,
-            distance: distance,
-            achievedAt: Date()
-        )
-    }
-
     // MARK: -- Seeding
 
     @Test
@@ -132,203 +91,27 @@ struct ExerciseRegistryTests {
         #expect(displayOrders == Array(1...19), "Expected displayOrder 1...19, got \(displayOrders)")
     }
 
-    // MARK: -- PB Evaluation: heaviestWeightAtReps
-
-    @Test
-    func testTC_E5_FirstSetWithCorrectRepsIsAPB() {
-        let registry = try! makeRegistry()
-        let exercise = exercise(named: "Free Squat")
-        let set = makeSet(weight: 80.0, reps: 5)
-
-        let result = registry.isPB(set: set, exercise: exercise, currentPB: nil)
-
-        #expect(result == true, "Expected first valid set to be a PB")
+    private enum PBEvaluationVectorFixtures {
+        static let all: [PBEvaluationVector] = {
+            do {
+                return try PBEvaluationVectorLoader.load()
+            } catch {
+                fatalError("Failed to load PB evaluation vectors: \(error)")
+            }
+        }()
     }
 
-    @Test
-    func testTC_E6_HeavierWeightAtCorrectRepsIsAPB() {
-        let registry = try! makeRegistry()
-        let exercise = exercise(named: "Free Squat")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, weight: 80.0, reps: 5)
-        let set = makeSet(weight: 85.0, reps: 5)
+    // MARK: -- PB Evaluation (shared vectors)
 
-        let result = registry.isPB(set: set, exercise: exercise, currentPB: currentPB)
+    @Test(arguments: PBEvaluationVectorFixtures.all)
+    func testPBEvaluationVector(_ vector: PBEvaluationVector) throws {
+        let registry = try makeRegistry()
+        let result = PBEvaluationVectorRunner.evaluate(vector, registry: registry)
 
-        #expect(result == true, "Expected heavier weight at target reps to be a PB")
-    }
-
-    @Test
-    func testTC_E7_SameWeightAtCorrectRepsIsNotAPB() {
-        let registry = try! makeRegistry()
-        let exercise = exercise(named: "Free Squat")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, weight: 80.0, reps: 5)
-        let set = makeSet(weight: 80.0, reps: 5)
-
-        let result = registry.isPB(set: set, exercise: exercise, currentPB: currentPB)
-
-        #expect(result == false, "Expected matching weight not to be a PB")
-    }
-
-    @Test
-    func testTC_E8_HeavierWeightAtAnyRepsIsAPB() {
-        let registry = try! makeRegistry()
-        let exercise = exercise(named: "Free Squat")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, weight: 80.0, reps: 5)
-        let set = makeSet(weight: 85.0, reps: 3)
-
-        let result = registry.isPB(set: set, exercise: exercise, currentPB: currentPB)
-
-        #expect(result == true, "Expected heavier weight at any rep count to be a PB")
-    }
-
-    // MARK: -- PB Evaluation: bestWeightAndReps
-
-    @Test
-    func testTC_E9_FirstSetAtAnyRepsIsAPB() {
-        let registry = try! makeRegistry()
-        let exercise = exercise(named: "45-Degree Dumbbell Press")
-        let set = makeSet(weight: 20.0, reps: 5)
-
-        let result = registry.isPB(set: set, exercise: exercise, currentPB: nil)
-
-        #expect(result == true, "Expected first set at any rep count to be a PB")
-    }
-
-    @Test
-    func testTC_E10_FirstSetBelowFormerMinimumRepsIsAPB() {
-        let registry = try! makeRegistry()
-        let exercise = exercise(named: "45-Degree Dumbbell Press")
-        let set = makeSet(weight: 20.0, reps: 4)
-
-        let result = registry.isPB(set: set, exercise: exercise, currentPB: nil)
-
-        #expect(result == true, "Expected set below former minimum reps to be a PB")
-    }
-
-    @Test
-    func testTC_E11_WeightIncreaseAtAnyRepsIsAPB() {
-        let registry = try! makeRegistry()
-        let exercise = exercise(named: "45-Degree Dumbbell Press")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, weight: 20.0, reps: 8)
-        let set = makeSet(weight: 22.0, reps: 5)
-
-        let result = registry.isPB(set: set, exercise: exercise, currentPB: currentPB)
-
-        #expect(result == true, "Expected weight increase at any reps to be a PB")
-    }
-
-    @Test
-    func testTC_E12_RepsIncreaseAtCurrentBestWeightIsAPB() {
-        let registry = try! makeRegistry()
-        let exercise = exercise(named: "45-Degree Dumbbell Press")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, weight: 20.0, reps: 8)
-        let set = makeSet(weight: 20.0, reps: 10)
-
-        let result = registry.isPB(set: set, exercise: exercise, currentPB: currentPB)
-
-        #expect(result == true, "Expected reps increase at current best weight to be a PB")
-    }
-
-    @Test
-    func testTC_E13_WeightBelowCurrentBestIsNotAPBRegardlessOfReps() {
-        let registry = try! makeRegistry()
-        let exercise = exercise(named: "45-Degree Dumbbell Press")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, weight: 22.0, reps: 5)
-        let set = makeSet(weight: 20.0, reps: 12)
-
-        let result = registry.isPB(set: set, exercise: exercise, currentPB: currentPB)
-
-        #expect(result == false, "Expected lower weight not to be a PB regardless of reps")
-    }
-
-    @Test
-    func testTC_E14_WeightIncreaseAtLowRepsIsAPB() {
-        let registry = try! makeRegistry()
-        let exercise = exercise(named: "45-Degree Dumbbell Press")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, weight: 20.0, reps: 8)
-        let set = makeSet(weight: 22.0, reps: 4)
-
-        let result = registry.isPB(set: set, exercise: exercise, currentPB: currentPB)
-
-        #expect(result == true, "Expected weight increase at low reps to be a PB")
-    }
-
-    // MARK: -- PB Evaluation: mostReps
-
-    @Test
-    func testTC_E15_MoreRepsIsAPB() {
-        let registry = try! makeRegistry()
-        let exercise = exercise(named: "Chin-ups")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, reps: 10)
-        let set = makeSet(reps: 11)
-
-        let result = registry.isPB(set: set, exercise: exercise, currentPB: currentPB)
-
-        #expect(result == true, "Expected more reps to be a PB")
-    }
-
-    @Test
-    func testTC_E16_SameRepsIsNotAPB() {
-        let registry = try! makeRegistry()
-        let exercise = exercise(named: "Chin-ups")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, reps: 10)
-        let set = makeSet(reps: 10)
-
-        let result = registry.isPB(set: set, exercise: exercise, currentPB: currentPB)
-
-        #expect(result == false, "Expected matching reps not to be a PB")
-    }
-
-    // MARK: -- PB Evaluation: fastestTime
-
-    @Test
-    func testTC_E17_LowerTimeIsAPB() {
-        let registry = try! makeRegistry()
-        let exercise = exercise(named: "Ski 500m")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, time: 120.0)
-        let set = makeSet(time: 118.5)
-
-        let result = registry.isPB(set: set, exercise: exercise, currentPB: currentPB)
-
-        #expect(result == true, "Expected lower time to be a PB")
-    }
-
-    @Test
-    func testTC_E18_HigherTimeIsNotAPB() {
-        let registry = try! makeRegistry()
-        let exercise = exercise(named: "Ski 500m")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, time: 120.0)
-        let set = makeSet(time: 122.0)
-
-        let result = registry.isPB(set: set, exercise: exercise, currentPB: currentPB)
-
-        #expect(result == false, "Expected higher time not to be a PB")
-    }
-
-    // MARK: -- PB Evaluation: longestDistance
-
-    @Test
-    func testTC_E19_LongerDistanceIsAPB() {
-        let registry = try! makeRegistry()
-        let exercise = exercise(named: "Bike 60s")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, distance: 400.0)
-        let set = makeSet(distance: 420.0)
-
-        let result = registry.isPB(set: set, exercise: exercise, currentPB: currentPB)
-
-        #expect(result == true, "Expected longer distance to be a PB")
-    }
-
-    @Test
-    func testTC_E20_ShorterDistanceIsNotAPB() {
-        let registry = try! makeRegistry()
-        let exercise = exercise(named: "Bike 60s")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, distance: 400.0)
-        let set = makeSet(distance: 390.0)
-
-        let result = registry.isPB(set: set, exercise: exercise, currentPB: currentPB)
-
-        #expect(result == false, "Expected shorter distance not to be a PB")
+        #expect(
+            result == vector.expectsIsPB,
+            "[\(vector.id)] \(vector.description)"
+        )
     }
 }
 
@@ -350,47 +133,6 @@ final class ExerciseRegistryTests: XCTestCase {
         let registry = try makeRegistry()
         try registry.seedIfNeeded()
         return registry
-    }
-
-    private func exercise(named name: String) -> ExerciseModel {
-        guard let exercise = ExerciseModel.seedData.first(where: { $0.name == name }) else {
-            fatalError("Missing seed exercise: \(name)")
-        }
-        return exercise
-    }
-
-    private func makeSet(
-        weight: Double? = nil,
-        reps: Int? = nil,
-        time: Double? = nil,
-        distance: Double? = nil
-    ) -> ModelSet {
-        ModelSet(
-            exerciseEntryId: UUID(),
-            weight: weight,
-            reps: reps,
-            time: time,
-            distance: distance
-        )
-    }
-
-    private func makeCurrentPB(
-        exerciseId: UUID,
-        weight: Double? = nil,
-        reps: Int? = nil,
-        time: Double? = nil,
-        distance: Double? = nil
-    ) -> PersonalBestModel {
-        PersonalBestModel(
-            memberId: UUID(),
-            exerciseId: exerciseId,
-            setId: UUID(),
-            weight: weight,
-            reps: reps,
-            time: time,
-            distance: distance,
-            achievedAt: Date()
-        )
     }
 
     func testTC_E1_SeedIfNeededPopulatesStoreWhenEmpty() throws {
@@ -418,113 +160,20 @@ final class ExerciseRegistryTests: XCTestCase {
         XCTAssertEqual(displayOrders, Array(1...19))
     }
 
-    func testTC_E5_FirstSetWithCorrectRepsIsAPB() throws {
+    func testPBEvaluationVectors() throws {
         let registry = try makeRegistry()
-        let exercise = exercise(named: "Free Squat")
-        XCTAssertTrue(registry.isPB(set: makeSet(weight: 80.0, reps: 5), exercise: exercise, currentPB: nil))
-    }
+        let vectors = try PBEvaluationVectorLoader.load()
 
-    func testTC_E6_HeavierWeightAtCorrectRepsIsAPB() throws {
-        let registry = try makeRegistry()
-        let exercise = exercise(named: "Free Squat")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, weight: 80.0, reps: 5)
-        XCTAssertTrue(registry.isPB(set: makeSet(weight: 85.0, reps: 5), exercise: exercise, currentPB: currentPB))
-    }
-
-    func testTC_E7_SameWeightAtCorrectRepsIsNotAPB() throws {
-        let registry = try makeRegistry()
-        let exercise = exercise(named: "Free Squat")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, weight: 80.0, reps: 5)
-        XCTAssertFalse(registry.isPB(set: makeSet(weight: 80.0, reps: 5), exercise: exercise, currentPB: currentPB))
-    }
-
-    func testTC_E8_HeavierWeightAtAnyRepsIsAPB() throws {
-        let registry = try makeRegistry()
-        let exercise = exercise(named: "Free Squat")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, weight: 80.0, reps: 5)
-        XCTAssertTrue(registry.isPB(set: makeSet(weight: 85.0, reps: 3), exercise: exercise, currentPB: currentPB))
-    }
-
-    func testTC_E9_FirstSetAtAnyRepsIsAPB() throws {
-        let registry = try makeRegistry()
-        let exercise = exercise(named: "45-Degree Dumbbell Press")
-        XCTAssertTrue(registry.isPB(set: makeSet(weight: 20.0, reps: 5), exercise: exercise, currentPB: nil))
-    }
-
-    func testTC_E10_FirstSetBelowFormerMinimumRepsIsAPB() throws {
-        let registry = try makeRegistry()
-        let exercise = exercise(named: "45-Degree Dumbbell Press")
-        XCTAssertTrue(registry.isPB(set: makeSet(weight: 20.0, reps: 4), exercise: exercise, currentPB: nil))
-    }
-
-    func testTC_E11_WeightIncreaseAtAnyRepsIsAPB() throws {
-        let registry = try makeRegistry()
-        let exercise = exercise(named: "45-Degree Dumbbell Press")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, weight: 20.0, reps: 8)
-        XCTAssertTrue(registry.isPB(set: makeSet(weight: 22.0, reps: 5), exercise: exercise, currentPB: currentPB))
-    }
-
-    func testTC_E12_RepsIncreaseAtCurrentBestWeightIsAPB() throws {
-        let registry = try makeRegistry()
-        let exercise = exercise(named: "45-Degree Dumbbell Press")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, weight: 20.0, reps: 8)
-        XCTAssertTrue(registry.isPB(set: makeSet(weight: 20.0, reps: 10), exercise: exercise, currentPB: currentPB))
-    }
-
-    func testTC_E13_WeightBelowCurrentBestIsNotAPBRegardlessOfReps() throws {
-        let registry = try makeRegistry()
-        let exercise = exercise(named: "45-Degree Dumbbell Press")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, weight: 22.0, reps: 5)
-        XCTAssertFalse(registry.isPB(set: makeSet(weight: 20.0, reps: 12), exercise: exercise, currentPB: currentPB))
-    }
-
-    func testTC_E14_WeightIncreaseAtLowRepsIsAPB() throws {
-        let registry = try makeRegistry()
-        let exercise = exercise(named: "45-Degree Dumbbell Press")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, weight: 20.0, reps: 8)
-        XCTAssertTrue(registry.isPB(set: makeSet(weight: 22.0, reps: 4), exercise: exercise, currentPB: currentPB))
-    }
-
-    func testTC_E15_MoreRepsIsAPB() throws {
-        let registry = try makeRegistry()
-        let exercise = exercise(named: "Chin-ups")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, reps: 10)
-        XCTAssertTrue(registry.isPB(set: makeSet(reps: 11), exercise: exercise, currentPB: currentPB))
-    }
-
-    func testTC_E16_SameRepsIsNotAPB() throws {
-        let registry = try makeRegistry()
-        let exercise = exercise(named: "Chin-ups")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, reps: 10)
-        XCTAssertFalse(registry.isPB(set: makeSet(reps: 10), exercise: exercise, currentPB: currentPB))
-    }
-
-    func testTC_E17_LowerTimeIsAPB() throws {
-        let registry = try makeRegistry()
-        let exercise = exercise(named: "Ski 500m")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, time: 120.0)
-        XCTAssertTrue(registry.isPB(set: makeSet(time: 118.5), exercise: exercise, currentPB: currentPB))
-    }
-
-    func testTC_E18_HigherTimeIsNotAPB() throws {
-        let registry = try makeRegistry()
-        let exercise = exercise(named: "Ski 500m")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, time: 120.0)
-        XCTAssertFalse(registry.isPB(set: makeSet(time: 122.0), exercise: exercise, currentPB: currentPB))
-    }
-
-    func testTC_E19_LongerDistanceIsAPB() throws {
-        let registry = try makeRegistry()
-        let exercise = exercise(named: "Bike 60s")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, distance: 400.0)
-        XCTAssertTrue(registry.isPB(set: makeSet(distance: 420.0), exercise: exercise, currentPB: currentPB))
-    }
-
-    func testTC_E20_ShorterDistanceIsNotAPB() throws {
-        let registry = try makeRegistry()
-        let exercise = exercise(named: "Bike 60s")
-        let currentPB = makeCurrentPB(exerciseId: exercise.id, distance: 400.0)
-        XCTAssertFalse(registry.isPB(set: makeSet(distance: 390.0), exercise: exercise, currentPB: currentPB))
+        for vector in vectors {
+            try XCTContext.runActivity(named: vector.id) { _ in
+                let result = PBEvaluationVectorRunner.evaluate(vector, registry: registry)
+                XCTAssertEqual(
+                    result,
+                    vector.expectsIsPB,
+                    "[\(vector.id)] \(vector.description)"
+                )
+            }
+        }
     }
 }
 #endif
