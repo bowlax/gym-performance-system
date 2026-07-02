@@ -176,6 +176,39 @@
       "currentPB": { "distance": 400 },
       "newSet": { "distance": 390 },
       "expectedResult": "notPB"
+    },
+    {
+      "id": "TC-E21",
+      "description": "Heavier weight is a PB",
+      "rule": "heaviestWeight",
+      "exerciseName": "Plank",
+      "targetReps": null,
+      "minimumReps": null,
+      "currentPB": { "weight": 20 },
+      "newSet": { "weight": 25 },
+      "expectedResult": "isPB"
+    },
+    {
+      "id": "TC-E22",
+      "description": "Lighter weight is not a PB",
+      "rule": "heaviestWeight",
+      "exerciseName": "Plank",
+      "targetReps": null,
+      "minimumReps": null,
+      "currentPB": { "weight": 20 },
+      "newSet": { "weight": 15 },
+      "expectedResult": "notPB"
+    },
+    {
+      "id": "TC-E23",
+      "description": "Equal weight is not a PB",
+      "rule": "heaviestWeight",
+      "exerciseName": "Plank",
+      "targetReps": null,
+      "minimumReps": null,
+      "currentPB": { "weight": 20 },
+      "newSet": { "weight": 20 },
+      "expectedResult": "notPB"
     }
   ]
 }
