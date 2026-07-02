@@ -299,7 +299,13 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error("token-broker failed");
     if (error instanceof Error) {
-      console.error(error.message);
+      console.error("error name:", error.name);
+      console.error("error message:", error.message);
+      if (error.stack) {
+        console.error("error stack:", error.stack);
+      }
+    } else {
+      console.error("error value:", String(error));
     }
     return jsonResponse({ error: "Internal server error" }, 500);
   }
