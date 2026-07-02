@@ -58,9 +58,13 @@ npx supabase db push        # remote: only on a new or empty database
 
    ```
    SUPABASE_URL=http://127.0.0.1:54321
-   SUPABASE_SERVICE_ROLE_KEY=<from supabase status>
-   SUPABASE_JWT_SECRET=<from supabase status>
+   SERVICE_ROLE_KEY=<from supabase status>
+   JWT_SIGNING_SECRET=<from supabase status>
    ```
+
+   `SUPABASE_URL` is injected automatically on the hosted runtime; include it
+   locally when using `supabase functions serve`. Custom secrets must not use
+   the `SUPABASE_` prefix (reserved by the hosted runtime).
 
 2. Start the local stack and serve the function:
 
@@ -89,8 +93,8 @@ Set secrets on the remote project, then deploy:
 
 ```bash
 npx supabase secrets set \
-  SUPABASE_SERVICE_ROLE_KEY=<service-role-key> \
-  SUPABASE_JWT_SECRET=<jwt-secret>
+  SERVICE_ROLE_KEY=<service-role-key> \
+  JWT_SIGNING_SECRET=<jwt-secret>
 
 npx supabase functions deploy token-broker --no-verify-jwt
 ```

@@ -5,9 +5,12 @@
  * Supabase JWT carrying member_id, gym_id, and role claims for RLS.
  *
  * Required environment variables (set via `supabase secrets set` or `.env` for local serve):
- *   SUPABASE_URL              — project API URL
- *   SUPABASE_SERVICE_ROLE_KEY — service role secret key (bypasses RLS for member create/adopt)
- *   SUPABASE_JWT_SECRET       — JWT signing secret (Settings → API → JWT Secret)
+ *   SUPABASE_URL        — project API URL (provided automatically on hosted runtime)
+ *   SERVICE_ROLE_KEY    — service role secret key (bypasses RLS for member create/adopt)
+ *   JWT_SIGNING_SECRET  — JWT signing secret (Settings → API → JWT Secret)
+ *
+ * Note: custom secrets must not use the SUPABASE_ prefix — the hosted runtime
+ * reserves that prefix and rejects custom secrets named with it.
  *
  * Local development:
  *   npm install
@@ -147,7 +150,7 @@ function requireEnv(name: string): string {
 
 function createServiceClient(): ServiceClient {
   const supabaseUrl = requireEnv("SUPABASE_URL");
-  const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+  const serviceRoleKey = requireEnv("SERVICE_ROLE_KEY");
 
   return createClient(supabaseUrl, serviceRoleKey, {
     auth: {
@@ -221,7 +224,7 @@ async function mintSupabaseJwt(
   gymId: string,
   role: AppRole,
 ): Promise<string> {
-  const jwtSecret = requireEnv("SUPABASE_JWT_SECRET");
+  const jwtSecret = requireEnv("JWT_SIGNING_SECRET");
   const now = Math.floor(Date.now() / 1000);
 
   return await new SignJWT({
