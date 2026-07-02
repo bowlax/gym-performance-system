@@ -732,3 +732,46 @@ The Supabase JWT carries member_id, gym_id, and role. RLS policies use these:
 - GDPR hard-delete is a privileged operation not exposed to member or coach roles
 
 With the auth mapping defined, the deferred RLS policy SQL (supabase-schema.md section) can now be written against these claims.
+
+
+---
+
+## 19. Row-Level Security Policies (Phase 2)
+
+**RLS enforces the privacy model at the database level, reading claims from the Supabase JWT minted by the token broker.**
+
+### Claims available to policies
+
+The Supabase JWT carries: member_id (canonical member UUID), gym_id, role (member | coach | owner). Policies read these via auth.jwt().
+
+### Access model
+
+| Role | Read | Write |
+|---|---|---|
+| Member | Own rows only (member_id matches claim), within gym_id | Own performance data (sessions, entries, sets, PBs) |
+| Coach | All member rows within gym_id | No writes to member performance data in phase 2. Coach features (commentary, goals) added later |
+| Owner | All member rows within gym_id | Member and coach management (later). No edits to member performance data |
+| Administrator | Privileged Supabase access | GDPR hard-delete via privileged path only |
+
+### Deletion model
+
+Two distinct member actions, deliberately separated:
+
+- **Disconnect / remove from central (self-service):** the common, reversible action. Implemented as soft-delete (deleted_at) on the member's own rows, or clearing sync. Exposed to the member role.
+- **GDPR hard-erasure (administrator-executed on request):** rare, irreversible. NOT exposed to member or coach roles in RLS. Member requests it; administrator actions it via privileged access within the GDPR response period. Handled across both local and central stores together, with a record that the request was made and fulfilled.
+
+Rationale: hard-delete is irreversible and destructive; executing it administrator-side prevents catastrophic accidental taps, allows identity confirmation, handles local and central together, and preserves proof the request was honoured. GDPR does not require instant self-service erasure, only that valid requests are honoured within a reasonable period.
+
+### Privacy policy dependency
+
+The privacy policy must be revised when sync ships to accurately describe:
+- Self-service disconnect and central data removal
+- Request-based full erasure and the response period
+- The contact route for erasure requests (administrator, since Admin Surface is deferred to phase 3)
+- What data is held centrally versus local-only (anonymous members have no central data)
+
+This revision is tied to the sync release. The current policy remains accurate while the app is local-only and must NOT be changed until sync features actually ship.
+
+### Coaches read-only on performance data
+
+A member's training data is theirs. Coaches observe (and later comment via dedicated coach features), but never edit a member's logged sessions or PBs. This keeps the trust model clean and is enforced in RLS by granting coaches select but not insert/update/delete on member performance tables.
