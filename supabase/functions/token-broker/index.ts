@@ -71,6 +71,76 @@ const SURFACES: readonly Surface[] = [
 
 const JWT_LIFETIME_SECONDS = 60 * 60;
 
+interface PostgrestErrorLike {
+  message?: string;
+  name?: string;
+  stack?: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+}
+
+function logSupabaseError(
+  context: string,
+  error: PostgrestErrorLike,
+): void {
+  console.error(`token-broker supabase ${context} error message:`, error.message);
+  if (error.details) {
+    console.error(`token-broker supabase ${context} error details:`, error.details);
+  }
+  if (error.hint) {
+    console.error(`token-broker supabase ${context} error hint:`, error.hint);
+  }
+  if (error.code) {
+    console.error(`token-broker supabase ${context} error code:`, error.code);
+  }
+}
+
+function logCaughtError(error: unknown): void {
+  console.error("token-broker failed");
+
+  if (error instanceof Error) {
+    console.error("token-broker error name:", error.name);
+    console.error("token-broker error message:", error.message);
+    if (error.stack) {
+      console.error("token-broker error stack:", error.stack);
+    }
+    return;
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const record = error as PostgrestErrorLike;
+    if (record.message) {
+      console.error("token-broker error message:", record.message);
+    }
+    if (record.name) {
+      console.error("token-broker error name:", record.name);
+    }
+    if (record.stack) {
+      console.error("token-broker error stack:", record.stack);
+    }
+    if (record.details) {
+      console.error("token-broker supabase error details:", record.details);
+    }
+    if (record.hint) {
+      console.error("token-broker supabase error hint:", record.hint);
+    }
+    if (record.code) {
+      console.error("token-broker supabase error code:", record.code);
+    }
+    if (!record.message && !record.name && !record.details && !record.code) {
+      try {
+        console.error("token-broker error value:", JSON.stringify(error));
+      } catch {
+        console.error("token-broker error value:", String(error));
+      }
+    }
+    return;
+  }
+
+  console.error("token-broker error value:", String(error));
+}
+
 function jsonResponse(body: Record<string, unknown>, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -172,6 +242,7 @@ async function lookupGymId(
     .maybeSingle();
 
   if (error) {
+    logSupabaseError("lookupGymId", error);
     throw error;
   }
 
@@ -194,6 +265,7 @@ async function createOrAdoptMember(
     .maybeSingle();
 
   if (lookupError) {
+    logSupabaseError("createOrAdoptMember.lookup", lookupError);
     throw lookupError;
   }
 
@@ -213,6 +285,7 @@ async function createOrAdoptMember(
     .single();
 
   if (insertError) {
+    logSupabaseError("createOrAdoptMember.insert", insertError);
     throw insertError;
   }
 
@@ -297,16 +370,7 @@ Deno.serve(async (req) => {
 
     return jsonResponse({ token }, 200);
   } catch (error) {
-    console.error("token-broker failed");
-    if (error instanceof Error) {
-      console.error("error name:", error.name);
-      console.error("error message:", error.message);
-      if (error.stack) {
-        console.error("error stack:", error.stack);
-      }
-    } else {
-      console.error("error value:", String(error));
-    }
+    logCaughtError(error);
     return jsonResponse({ error: "Internal server error" }, 500);
   }
 });
