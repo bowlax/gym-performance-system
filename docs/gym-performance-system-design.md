@@ -775,3 +775,73 @@ This revision is tied to the sync release. The current policy remains accurate w
 ### Coaches read-only on performance data
 
 A member's training data is theirs. Coaches observe (and later comment via dedicated coach features), but never edit a member's logged sessions or PBs. This keeps the trust model clean and is enforced in RLS by granting coaches select but not insert/update/delete on member performance tables.
+
+
+---
+
+## 20. Sync Manager Design (Phase 2)
+
+**The Sync Manager keeps the local-first promise: the device is always the source of truth, and sync is an additive layer for connected members.**
+
+### Responsibilities
+
+- Connection state (anonymous, connected, disconnected)
+- Background sync scheduling plus manual "sync now"
+- Offline behaviour (local writes always succeed; sync catches up later)
+- Merge and conflict resolution
+- Token lifecycle (via the token broker)
+- Sync status reporting to the UI
+- Triggering privileged operations (GDPR) via the service-role path
+
+### Change tracking: last-sync-timestamp approach
+
+Each device stores the timestamp of its last successful sync. On each sync:
+- Push local records whose updated_at is newer than the last sync time
+- Pull remote records whose updated_at is newer than the last sync time
+- On success, record the new last-sync time
+
+Chosen for simplicity, appropriate to a single member's small data volume. A change queue / outbox was considered and judged unnecessary machinery at this scale.
+
+### Sync order: pull, merge, push
+
+1. PULL remote records changed since last sync
+2. MERGE them into the local store using UUID identity and last-write-wins on updated_at
+3. PUSH local records changed since last sync
+4. Record new last-sync time on success
+
+Pull-first resolves conflicts locally before sending the device's version up, keeping the central store clean.
+
+### Conflict resolution: last-write-wins
+
+- Identity by UUID (same record has same UUID on every device)
+- When a record changed on both sides since last sync, the version with the later updated_at wins; the other is overwritten
+- Genuine conflicts are rare (a single member editing their own data), making last-write-wins predictable and acceptable
+
+### Timestamps: device-set (accepted trade-off)
+
+updated_at is set by the device, not the server. This is a deliberate simplification.
+- Risk: only material when the same record is edited on two devices with meaningfully skewed clocks before syncing - rare for a single member's own data
+- Mitigation path: if it ever becomes a problem, move to server-set timestamps (Supabase stamping updated_at on write). This is a contained future change requiring no redesign
+- Recorded as a conscious decision, not an oversight
+
+### Edge cases handled
+
+- **Interrupted sync:** a failed sync does not advance the last-sync timestamp; the next sync retries. Idempotent because merging the same record by UUID and timestamp is safe to repeat. Nothing is lost
+- **First sync after connecting:** last-sync time is "never", so the entire local history qualifies and pushes up. Correct; the first sync is the heaviest, a one-time event. This is the phase 1 to phase 2 migration moment
+- **Second device:** reconciled via the token broker's create-or-adopt (see section 18); local data re-tagged to the canonical member UUID, then normal sync applies
+
+### Offline behaviour
+
+- All local writes always succeed immediately against the local store, connected or not
+- If connected but offline, changes accumulate locally (identified by updated_at newer than last sync) and sync when connectivity returns
+- The app is fully functional offline at all times; sync never blocks a local action
+
+### Sync status reporting
+
+The Sync Manager exposes status to the UI: last synced time, syncing now, offline, and error states. Members see whether their data is backed up, which matters for trust during the period they are deciding whether to rely on sync.
+
+### Architectural placement
+
+- **Sync Manager** (utility) owns the orchestration, state, scheduling, and conflict rules
+- **Sync Service Access** (Resource Access) handles the actual data transfer between the local store and Supabase
+- Business Logic and the Member Surface are unaffected; they read and write the local store as before. Sync happens beneath them
