@@ -26,7 +26,7 @@ extension ExerciseModel {
                 targetReps: 5,
                 minimumReps: nil,
                 parentExerciseId: nil,
-                displayOrder: 2
+                displayOrder: 3
             ),
             ExerciseModel(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!,
@@ -37,7 +37,7 @@ extension ExerciseModel {
                 targetReps: 5,
                 minimumReps: nil,
                 parentExerciseId: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
-                displayOrder: 3
+                displayOrder: 4
             ),
             ExerciseModel(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000004")!,
@@ -48,7 +48,7 @@ extension ExerciseModel {
                 targetReps: 5,
                 minimumReps: nil,
                 parentExerciseId: nil,
-                displayOrder: 4
+                displayOrder: 6
             ),
             ExerciseModel(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000005")!,
@@ -59,7 +59,7 @@ extension ExerciseModel {
                 targetReps: 5,
                 minimumReps: nil,
                 parentExerciseId: UUID(uuidString: "00000000-0000-0000-0000-000000000004")!,
-                displayOrder: 5
+                displayOrder: 7
             ),
             ExerciseModel(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000006")!,
@@ -70,7 +70,7 @@ extension ExerciseModel {
                 targetReps: 5,
                 minimumReps: nil,
                 parentExerciseId: nil,
-                displayOrder: 6
+                displayOrder: 8
             ),
             ExerciseModel(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000007")!,
@@ -81,7 +81,7 @@ extension ExerciseModel {
                 targetReps: 5,
                 minimumReps: nil,
                 parentExerciseId: UUID(uuidString: "00000000-0000-0000-0000-000000000006")!,
-                displayOrder: 7
+                displayOrder: 9
             ),
 
             // MARK: -- Variable Rep Dumbbell and Bodyweight
@@ -95,7 +95,7 @@ extension ExerciseModel {
                 targetReps: nil,
                 minimumReps: nil,
                 parentExerciseId: nil,
-                displayOrder: 8
+                displayOrder: 5
             ),
             ExerciseModel(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000009")!,
@@ -106,7 +106,7 @@ extension ExerciseModel {
                 targetReps: nil,
                 minimumReps: nil,
                 parentExerciseId: nil,
-                displayOrder: 9
+                displayOrder: 10
             ),
             ExerciseModel(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000010")!,
@@ -117,7 +117,7 @@ extension ExerciseModel {
                 targetReps: nil,
                 minimumReps: nil,
                 parentExerciseId: nil,
-                displayOrder: 10
+                displayOrder: 11
             ),
             ExerciseModel(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000011")!,
@@ -128,7 +128,7 @@ extension ExerciseModel {
                 targetReps: nil,
                 minimumReps: nil,
                 parentExerciseId: nil,
-                displayOrder: 11
+                displayOrder: 12
             ),
             ExerciseModel(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000012")!,
@@ -139,7 +139,7 @@ extension ExerciseModel {
                 targetReps: nil,
                 minimumReps: nil,
                 parentExerciseId: nil,
-                displayOrder: 12
+                displayOrder: 15
             ),
             ExerciseModel(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000013")!,
@@ -150,7 +150,7 @@ extension ExerciseModel {
                 targetReps: nil,
                 minimumReps: nil,
                 parentExerciseId: nil,
-                displayOrder: 13
+                displayOrder: 16
             ),
             ExerciseModel(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000014")!,
@@ -161,7 +161,7 @@ extension ExerciseModel {
                 targetReps: nil,
                 minimumReps: nil,
                 parentExerciseId: nil,
-                displayOrder: 14
+                displayOrder: 19
             ),
             ExerciseModel(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000015")!,
@@ -172,7 +172,7 @@ extension ExerciseModel {
                 targetReps: nil,
                 minimumReps: nil,
                 parentExerciseId: nil,
-                displayOrder: 15
+                displayOrder: 14
             ),
 
             // MARK: -- Reps Only
@@ -186,7 +186,7 @@ extension ExerciseModel {
                 targetReps: nil,
                 minimumReps: nil,
                 parentExerciseId: nil,
-                displayOrder: 16
+                displayOrder: 13
             ),
 
             // MARK: -- Weight and Time
@@ -200,7 +200,7 @@ extension ExerciseModel {
                 targetReps: nil,
                 minimumReps: nil,
                 parentExerciseId: nil,
-                displayOrder: 17
+                displayOrder: 18
             ),
 
             // MARK: -- Timed
@@ -214,7 +214,7 @@ extension ExerciseModel {
                 targetReps: nil,
                 minimumReps: nil,
                 parentExerciseId: nil,
-                displayOrder: 18
+                displayOrder: 17
             ),
 
             // MARK: -- Distance
@@ -228,7 +228,7 @@ extension ExerciseModel {
                 targetReps: nil,
                 minimumReps: nil,
                 parentExerciseId: nil,
-                displayOrder: 19
+                displayOrder: 2
             )
         ]
     }
