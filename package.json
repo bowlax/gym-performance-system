@@ -1,0 +1,12 @@
+{
+  "name": "gym-performance-system",
+  "private": true,
+  "scripts": {
+    "supabase": "supabase",
+    "functions:check": "cd supabase/functions && deno check token-broker/index.ts",
+    "functions:serve": "supabase functions serve token-broker --no-verify-jwt"
+  },
+  "devDependencies": {
+    "supabase": "^2.75.0"
+  }
+}

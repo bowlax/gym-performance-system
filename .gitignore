@@ -1,6 +1,13 @@
 cursor-instructions-*.md
 lovable-instructions-*.md
 .DS_Store
+.deno/
+node_modules/
+
+# Supabase local secrets
+supabase/.env
+supabase/.env.*
+!supabase/.env.example
 
 # Xcode / SwiftPM
 DerivedData/
