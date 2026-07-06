@@ -2,6 +2,8 @@
   "version": "5",
   "specifiers": {
     "jsr:@panva/jose@6": "6.2.3",
+    "jsr:@std/assert@1": "1.0.19",
+    "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@supabase/supabase-js@2": "2.110.0",
     "npm:@supabase/auth-js@2.110.0": "2.110.0",
     "npm:@supabase/functions-js@2.110.0": "2.110.0",
@@ -12,6 +14,15 @@
   "jsr": {
     "@panva/jose@6.2.3": {
       "integrity": "57cc772f01b2ac60f847a7e6ec815059762768186266ed833fb59953e9611312"
+    },
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    },
+    "@std/internal@1.0.14": {
+      "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
     },
     "@supabase/supabase-js@2.110.0": {
       "integrity": "6eadc04222c1d17bb35ab8f2127662e8e3f4efafff6983ac2cc9498cce6c01e0",

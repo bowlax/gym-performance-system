@@ -35,3 +35,6 @@ enable_signup = true
 
 [functions.token-broker]
 verify_jwt = false
+
+[functions.log-set]
+verify_jwt = true

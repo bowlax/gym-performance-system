@@ -44,5 +44,6 @@ Set state object (all fields optional; omit unused measurements):
 ## Usage
 
 Swift loads vectors from disk via `PBEvaluationVectors.swift` and runs them
-in `ExerciseRegistryTests`. A TypeScript implementation should read the same
-file and assert the same `expectedResult` for each vector.
+in `ExerciseRegistryTests`. TypeScript loads the same file in
+`supabase/functions/_shared/pb-evaluation_test.ts` (run via
+`npm run pb-evaluation:test`).
