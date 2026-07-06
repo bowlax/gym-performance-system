@@ -212,6 +212,70 @@ Aliases `brandAccent` and `wolfBlue` are equivalent; `brandAccent` is defined bu
 
 ---
 
+## Web Implementation Values
+
+The iOS app uses platform-adaptive system colours (`secondarySystemBackground`, `tertiarySystemBackground`, `primary`, secondary text) that resolve automatically on iOS but have no web equivalent. The web surface must use **fixed values**. The values below pin the approximate iOS system colours already recorded in this document as the exact web target — do not re-approximate the neutrals at implementation time.
+
+### Brand colours (identical on all platforms)
+
+| Token | Hex | Notes |
+|-------|-----|-------|
+| Wolf blue | `#1A5BA6` | Exact; same as iOS `wolfBlue` / `brandAccent` |
+| PB yellow | `#FFD600` | Exact; same as iOS `pbYellow` / `achievementAccent` |
+
+### Neutral colours — light mode
+
+| Role | Web value | iOS semantic equivalent |
+|------|-----------|-------------------------|
+| App background | `#FFFFFF` | System grouped/standard background |
+| Primary text | `#000000` | `Color.primary` |
+| Secondary text | `rgba(60, 60, 67, 0.6)` | `Color.secondary` |
+| Card background | `#F2F2F7` | `secondarySystemBackground` |
+| Input surface | `#FFFFFF` | `tertiarySystemBackground` |
+
+### Neutral colours — dark mode
+
+| Role | Web value | iOS semantic equivalent |
+|------|-----------|-------------------------|
+| App background | `#000000` | System grouped/standard background |
+| Primary text | `#FFFFFF` | `Color.primary` |
+| Secondary text | `rgba(235, 235, 245, 0.6)` | `Color.secondary` |
+| Card background | `#1C1C1E` | `secondarySystemBackground` |
+| Input surface | `#2C2C2E` | `tertiarySystemBackground` |
+
+Apply light and dark values via a `prefers-color-scheme` media query or an equivalent theme mechanism.
+
+### Opacity variants (identical on web)
+
+Use the same opacity combinations documented in section 1:
+
+| Combination | Use |
+|-------------|-----|
+| Wolf blue at **30%** | Disabled primary button background |
+| Wolf blue at **50%** | Non-PB chart data points |
+| Wolf blue **30% → clear** | Chart area gradient |
+| PB yellow at **15%** | PB celebration circle fill |
+| PB yellow at **25%** | PB badge / capsule backgrounds |
+
+### Typography (web)
+
+- **Font stack:** `"SF Pro Rounded", system-ui, sans-serif` (or equivalent rounded sans-serif fallbacks). SF Pro Rounded is not reliably available on web, especially on Android.
+- **Accepted platform difference:** The rounded character is approximated on web by necessity. This is deliberate, not a defect.
+- **Tabular numerals:** Preserve for weights, reps, times, distances, and PB values so digits do not shift width when values change. Use `font-variant-numeric: tabular-nums` (or an equivalent) on all numeric display and input fields that use `pbValueStyle` / `inputValueStyle` on iOS.
+
+### Corner radius (web)
+
+iOS uses **continuous** (superellipse) corners; web uses standard `border-radius` as the accepted approximation:
+
+| Element | Radius |
+|---------|--------|
+| Cards, primary buttons | **16px** |
+| Input surfaces | **10px** |
+
+Spacing constants (`cardPadding` 16, `cardSpacing` 12, `sectionSpacing` 24) apply as **16px**, **12px**, and **24px** on web.
+
+---
+
 ## Scope note
 
 `DesignSystem.swift` also defines chart scroll/zoom behaviour (`ScrollableDateChartConfiguration`, `ScrollableDateChartModifier`). Those are interaction/layout logic for Swift Charts, not visual tokens, and are omitted from this reference.
