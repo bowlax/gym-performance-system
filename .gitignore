@@ -1,6 +1,7 @@
 cursor-instructions-*.md
 lovable-instructions-*.md
 .DS_Store
+**/.DS_Store
 .deno/
 node_modules/
 
@@ -26,8 +27,11 @@ src/client/web/**/.lovable/
 # Downloaded Lovable export (integrate then remove)
 GymPerformance Web.zip
 
-# Xcode / SwiftPM
+# Xcode / SwiftPM build artefacts
 DerivedData/
+.derivedData/
+build/
+*.xcarchive
 *.xcuserstate
 xcuserdata/
 *.moved-aside
@@ -41,3 +45,16 @@ xcuserdata/
 .swiftpm/
 .build/
 tools/
+
+# Duplicate / stray Xcode project copies
+GymPerformance 2.xcodeproj/
+
+# Code signing — never commit certificates, keys, or provisioning profiles
+*.cer
+*.p12
+*.p8
+*.mobileprovision
+*.provisionprofile
+*.certSigningRequest
+CertificateSigningRequest.certSigningRequest
+distribution.cer
