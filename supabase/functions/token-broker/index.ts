@@ -4,10 +4,23 @@
  * Exchanges a TeamUp access token (plus device member UUID and surface) for a
  * Supabase JWT carrying member_id, gym_id, and app_role claims for RLS.
  *
+ * When TeamUp OAuth env vars are set, also exposes GET authorize/callback
+ * routes for backend-driven OAuth (authorization code + PKCE). Without those
+ * vars, only the existing POST stub path is available.
+ *
  * Required environment variables (set via `supabase secrets set` or `.env` for local serve):
  *   SUPABASE_URL        — project API URL (provided automatically on hosted runtime)
  *   SERVICE_ROLE_KEY    — service role secret key (bypasses RLS for member create/adopt)
  *   JWT_SIGNING_SECRET  — JWT signing secret (Settings → API → JWT Secret)
+ *
+ * Optional TeamUp OAuth (all required together to enable the real OAuth path):
+ *   TEAMUP_OAUTH_CLIENT_ID
+ *   TEAMUP_OAUTH_CLIENT_SECRET
+ *   TEAMUP_OAUTH_REDIRECT_URI
+ *   TEAMUP_OAUTH_PROVIDER_ID
+ *   TEAMUP_OAUTH_SUCCESS_REDIRECT_URI (optional; returnUrl query param must match origin)
+ *   TEAMUP_OAUTH_SCOPE (optional; default read_write provider:<PROVIDER_ID>)
+ *   TEAMUP_OAUTH_AUTHORIZE_URL / TEAMUP_OAUTH_TOKEN_URL (optional overrides)
  *
  * Note: custom secrets must not use the SUPABASE_ prefix — the hosted runtime
  * reserves that prefix and rejects custom secrets named with it.
@@ -25,6 +38,22 @@
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { SignJWT } from "jsr:@panva/jose@6";
+import {
+  appendTokenToReturnUrl,
+  buildTeamUpAuthorizeUrl,
+  decodeTeamUpAccessToken,
+  exchangeTeamUpAuthorizationCode,
+  generatePkceCodeVerifier,
+  isTeamUpOAuthConfigured,
+  pkceCodeChallengeS256,
+  readTeamUpOAuthConfig,
+  resolveOAuthReturnUrl,
+  shouldUseStubTeamUpPath,
+  signOAuthState,
+  stubTeamUpVerification,
+  verifyOAuthState,
+  type TeamUpVerificationResult,
+} from "../_shared/teamup-oauth.ts";
 
 // Minimal schema types for compile-time checking without a generated Database type.
 interface GymRow {
@@ -45,13 +74,6 @@ const corsHeaders: Record<string, string> = {
 
 type Surface = "ios" | "memberWeb" | "coachWeb" | "ownerWeb";
 type AppRole = "member" | "coach" | "owner";
-type TeamUpMode = "customer" | "provider";
-
-interface TeamUpVerificationResult {
-  teamupCustomerId: string;
-  providerId: string;
-  mode: TeamUpMode;
-}
 
 interface TokenBrokerRequest {
   teamupToken: string;
@@ -148,6 +170,13 @@ function jsonResponse(body: Record<string, unknown>, status: number): Response {
   });
 }
 
+function redirectResponse(location: string, status = 302): Response {
+  return new Response(null, {
+    status,
+    headers: { ...corsHeaders, Location: location },
+  });
+}
+
 function isSurface(value: string): value is Surface {
   return (SURFACES as readonly string[]).includes(value);
 }
@@ -180,18 +209,36 @@ function parseRequestBody(body: unknown): TokenBrokerRequest | null {
   return { teamupToken, deviceMemberId, surface };
 }
 
-/**
- * TODO: Replace with a real call to TeamUp's API once API access is available.
- * Must verify the token, extract customer ID, provider/gym ID, and auth mode.
- */
-async function verifyTeamUpToken(
-  _token: string,
-): Promise<TeamUpVerificationResult> {
+function parseOAuthAuthorizeParams(
+  url: URL,
+): { deviceMemberId: string; surface: Surface; returnUrl: string | null } | null {
+  const deviceMemberId = url.searchParams.get("deviceMemberId");
+  const surface = url.searchParams.get("surface");
+  const returnUrl = url.searchParams.get("returnUrl");
+
+  if (!deviceMemberId || !UUID_PATTERN.test(deviceMemberId)) {
+    return null;
+  }
+  if (!surface || !isSurface(surface)) {
+    return null;
+  }
+
   return {
-    teamupCustomerId: "TEST-CUSTOMER-001",
-    providerId: "5404319",
-    mode: "customer",
+    deviceMemberId,
+    surface,
+    returnUrl: returnUrl && returnUrl.length > 0 ? returnUrl : null,
   };
+}
+
+async function verifyTeamUpToken(
+  token: string,
+): Promise<TeamUpVerificationResult> {
+  if (shouldUseStubTeamUpPath(token)) {
+    const config = readTeamUpOAuthConfig();
+    return stubTeamUpVerification(config?.providerId);
+  }
+
+  return decodeTeamUpAccessToken(token);
 }
 
 function surfaceToRole(surface: Surface): AppRole {
@@ -317,61 +364,197 @@ async function mintSupabaseJwt(
     .sign(new TextEncoder().encode(jwtSecret));
 }
 
+async function issueMemberSession(
+  verification: TeamUpVerificationResult,
+  deviceMemberId: string,
+  surface: Surface,
+): Promise<{ token: string } | { error: string; status: number }> {
+  const role = surfaceToRole(surface);
+
+  if (verification.mode === "customer" && isStaffSurface(surface)) {
+    return {
+      error: "TeamUp customer token cannot access staff surfaces",
+      status: 403,
+    };
+  }
+
+  const supabase = createServiceClient();
+  const gymId = await lookupGymId(supabase, verification.providerId);
+
+  if (!gymId) {
+    return { error: "Gym not found for TeamUp provider", status: 404 };
+  }
+
+  const memberId = await createOrAdoptMember(
+    supabase,
+    gymId,
+    verification.teamupCustomerId,
+    deviceMemberId,
+  );
+
+  const token = await mintSupabaseJwt(memberId, gymId, role);
+  return { token };
+}
+
+async function handlePost(req: Request): Promise<Response> {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body" }, 400);
+  }
+
+  const request = parseRequestBody(body);
+  if (!request) {
+    return jsonResponse(
+      {
+        error:
+          "Invalid request body. Expected teamupToken (string), deviceMemberId (UUID), surface (ios | memberWeb | coachWeb | ownerWeb).",
+      },
+      400,
+    );
+  }
+
+  const verification = await verifyTeamUpToken(request.teamupToken);
+  const result = await issueMemberSession(
+    verification,
+    request.deviceMemberId,
+    request.surface,
+  );
+
+  if ("error" in result) {
+    return jsonResponse({ error: result.error }, result.status);
+  }
+
+  return jsonResponse({ token: result.token }, 200);
+}
+
+async function handleOAuthAuthorize(req: Request): Promise<Response> {
+  const config = readTeamUpOAuthConfig();
+  if (!config) {
+    return jsonResponse({ error: "TeamUp OAuth is not configured" }, 404);
+  }
+
+  const params = parseOAuthAuthorizeParams(new URL(req.url));
+  if (!params) {
+    return jsonResponse(
+      {
+        error:
+          "Invalid authorize request. Expected deviceMemberId (UUID), surface (ios | memberWeb | coachWeb | ownerWeb), optional returnUrl.",
+      },
+      400,
+    );
+  }
+
+  const codeVerifier = generatePkceCodeVerifier();
+  const codeChallenge = await pkceCodeChallengeS256(codeVerifier);
+  const signingSecret = requireEnv("JWT_SIGNING_SECRET");
+  const returnUrl = resolveOAuthReturnUrl(config, params.returnUrl);
+
+  const state = await signOAuthState(
+    {
+      deviceMemberId: params.deviceMemberId,
+      surface: params.surface,
+      codeVerifier,
+      returnUrl,
+    },
+    signingSecret,
+  );
+
+  const authorizeUrl = buildTeamUpAuthorizeUrl(config, {
+    codeChallenge,
+    state,
+  });
+
+  return redirectResponse(authorizeUrl);
+}
+
+async function handleOAuthCallback(req: Request): Promise<Response> {
+  const config = readTeamUpOAuthConfig();
+  if (!config) {
+    return jsonResponse({ error: "TeamUp OAuth is not configured" }, 404);
+  }
+
+  const url = new URL(req.url);
+  const oauthError = url.searchParams.get("error");
+  if (oauthError) {
+    const description = url.searchParams.get("error_description") ??
+      "TeamUp authorization was denied";
+    return jsonResponse({ error: description }, 400);
+  }
+
+  const code = url.searchParams.get("code");
+  const stateToken = url.searchParams.get("state");
+  if (!code || !stateToken) {
+    return jsonResponse(
+      { error: "OAuth callback is missing code or state" },
+      400,
+    );
+  }
+
+  const signingSecret = requireEnv("JWT_SIGNING_SECRET");
+  let state;
+  try {
+    state = await verifyOAuthState(stateToken, signingSecret);
+  } catch {
+    return jsonResponse({ error: "Invalid or expired OAuth state" }, 400);
+  }
+
+  const teamUpAccessToken = await exchangeTeamUpAuthorizationCode(config, {
+    code,
+    codeVerifier: state.codeVerifier,
+  });
+
+  const verification = decodeTeamUpAccessToken(teamUpAccessToken);
+  const result = await issueMemberSession(
+    verification,
+    state.deviceMemberId,
+    state.surface as Surface,
+  );
+
+  if ("error" in result) {
+    return jsonResponse({ error: result.error }, result.status);
+  }
+
+  const returnUrl = resolveOAuthReturnUrl(config, state.returnUrl);
+  if (returnUrl) {
+    return redirectResponse(
+      appendTokenToReturnUrl(returnUrl, result.token),
+    );
+  }
+
+  return jsonResponse({ token: result.token }, 200);
+}
+
+function routeOAuthGet(req: Request): Response | Promise<Response> {
+  const url = new URL(req.url);
+  const oauth = url.searchParams.get("oauth");
+
+  if (oauth === "authorize") {
+    return handleOAuthAuthorize(req);
+  }
+  if (oauth === "callback") {
+    return handleOAuthCallback(req);
+  }
+
+  return jsonResponse({ error: "Method not allowed" }, 405);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  if (req.method !== "POST") {
-    return jsonResponse({ error: "Method not allowed" }, 405);
-  }
-
   try {
-    let body: unknown;
-    try {
-      body = await req.json();
-    } catch {
-      return jsonResponse({ error: "Invalid JSON body" }, 400);
+    if (req.method === "GET") {
+      return await routeOAuthGet(req);
     }
 
-    const request = parseRequestBody(body);
-    if (!request) {
-      return jsonResponse(
-        {
-          error:
-            "Invalid request body. Expected teamupToken (string), deviceMemberId (UUID), surface (ios | memberWeb | coachWeb | ownerWeb).",
-        },
-        400,
-      );
+    if (req.method === "POST") {
+      return await handlePost(req);
     }
 
-    const verification = await verifyTeamUpToken(request.teamupToken);
-    const role = surfaceToRole(request.surface);
-
-    if (verification.mode === "customer" && isStaffSurface(request.surface)) {
-      return jsonResponse(
-        { error: "TeamUp customer token cannot access staff surfaces" },
-        403,
-      );
-    }
-
-    const supabase = createServiceClient();
-    const gymId = await lookupGymId(supabase, verification.providerId);
-
-    if (!gymId) {
-      return jsonResponse({ error: "Gym not found for TeamUp provider" }, 404);
-    }
-
-    const memberId = await createOrAdoptMember(
-      supabase,
-      gymId,
-      verification.teamupCustomerId,
-      request.deviceMemberId,
-    );
-
-    const token = await mintSupabaseJwt(memberId, gymId, role);
-
-    return jsonResponse({ token }, 200);
+    return jsonResponse({ error: "Method not allowed" }, 405);
   } catch (error) {
     logCaughtError(error);
     return jsonResponse({ error: "Internal server error" }, 500);
