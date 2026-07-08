@@ -33,3 +33,4 @@ Labels are managed on GitHub via `gh label create` (see repository settings → 
 | #5 | Export my data | `phase-1` |
 | #6 | Import my data | `phase-2` |
 | #7 | TeamUp integration | `phase-3` |
+| #27 | Add exercises to previously logged sessions | `phase-2` |

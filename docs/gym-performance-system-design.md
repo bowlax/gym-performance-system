@@ -381,6 +381,7 @@ Full layout tokens and platform mappings: `docs/design-system.md` (Training cons
 | #5 | Export member data as JSON | Phase 1 | Pending |
 | #6 | Import previously exported data | Phase 2 | Deferred |
 | #7 | TeamUp integration | Phase 3 | Deferred -- review during phase 2 scoping |
+| #27 | Add exercises to previously logged sessions | Phase 2 | Deferred |
 
 ---
 

@@ -127,24 +127,19 @@ function DesignSystem() {
           </div>
         </Section>
 
-        <Section title="PB card" caption="Yellow ring + badge celebrates a personal best">
+        <Section title="PB card" caption="Board row layout matches iOS Personal Bests">
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             <PBCard
               lift="Back squat"
-              value={142.5}
-              achievedAt="Set on 2 Jul 2026"
-              isPB
+              value="142.5kg × 5"
+              achievedAt="2 Jul"
             />
             <PBCard
               lift="Bench press"
-              value={97.5}
-              achievedAt="Set on 18 Jun 2026"
+              value="97.5kg × 3"
+              achievedAt="18 Jun"
             />
-            <PBCard
-              lift="Deadlift"
-              value={185}
-              achievedAt="Set on 24 Jun 2026"
-            />
+            <PBCard lift="Deadlift" />
           </div>
         </Section>
 

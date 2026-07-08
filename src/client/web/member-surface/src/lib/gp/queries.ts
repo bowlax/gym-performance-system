@@ -474,6 +474,43 @@ export async function fetchExercises(
 export interface BoardRow {
   exercise: ExerciseRow;
   pb: PersonalBestRow | null;
+  hasHistory: boolean;
+}
+
+async function fetchExerciseIdsWithHistory(
+  supabase: SupabaseClient,
+  exerciseIds: string[],
+): Promise<Set<string>> {
+  const ids = new Set<string>();
+  if (exerciseIds.length === 0) return ids;
+
+  const { data: pbRows, error: pbError } = await supabase
+    .from("personal_bests")
+    .select("exercise_id")
+    .in("exercise_id", exerciseIds)
+    .is("deleted_at", null);
+  if (pbError) throw new Error(pbError.message);
+  for (const row of pbRows ?? []) {
+    const exerciseId = row.exercise_id;
+    if (typeof exerciseId === "string") ids.add(exerciseId);
+  }
+
+  const { data: entryRows, error: entryError } = await supabase
+    .from("exercise_entries")
+    .select("exercise_id, sets(id, deleted_at)")
+    .in("exercise_id", exerciseIds)
+    .is("deleted_at", null);
+  if (entryError) throw new Error(entryError.message);
+
+  for (const row of entryRows ?? []) {
+    const exerciseId = row.exercise_id;
+    if (typeof exerciseId !== "string") continue;
+    const sets = row.sets as Array<{ deleted_at?: string | null }> | null;
+    const hasActiveSet = (sets ?? []).some((set) => set.deleted_at == null);
+    if (hasActiveSet) ids.add(exerciseId);
+  }
+
+  return ids;
 }
 
 /**
@@ -492,8 +529,13 @@ export async function fetchBoard(
     const exId = pb.exercise?.id;
     if (exId) pbByExercise.set(exId, pb);
   }
+  const historyIds = await fetchExerciseIdsWithHistory(
+    supabase,
+    exercises.map((exercise) => exercise.id),
+  );
   return exercises.map((exercise) => ({
     exercise,
     pb: pbByExercise.get(exercise.id) ?? null,
+    hasHistory: historyIds.has(exercise.id),
   }));
 }

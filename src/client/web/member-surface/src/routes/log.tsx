@@ -448,7 +448,7 @@ function ExercisePicker({
   }
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center">
         <button
           type="button"
           onClick={onCancel}
@@ -456,14 +456,6 @@ function ExercisePicker({
         >
           <ChevronLeft className="size-4" />
           Back
-        </button>
-        <button
-          type="button"
-          onClick={() => onDone(Array.from(picked))}
-          disabled={picked.size === 0}
-          className="text-sm font-semibold text-primary disabled:text-muted-foreground"
-        >
-          Add ({picked.size})
         </button>
       </div>
       <div className="rounded-[16px] bg-card p-2">
@@ -490,13 +482,8 @@ function ExercisePicker({
                 disabled={already}
                 className="flex w-full items-center justify-between rounded-[10px] px-3 py-3 text-left hover:bg-muted disabled:opacity-50"
               >
-                <div>
-                  <div className="text-sm font-medium text-foreground">
-                    {ex.name}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {ex.measurement_type}
-                  </div>
+                <div className="text-sm font-medium text-foreground">
+                  {ex.name}
                 </div>
                 {already ? (
                   <span className="text-xs text-muted-foreground">Added</span>
@@ -516,6 +503,15 @@ function ExercisePicker({
             );
           })}
       </div>
+      <Button
+        type="button"
+        onClick={() => onDone(Array.from(picked))}
+        disabled={picked.size === 0}
+      >
+        {picked.size === 0
+          ? "Select exercises"
+          : `Add ${picked.size} exercise${picked.size === 1 ? "" : "s"}`}
+      </Button>
     </div>
   );
 }

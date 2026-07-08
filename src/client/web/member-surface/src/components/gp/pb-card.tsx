@@ -2,47 +2,45 @@ import { cn } from "@/lib/utils";
 
 export interface PBCardProps {
   lift: string;
-  /** Primary display — number or preformatted string (e.g. Cable Row `12 × 8`). */
-  value: number | string;
-  unit?: string;
+  /** Full PB display string (e.g. `80kg × 5`). Omit for exercises without a PB. */
+  value?: string;
+  /** Short date under the PB value (e.g. `8 Jul`). */
   achievedAt?: string;
-  isPB?: boolean;
   className?: string;
 }
 
 /**
- * PBCard — the core Board card. When `isPB` is true, the card gets the
- * electric-yellow celebration ring and PB badge. Weight is rendered in the
- * tabular numeric treatment shared with iOS.
+ * Board exercise card — mirrors iOS `BoardView.row` layout.
  */
-export function PBCard({
-  lift,
-  value,
-  unit = "kg",
-  achievedAt,
-  isPB: _isPB = false,
-  className,
-}: PBCardProps) {
+export function PBCard({ lift, value, achievedAt, className }: PBCardProps) {
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-[16px] bg-card p-4 pl-5 text-card-foreground",
-        "before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-primary",
+        "flex overflow-hidden rounded-[16px] bg-card text-card-foreground",
         className,
       )}
     >
-      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{lift}</div>
-      <div className="mt-3 flex items-baseline gap-1.5">
-        <span className="font-numeric text-5xl font-semibold leading-none text-primary">
-          {value}
-        </span>
-        {unit.trim() !== "" && (
-          <span className="text-lg font-medium text-muted-foreground">{unit}</span>
+      <div
+        className="w-[3px] shrink-0 bg-primary"
+        aria-hidden
+      />
+      <div className="flex min-w-0 flex-1 items-start justify-between gap-3 p-4">
+        <h3 className="min-w-0 flex-1 text-[17px] font-semibold leading-snug text-foreground">
+          {lift}
+        </h3>
+        {value ? (
+          <div className="shrink-0 text-right">
+            <div className="font-numeric text-[34px] font-semibold leading-none tracking-tight text-primary">
+              {value}
+            </div>
+            {achievedAt ? (
+              <div className="mt-1 text-xs text-muted-foreground">{achievedAt}</div>
+            ) : null}
+          </div>
+        ) : (
+          <span className="shrink-0 text-xs text-muted-foreground">No PB yet</span>
         )}
       </div>
-      {achievedAt && (
-        <div className="mt-3 text-xs text-muted-foreground">{achievedAt}</div>
-      )}
     </div>
   );
 }

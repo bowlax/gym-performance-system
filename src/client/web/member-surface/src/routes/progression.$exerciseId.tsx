@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 import {
   CartesianGrid,
   Line,
@@ -54,7 +55,12 @@ import { todayISO } from "@/lib/gp/log-set";
 import { cn } from "@/lib/utils";
 import { MmSsFields } from "@/components/gp/mm-ss-fields";
 
+const progressionSearchSchema = z.object({
+  manual: z.boolean().optional(),
+});
+
 export const Route = createFileRoute("/progression/$exerciseId")({
+  validateSearch: progressionSearchSchema,
   head: () => ({
     meta: [
       { title: "Progression — GymPerformance" },
@@ -90,10 +96,12 @@ function ProgressionScreen() {
 function ProgressionContent() {
   const { supabase, session } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { exerciseId } = Route.useParams();
+  const { manual } = Route.useSearch();
   const tokenTag = session?.token?.slice(-8) ?? "anon";
 
-  const [manualOpen, setManualOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(!!manual);
   const [resetOpen, setResetOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ProgressionEntryRow | null>(null);
@@ -117,8 +125,15 @@ function ProgressionContent() {
       if (!supabase || !exerciseQuery.data) throw new Error("Not signed in");
       return fetchMergedProgression(supabase, exerciseId, exerciseQuery.data);
     },
-    enabled: !!supabase && !!exerciseQuery.data,
+    enabled: !!supabase && !!exerciseQuery.data && !manual,
   });
+
+  const handleManualOpenChange = (open: boolean) => {
+    setManualOpen(open);
+    if (!open && manual) {
+      void navigate({ to: "/" });
+    }
+  };
 
   const refreshProgression = async () => {
     await queryClient.invalidateQueries({ queryKey: ["pb-history", exerciseId] });
@@ -131,10 +146,10 @@ function ProgressionContent() {
     return () => window.clearTimeout(timer);
   }, [celebrate]);
 
-  if (exerciseQuery.isLoading || historyQuery.isLoading) {
+  if (exerciseQuery.isLoading || (!manual && historyQuery.isLoading)) {
     return <SkeletonProgression />;
   }
-  if (exerciseQuery.isError || historyQuery.isError) {
+  if (exerciseQuery.isError || (!manual && historyQuery.isError)) {
     const err = (exerciseQuery.error ?? historyQuery.error) as Error;
     return (
       <div className="rounded-[16px] bg-card p-4">
@@ -158,6 +173,27 @@ function ProgressionContent() {
   const history = historyQuery.data?.entries ?? [];
   const personalBests = historyQuery.data?.personalBests ?? [];
   const current = personalBests.find((h) => h.is_current) ?? null;
+
+  if (manual) {
+    return (
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold tracking-tight text-foreground">
+          {exercise.name}
+        </h2>
+        <ManualPBSheet
+          open={manualOpen}
+          onOpenChange={handleManualOpenChange}
+          exercise={exercise}
+          current={current}
+          token={session?.token ?? null}
+          onSaved={async (isNewPB) => {
+            if (isNewPB) setCelebrate(true);
+            await refreshProgression();
+          }}
+        />
+      </div>
+    );
+  }
 
   const openDeleteDialog = (row: ProgressionEntryRow) => {
     setPendingDelete(row);

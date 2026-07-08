@@ -98,6 +98,80 @@ export function formatNumber(v: number): string {
   return Number.isInteger(v) ? String(v) : v.toFixed(1);
 }
 
+/** Board row date label — iOS `PBFormatter.shortDate` parity (`d MMM`). */
+export function formatBoardPBDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+/** Full PB string for board cards — iOS `PBFormatter.formatPB` parity. */
+export function formatBoardPBDisplay(
+  pb: {
+    value: number;
+    reps?: number | null;
+    raw?: Record<string, unknown>;
+  },
+  exercise: {
+    name: string;
+    measurement_type?: string | null;
+  },
+): string {
+  const measurementType = exercise.measurement_type ?? "";
+  const raw = pb.raw ?? {};
+
+  const weight =
+    measurementType === "weightAndReps" ||
+    measurementType === "weightAndTime" ||
+    measurementType === "weightAndDistance"
+      ? pb.value
+      : typeof raw.weight === "number"
+        ? raw.weight
+        : typeof raw.weight_kg === "number"
+          ? raw.weight_kg
+          : null;
+
+  const timeSeconds =
+    measurementType === "timeOnly" || measurementType === "weightAndTime"
+      ? pb.value
+      : typeof raw.time_seconds === "number"
+        ? raw.time_seconds
+        : typeof raw.time === "number"
+          ? raw.time
+          : null;
+
+  const distance =
+    measurementType === "distanceOnly"
+      ? pb.value
+      : typeof raw.distance === "number"
+        ? raw.distance
+        : typeof raw.distance_meters === "number"
+          ? raw.distance_meters
+          : null;
+
+  const reps =
+    pb.reps ??
+    (typeof raw.reps === "number"
+      ? raw.reps
+      : typeof raw.rep_count === "number"
+        ? raw.rep_count
+        : measurementType === "repsOnly"
+          ? pb.value
+          : null);
+
+  return formatSetValues({
+    weight,
+    reps,
+    timeSeconds,
+    distance,
+    measurementType,
+    exerciseName: exercise.name,
+  });
+}
+
 /** iOS-parity display: always `m:ss` (e.g. `0:52`, `1:52`). */
 export function formatTime(totalSeconds: number): string {
   if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return "–";

@@ -24,7 +24,8 @@ import {
   fetchSessions,
   type BoardRow,
 } from "@/lib/gp/queries";
-import { formatPBValue } from "@/lib/gp/format";
+import { formatBoardPBDate, formatBoardPBDisplay } from "@/lib/gp/format";
+import { boardExerciseDestination } from "@/lib/gp/board-exercise-routing";
 import {
   clearSessionSaveSummary,
   readSessionSaveSummary,
@@ -265,57 +266,30 @@ function BoardContent() {
 }
 
 function BoardCard({ row }: { row: BoardRow }) {
-  const { exercise, pb } = row;
-  const measurement = exercise.measurement_type ?? "";
-  const formatted = pb
-    ? formatPBValue(pb.value, measurement, {
-        exerciseName: exercise.name,
-        reps: pb.reps,
-      })
-    : null;
+  const { exercise, pb, hasHistory } = row;
+  const pbDisplay = pb ? formatBoardPBDisplay(pb, exercise) : undefined;
+  const achievedAt =
+    pb?.achieved_at != null ? formatBoardPBDate(pb.achieved_at) : undefined;
+  const destination = boardExerciseDestination(!!pb, hasHistory);
+
   return (
     <Link
       to="/progression/$exerciseId"
       params={{ exerciseId: exercise.id }}
+      search={destination === "manual" ? { manual: true } : {}}
       className="block rounded-[16px] transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20"
-      aria-label={`Open progression for ${exercise.name}`}
+      aria-label={
+        destination === "manual"
+          ? `Add first personal best for ${exercise.name}`
+          : `Open progression for ${exercise.name}`
+      }
     >
-      {pb && formatted ? (
-        <PBCard
-          lift={exercise.name}
-          value={formatted.primary}
-          unit={formatted.unit}
-          achievedAt={
-            pb.achieved_at
-              ? `Set on ${new Date(pb.achieved_at).toLocaleDateString(undefined, {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })}`
-              : undefined
-          }
-          isPB
-        />
-      ) : (
-        <EmptyExerciseCard name={exercise.name} />
-      )}
+      <PBCard
+        lift={exercise.name}
+        value={pbDisplay}
+        achievedAt={achievedAt}
+      />
     </Link>
-  );
-}
-
-function EmptyExerciseCard({ name }: { name: string }) {
-  return (
-    <div className="relative overflow-hidden rounded-[16px] bg-card p-4 pl-5 text-card-foreground before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-primary">
-      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        {name}
-      </div>
-      <div className="mt-3 flex items-baseline gap-1.5">
-        <span className="font-numeric text-5xl font-semibold leading-none text-muted-foreground/60">
-          –
-        </span>
-      </div>
-      <div className="mt-3 text-xs text-muted-foreground">No PB yet</div>
-    </div>
   );
 }
 
