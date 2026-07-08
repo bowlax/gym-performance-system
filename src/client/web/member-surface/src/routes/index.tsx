@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import { Info, ChevronRight, Trophy } from "lucide-react";
 import {
   format,
@@ -31,7 +31,9 @@ import {
 } from "@/lib/gp/queries";
 import { formatPBValue } from "@/lib/gp/format";
 import {
-  takeSessionSaveSummary,
+  clearSessionSaveSummary,
+  readSessionSaveSummary,
+  sessionSaveSummaryFromLocationState,
   type SessionSaveSummary,
 } from "@/lib/gp/session-save-summary";
 
@@ -61,10 +63,25 @@ function BoardScreen() {
   const [saveSummary, setSaveSummary] = useState<SessionSaveSummary | null>(
     null,
   );
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const locationState = useRouterState({ select: (s) => s.location.state });
 
   useEffect(() => {
-    setSaveSummary(takeSessionSaveSummary());
-  }, []);
+    if (pathname !== "/") return;
+
+    const fromNavigation = sessionSaveSummaryFromLocationState(locationState);
+    const fromStorage = readSessionSaveSummary();
+    const summary = fromNavigation ?? fromStorage;
+
+    if (summary?.items.length) {
+      setSaveSummary(summary);
+    }
+  }, [pathname, locationState]);
+
+  function dismissSaveSummary() {
+    clearSessionSaveSummary();
+    setSaveSummary(null);
+  }
 
   return (
     <AppShell>
@@ -91,7 +108,7 @@ function BoardScreen() {
       <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
       <SessionSavedDialog
         summary={saveSummary}
-        onClose={() => setSaveSummary(null)}
+        onClose={dismissSaveSummary}
       />
     </AppShell>
   );

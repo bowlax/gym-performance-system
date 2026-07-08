@@ -29,7 +29,10 @@ import {
   isCableRow,
 } from "@/lib/gp/format";
 import { logSession, todayISO } from "@/lib/gp/log-set";
-import { stashSessionSaveSummary } from "@/lib/gp/session-save-summary";
+import {
+  stashSessionSaveSummary,
+  type SessionSaveSummary,
+} from "@/lib/gp/session-save-summary";
 
 export const Route = createFileRoute("/log")({
   head: () => ({
@@ -222,7 +225,7 @@ function LogSessionForm() {
         exercises: exercisesToLog,
       });
 
-      stashSessionSaveSummary({
+      const saveSummary: SessionSaveSummary = {
         items: sessionResult.results.map(({ exerciseId, result }) => {
           const exercise = selectedExercises.find((e) => e.id === exerciseId);
           return {
@@ -231,14 +234,19 @@ function LogSessionForm() {
             isPersonalBest: result.isPersonalBest,
           };
         }),
-      });
+      };
+
+      stashSessionSaveSummary(saveSummary);
 
       await queryClient.invalidateQueries({ queryKey: ["board"] });
       await queryClient.invalidateQueries({ queryKey: ["personal-bests"] });
       await queryClient.invalidateQueries({ queryKey: ["session-history"] });
       await queryClient.invalidateQueries({ queryKey: ["sessions"] });
 
-      void navigate({ to: "/" });
+      void navigate({
+        to: "/",
+        state: { sessionSaveSummary: saveSummary },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
