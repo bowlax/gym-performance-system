@@ -112,6 +112,30 @@ function formatRawSeconds(seconds: number | null | undefined): string {
   return `${Math.round(seconds)}s`;
 }
 
+/** Scalar used for progression charts (iOS `PBFormatter.chartValue` parity). */
+export function chartValue(params: {
+  weight?: number | null;
+  reps?: number | null;
+  timeSeconds?: number | null;
+  distance?: number | null;
+  measurementType: MeasurementType | string;
+}): number {
+  const { weight, reps, timeSeconds, distance, measurementType } = params;
+  switch (measurementType) {
+    case "weightAndReps":
+    case "weightAndTime":
+      return weight ?? 0;
+    case "timeOnly":
+      return timeSeconds ?? 0;
+    case "distanceOnly":
+      return distance ?? 0;
+    case "repsOnly":
+      return reps ?? 0;
+    default:
+      return weight ?? timeSeconds ?? distance ?? reps ?? 0;
+  }
+}
+
 export function fieldsForMeasurement(measurementType: MeasurementType | string) {
   switch (measurementType) {
     case "weightAndReps":

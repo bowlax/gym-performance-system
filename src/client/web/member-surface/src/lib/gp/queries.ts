@@ -1,12 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { bestSetFromSets } from "./best-set";
 import type { MeasurementType } from "./format";
+import {
+  mergeProgressionEntries,
+  type ExerciseSetSummary,
+  type ProgressionEntryRow,
+} from "./progression-entry-merger";
 
 export interface ExerciseRow {
   id: string;
   name: string;
   measurement_type: MeasurementType;
   display_order: number;
+  pb_rule?: string | null;
 }
+
+export type { ExerciseSetSummary, ProgressionEntryRow };
 
 export interface PersonalBestRow {
   id: string;
@@ -119,6 +128,108 @@ export async function fetchExerciseHistory(
     entry_type: typeof r.entry_type === "string" ? r.entry_type : null,
     raw: r,
   }));
+}
+
+/**
+ * Best set per session for one exercise — mirrors iOS `exerciseHistory`.
+ */
+export async function fetchExerciseSessionHistory(
+  supabase: SupabaseClient,
+  exerciseId: string,
+  pbRule: string | null | undefined,
+  pbSetIds: ReadonlySet<string>,
+): Promise<ExerciseSetSummary[]> {
+  const { data, error } = await supabase
+    .from("exercise_entries")
+    .select(
+      "id, session:sessions!inner(id, date), sets(id, weight, reps, time_seconds, distance, deleted_at)",
+    )
+    .eq("exercise_id", exerciseId)
+    .is("deleted_at", null);
+  if (error) throw new Error(error.message);
+
+  const rows = (data ?? []) as unknown as Array<{
+    id: string;
+    session: { id: string; date: string } | Array<{ id: string; date: string }>;
+    sets: Array<
+      SessionSetRow & { deleted_at?: string | null }
+    >;
+  }>;
+
+  const bySession = new Map<string, { date: string; sets: SessionSetRow[] }>();
+
+  for (const row of rows) {
+    const session = Array.isArray(row.session) ? row.session[0] : row.session;
+    if (!session) continue;
+
+    const activeSets = (row.sets ?? [])
+      .filter((set) => set.deleted_at == null)
+      .map((set) => ({
+        id: set.id,
+        weight: set.weight,
+        reps: set.reps,
+        time_seconds: set.time_seconds,
+        distance: set.distance,
+      }));
+
+    const existing = bySession.get(session.id);
+    if (existing) {
+      existing.sets.push(...activeSets);
+    } else {
+      bySession.set(session.id, { date: session.date, sets: [...activeSets] });
+    }
+  }
+
+  const summaries: ExerciseSetSummary[] = [];
+  for (const { date, sets } of bySession.values()) {
+    const best = bestSetFromSets(sets, pbRule);
+    if (!best) continue;
+    summaries.push({
+      sessionDate: date,
+      set: best,
+      isPB: pbSetIds.has(best.id),
+    });
+  }
+
+  return summaries.sort((left, right) =>
+    left.sessionDate.localeCompare(right.sessionDate),
+  );
+}
+
+export interface MergedProgressionData {
+  entries: ProgressionEntryRow[];
+  personalBests: PersonalBestHistoryRow[];
+}
+
+/** Session sets merged with PB history for the progression chart and list. */
+export async function fetchMergedProgression(
+  supabase: SupabaseClient,
+  exerciseId: string,
+  exercise: ExerciseRow,
+): Promise<MergedProgressionData> {
+  const personalBests = await fetchExerciseHistory(
+    supabase,
+    exerciseId,
+    exercise.measurement_type,
+  );
+  const pbSetIds = new Set(
+    personalBests
+      .map((pb) => pb.set_id)
+      .filter((id): id is string => id != null),
+  );
+  const sessionHistory = await fetchExerciseSessionHistory(
+    supabase,
+    exerciseId,
+    exercise.pb_rule,
+    pbSetIds,
+  );
+  const entries = mergeProgressionEntries({
+    sessionHistory,
+    personalBests,
+    exercise,
+    from: new Date(0),
+  });
+  return { entries, personalBests };
 }
 
 /**

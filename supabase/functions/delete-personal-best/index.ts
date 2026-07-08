@@ -27,7 +27,7 @@ import {
 
 interface DeletePersonalBestRequest {
   exerciseId: string;
-  personalBestId: string;
+  personalBestId?: string;
   setId?: string;
 }
 
@@ -52,11 +52,16 @@ function parseDeleteRequest(body: unknown): DeletePersonalBestRequest | null {
   if (typeof record.exerciseId !== "string" || !isUuid(record.exerciseId)) {
     return null;
   }
-  if (
-    typeof record.personalBestId !== "string" ||
-    !isUuid(record.personalBestId)
-  ) {
-    return null;
+
+  let personalBestId: string | undefined;
+  if (record.personalBestId != null) {
+    if (
+      typeof record.personalBestId !== "string" ||
+      !isUuid(record.personalBestId)
+    ) {
+      return null;
+    }
+    personalBestId = record.personalBestId;
   }
 
   let setId: string | undefined;
@@ -67,9 +72,13 @@ function parseDeleteRequest(body: unknown): DeletePersonalBestRequest | null {
     setId = record.setId;
   }
 
+  if (!personalBestId && !setId) {
+    return null;
+  }
+
   return {
     exerciseId: record.exerciseId,
-    personalBestId: record.personalBestId,
+    personalBestId,
     setId,
   };
 }
@@ -221,7 +230,7 @@ handleEdgeRequest(async (req, claims, authHeader) => {
     return jsonResponse(
       {
         error:
-          "Invalid request body. Provide exerciseId and personalBestId.",
+          "Invalid request body. Provide exerciseId and personalBestId and/or setId.",
       },
       400,
     );
@@ -250,7 +259,7 @@ handleEdgeRequest(async (req, claims, authHeader) => {
     targetPB = findPersonalBestForDeletedSet(allPBs, request.setId);
 
     await softDeleteSet(supabase, request.setId);
-  } else {
+  } else if (request.personalBestId) {
     targetPB = await fetchPersonalBestById(
       supabase,
       request.personalBestId,

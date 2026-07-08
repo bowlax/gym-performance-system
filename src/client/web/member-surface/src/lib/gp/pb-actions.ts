@@ -39,7 +39,7 @@ export interface ResetCurrentPBResult {
 
 export interface DeletePersonalBestInput {
   exerciseId: string;
-  personalBestId: string;
+  personalBestId?: string;
   setId?: string;
 }
 
@@ -114,8 +114,10 @@ export async function deletePersonalBest(
 ): Promise<DeletePersonalBestResult> {
   const body: Record<string, unknown> = {
     exerciseId: input.exerciseId,
-    personalBestId: input.personalBestId,
   };
+  if (input.personalBestId) {
+    body.personalBestId = input.personalBestId;
+  }
   if (input.setId) {
     body.setId = input.setId;
   }

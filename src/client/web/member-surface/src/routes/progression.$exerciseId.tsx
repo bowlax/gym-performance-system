@@ -39,8 +39,9 @@ import {
 import { useAuth } from "@/lib/gp/auth-provider";
 import {
   fetchExercise,
-  fetchExerciseHistory,
+  fetchMergedProgression,
   type PersonalBestHistoryRow,
+  type ProgressionEntryRow,
   type ExerciseRow,
 } from "@/lib/gp/queries";
 import { fieldsForMeasurement, formatPBValue, combineMmSs, fieldLabel, fieldUnit, isCableRow } from "@/lib/gp/format";
@@ -95,7 +96,7 @@ function ProgressionContent() {
   const [manualOpen, setManualOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<PersonalBestHistoryRow | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ProgressionEntryRow | null>(null);
   const [deleteMessage, setDeleteMessage] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
@@ -110,13 +111,11 @@ function ProgressionContent() {
     enabled: !!supabase,
   });
 
-  const measurement = exerciseQuery.data?.measurement_type;
-
   const historyQuery = useQuery({
     queryKey: ["pb-history", exerciseId, tokenTag],
     queryFn: () => {
-      if (!supabase) throw new Error("Not signed in");
-      return fetchExerciseHistory(supabase, exerciseId, measurement);
+      if (!supabase || !exerciseQuery.data) throw new Error("Not signed in");
+      return fetchMergedProgression(supabase, exerciseId, exerciseQuery.data);
     },
     enabled: !!supabase && !!exerciseQuery.data,
   });
@@ -156,12 +155,15 @@ function ProgressionContent() {
     );
   }
 
-  const history = historyQuery.data ?? [];
-  const current = history.find((h) => h.is_current) ?? null;
+  const history = historyQuery.data?.entries ?? [];
+  const personalBests = historyQuery.data?.personalBests ?? [];
+  const current = personalBests.find((h) => h.is_current) ?? null;
 
-  const openDeleteDialog = (row: PersonalBestHistoryRow) => {
+  const openDeleteDialog = (row: ProgressionEntryRow) => {
     setPendingDelete(row);
-    setDeleteMessage(deleteConfirmationMessage(row, history, current));
+    setDeleteMessage(
+      deleteConfirmationMessage(row, history, current, personalBests),
+    );
     setDeleteOpen(true);
   };
 
@@ -187,8 +189,8 @@ function ProgressionContent() {
     try {
       await deletePersonalBest(session.token, {
         exerciseId,
-        personalBestId: pendingDelete.id,
-        setId: pendingDelete.set_id ?? undefined,
+        personalBestId: pendingDelete.personalBestId ?? undefined,
+        setId: pendingDelete.setId ?? undefined,
       });
       setDeleteOpen(false);
       setPendingDelete(null);
@@ -591,19 +593,20 @@ function ProgressionChart({
   history,
 }: {
   exercise: ExerciseRow;
-  history: PersonalBestHistoryRow[];
+  history: ProgressionEntryRow[];
 }) {
   const measurement = exercise.measurement_type ?? "";
   const points = history
-    .filter((h) => h.achieved_at && Number.isFinite(h.value))
+    .filter((h) => h.date && Number.isFinite(h.chartValue))
     .map((h) => ({
-      t: new Date(h.achieved_at as string).getTime(),
-      value: h.value,
-      label: new Date(h.achieved_at as string).toLocaleDateString(undefined, {
+      t: new Date(h.date).getTime(),
+      value: h.chartValue,
+      label: new Date(h.date).toLocaleDateString(undefined, {
         day: "numeric",
         month: "short",
         year: "2-digit",
       }),
+      isPB: h.isPB,
     }));
 
   return (
@@ -652,7 +655,25 @@ function ProgressionChart({
                   dataKey="value"
                   stroke="var(--primary)"
                   strokeWidth={2}
-                  dot={{ r: 4, fill: "var(--primary)", stroke: "var(--primary)" }}
+                  dot={(props) => {
+                    const { cx, cy, payload } = props as {
+                      cx?: number;
+                      cy?: number;
+                      payload?: { isPB?: boolean };
+                    };
+                    if (cx == null || cy == null) return null;
+                    const isPb = payload?.isPB ?? false;
+                    return (
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={isPb ? 5 : 3}
+                        fill={isPb ? "var(--pb)" : "var(--primary)"}
+                        stroke={isPb ? "var(--pb)" : "var(--primary)"}
+                        opacity={isPb ? 1 : 0.55}
+                      />
+                    );
+                  }}
                   activeDot={{ r: 6, fill: "var(--primary)" }}
                 />
               </LineChart>
@@ -670,13 +691,12 @@ function HistoryList({
   onDelete,
 }: {
   exercise: ExerciseRow;
-  history: PersonalBestHistoryRow[];
-  onDelete: (row: PersonalBestHistoryRow) => void;
+  history: ProgressionEntryRow[];
+  onDelete: (row: ProgressionEntryRow) => void;
 }) {
-  const measurement = exercise.measurement_type ?? "";
   const rows = [...history].sort((a, b) => {
-    const ta = a.achieved_at ? new Date(a.achieved_at).getTime() : 0;
-    const tb = b.achieved_at ? new Date(b.achieved_at).getTime() : 0;
+    const ta = a.date ? new Date(a.date).getTime() : 0;
+    const tb = b.date ? new Date(b.date).getTime() : 0;
     return tb - ta;
   });
 
@@ -689,38 +709,25 @@ function HistoryList({
         </div>
       ) : (
         <ul className="overflow-hidden rounded-[16px] bg-card">
-          {rows.map((row) => {
-            const f = formatExercisePB(
-              row.value,
-              measurement,
-              exercise,
-              row.reps,
-            );
-            const isPbRow = !row.was_reset;
-            return (
+          {rows.map((row) => (
               <li
                 key={row.id}
                 className={cn(
                   "flex items-stretch border-b border-border/50 last:border-0",
-                  row.was_reset && "bg-muted/40",
+                  row.wasReset && "bg-muted/40",
                 )}
               >
-                {isPbRow && (
+                {row.isPB && (
                   <div className="w-1 shrink-0 bg-pb" aria-hidden />
                 )}
                 <div className="flex min-w-0 flex-1 items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
                     <div className="font-numeric text-base font-semibold tabular-nums text-foreground">
-                      {f.primary}
-                      {f.unit && (
-                        <span className="ml-1 text-sm font-medium text-muted-foreground">
-                          {f.unit}
-                        </span>
-                      )}
+                      {row.formattedValue}
                     </div>
                     <div className="mt-0.5 text-xs text-muted-foreground">
-                      {row.achieved_at
-                        ? new Date(row.achieved_at).toLocaleDateString(undefined, {
+                      {row.date
+                        ? new Date(row.date).toLocaleDateString(undefined, {
                             day: "numeric",
                             month: "short",
                             year: "numeric",
@@ -729,12 +736,12 @@ function HistoryList({
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    {row.is_current && (
+                    {row.isPB && (
                       <span className="rounded-full bg-pb-badge px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-pb-foreground">
                         PB
                       </span>
                     )}
-                    {row.was_reset && (
+                    {row.wasReset && (
                       <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                         Reset
                       </span>
@@ -750,8 +757,7 @@ function HistoryList({
                   </div>
                 </div>
               </li>
-            );
-          })}
+            ))}
         </ul>
       )}
     </div>
@@ -759,23 +765,25 @@ function HistoryList({
 }
 
 function deleteConfirmationMessage(
-  row: PersonalBestHistoryRow,
-  history: PersonalBestHistoryRow[],
+  row: ProgressionEntryRow,
+  history: ProgressionEntryRow[],
   current: PersonalBestHistoryRow | null,
+  personalBests: PersonalBestHistoryRow[],
 ): string {
   const removesCurrent =
-    row.is_current ||
-    (current != null &&
-      (row.id === current.id ||
-        (row.set_id != null && row.set_id === current.set_id)));
+    current != null &&
+    (row.personalBestId === current.id ||
+      (row.setId != null && row.setId === current.set_id) ||
+      (row.setId != null &&
+        personalBests.some(
+          (pb) => pb.set_id === row.setId && pb.id === current.id,
+        )));
 
   if (!removesCurrent) {
     return "This cannot be undone.";
   }
 
-  const otherCandidates = history.filter(
-    (h) => h.id !== row.id && !h.was_reset,
-  );
+  const otherCandidates = history.filter((h) => h.id !== row.id && h.isPB);
 
   if (otherCandidates.length === 0) {
     return "Your board will show no current PB until you log a new one.";
