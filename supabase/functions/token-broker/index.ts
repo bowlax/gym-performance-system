@@ -2,7 +2,7 @@
  * Token Broker — Supabase Edge Function
  *
  * Exchanges a TeamUp access token (plus device member UUID and surface) for a
- * Supabase JWT carrying member_id, gym_id, and role claims for RLS.
+ * Supabase JWT carrying member_id, gym_id, and app_role claims for RLS.
  *
  * Required environment variables (set via `supabase secrets set` or `.env` for local serve):
  *   SUPABASE_URL        — project API URL (provided automatically on hosted runtime)
@@ -295,14 +295,17 @@ async function createOrAdoptMember(
 async function mintSupabaseJwt(
   memberId: string,
   gymId: string,
-  role: AppRole,
+  appRole: AppRole,
 ): Promise<string> {
   const jwtSecret = requireEnv("JWT_SIGNING_SECRET");
   const now = Math.floor(Date.now() / 1000);
 
+  // PostgREST maps JWT "role" to a Postgres role (authenticated/anon/service_role).
+  // App roles (member/coach/owner) live in app_role for RLS policy checks.
   return await new SignJWT({
     sub: memberId,
-    role,
+    role: "authenticated",
+    app_role: appRole,
     member_id: memberId,
     gym_id: gymId,
   })

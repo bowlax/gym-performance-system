@@ -17,7 +17,10 @@ Throughout, these expressions read the JWT claims:
 
 - Current gym:    (auth.jwt() ->> 'gym_id')::uuid
 - Current member: (auth.jwt() ->> 'member_id')::uuid
-- Current role:   (auth.jwt() ->> 'role')
+- App role:       (auth.jwt() ->> 'app_role')   -- member | coach | owner
+
+The JWT `role` claim is reserved for PostgREST (`authenticated`). The token broker
+sets `role: "authenticated"` and puts the app role in `app_role`.
 
 ---
 
@@ -59,7 +62,7 @@ create policy members_read on members
     using (
         gym_id = (auth.jwt() ->> 'gym_id')::uuid
         and (
-            (auth.jwt() ->> 'role') in ('coach','owner')
+            (auth.jwt() ->> 'app_role') in ('coach','owner')
             or id = (auth.jwt() ->> 'member_id')::uuid
         )
     );
@@ -103,7 +106,7 @@ create policy sessions_read on sessions
     using (
         gym_id = (auth.jwt() ->> 'gym_id')::uuid
         and (
-            (auth.jwt() ->> 'role') in ('coach','owner')
+            (auth.jwt() ->> 'app_role') in ('coach','owner')
             or member_id = (auth.jwt() ->> 'member_id')::uuid
         )
     );
@@ -146,7 +149,7 @@ create policy entries_read on exercise_entries
     using (
         gym_id = (auth.jwt() ->> 'gym_id')::uuid
         and (
-            (auth.jwt() ->> 'role') in ('coach','owner')
+            (auth.jwt() ->> 'app_role') in ('coach','owner')
             or exists (
                 select 1 from sessions s
                 where s.id = exercise_entries.session_id
@@ -193,7 +196,7 @@ create policy sets_read on sets
     using (
         gym_id = (auth.jwt() ->> 'gym_id')::uuid
         and (
-            (auth.jwt() ->> 'role') in ('coach','owner')
+            (auth.jwt() ->> 'app_role') in ('coach','owner')
             or exists (
                 select 1
                 from exercise_entries e
@@ -246,7 +249,7 @@ create policy pb_read on personal_bests
     using (
         gym_id = (auth.jwt() ->> 'gym_id')::uuid
         and (
-            (auth.jwt() ->> 'role') in ('coach','owner')
+            (auth.jwt() ->> 'app_role') in ('coach','owner')
             or member_id = (auth.jwt() ->> 'member_id')::uuid
         )
     );

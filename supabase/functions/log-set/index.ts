@@ -174,6 +174,28 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function parseNamedKeys(envName: string): string | null {
+  const raw = Deno.env.get(envName);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const keys = JSON.parse(raw) as Record<string, string>;
+    const defaultKey = keys["default"];
+    if (typeof defaultKey === "string" && defaultKey.length > 0) {
+      return defaultKey;
+    }
+  } catch {
+    // not JSON — treat as a plain key string below
+    if (raw.length > 0) {
+      return raw;
+    }
+  }
+
+  return null;
+}
+
 function getAnonKey(): string {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   if (anonKey) {
@@ -185,7 +207,14 @@ function getAnonKey(): string {
     return publishableKey;
   }
 
-  throw new Error("Missing SUPABASE_ANON_KEY or SUPABASE_PUBLISHABLE_KEY");
+  const namedPublishableKey = parseNamedKeys("SUPABASE_PUBLISHABLE_KEYS");
+  if (namedPublishableKey) {
+    return namedPublishableKey;
+  }
+
+  throw new Error(
+    "Missing publishable API key (SUPABASE_ANON_KEY, SUPABASE_PUBLISHABLE_KEY, or SUPABASE_PUBLISHABLE_KEYS)",
+  );
 }
 
 function decodeJwtClaims(authHeader: string | null): JwtClaims | null {
@@ -620,6 +649,26 @@ async function recordPersonalBest(
   return data as PersonalBestRow;
 }
 
+interface PostgrestErrorLike {
+  message?: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+}
+
+function logSupabaseError(context: string, error: PostgrestErrorLike): void {
+  console.error(`log-set supabase ${context} error message:`, error.message);
+  if (error.details) {
+    console.error(`log-set supabase ${context} error details:`, error.details);
+  }
+  if (error.hint) {
+    console.error(`log-set supabase ${context} error hint:`, error.hint);
+  }
+  if (error.code) {
+    console.error(`log-set supabase ${context} error code:`, error.code);
+  }
+}
+
 function logCaughtError(error: unknown): void {
   console.error("log-set failed");
   if (error instanceof Error) {
@@ -630,6 +679,10 @@ function logCaughtError(error: unknown): void {
     return;
   }
   if (error instanceof Response) {
+    return;
+  }
+  if (typeof error === "object" && error !== null) {
+    logSupabaseError("unknown", error as PostgrestErrorLike);
     return;
   }
   console.error("log-set error value:", String(error));
