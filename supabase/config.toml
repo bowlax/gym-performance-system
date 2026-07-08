@@ -38,3 +38,12 @@ verify_jwt = false
 
 [functions.log-set]
 verify_jwt = true
+
+[functions.add-manual-pb]
+verify_jwt = true
+
+[functions.reset-current-pb]
+verify_jwt = true
+
+[functions.delete-personal-best]
+verify_jwt = true

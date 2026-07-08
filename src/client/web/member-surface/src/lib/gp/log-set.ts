@@ -2,6 +2,13 @@ import { LOG_SET_URL } from "./env";
 
 export interface LogSetInput {
   sessionDate: string; // YYYY-MM-DD
+  /** Reuse an existing session instead of creating one. */
+  sessionId?: string;
+  /** Client-generated id when creating a new session (first exercise in a multi-set save). */
+  sessionClientId?: string;
+  /** Session metadata when creating a new session (ignored when sessionId is set). */
+  notes?: string | null;
+  calories_burned?: number | null;
   exerciseId: string;
   weight?: number;
   reps?: number;
@@ -10,6 +17,27 @@ export interface LogSetInput {
   /** Form-layer alias; mapped to `time_seconds` when building the request. */
   time?: number;
   distance?: number;
+}
+
+export interface LogSessionExerciseInput {
+  exerciseId: string;
+  weight?: number;
+  reps?: number;
+  time_seconds?: number;
+  time?: number;
+  distance?: number;
+}
+
+export interface LogSessionInput {
+  sessionDate: string;
+  notes?: string | null;
+  calories_burned?: number | null;
+  exercises: LogSessionExerciseInput[];
+}
+
+export interface LogSessionResult {
+  sessionId: string;
+  results: { exerciseId: string; result: LogSetResult }[];
 }
 
 export interface LogSetResult {
@@ -35,11 +63,23 @@ export async function logSet(
   if (typeof timeSeconds === "number") set.time_seconds = timeSeconds;
   if (typeof input.distance === "number") set.distance = input.distance;
 
-  const body = {
+  const body: Record<string, unknown> = {
     exerciseId: input.exerciseId,
     set,
-    session: { date: input.sessionDate },
   };
+
+  if (input.sessionId) {
+    body.sessionId = input.sessionId;
+  } else {
+    body.session = {
+      date: input.sessionDate,
+      ...(input.sessionClientId ? { id: input.sessionClientId } : {}),
+      ...(input.notes != null ? { notes: input.notes } : {}),
+      ...(input.calories_burned != null
+        ? { calories_burned: input.calories_burned }
+        : {}),
+    };
+  }
 
   if (import.meta.env.DEV) {
     // Debug: verify the payload the edge function receives.
@@ -71,6 +111,40 @@ export async function logSet(
   const previousValue = typeof raw.previousValue === "number" ? raw.previousValue : undefined;
   const newValue = typeof raw.newValue === "number" ? raw.newValue : undefined;
   return { isPersonalBest, previousValue, newValue, raw };
+}
+
+/**
+ * Log multiple exercises into a single session. The first set creates the session;
+ * subsequent sets reuse the same sessionId (iOS saveSession parity).
+ */
+export async function logSession(
+  token: string,
+  input: LogSessionInput,
+): Promise<LogSessionResult> {
+  if (input.exercises.length === 0) {
+    throw new Error("At least one exercise is required to log a session.");
+  }
+
+  const sessionId = crypto.randomUUID();
+  const results: LogSessionResult["results"] = [];
+
+  for (let i = 0; i < input.exercises.length; i++) {
+    const ex = input.exercises[i]!;
+    const result = await logSet(token, {
+      ...ex,
+      sessionDate: input.sessionDate,
+      ...(i === 0
+        ? {
+            sessionClientId: sessionId,
+            notes: input.notes,
+            calories_burned: input.calories_burned,
+          }
+        : { sessionId }),
+    });
+    results.push({ exerciseId: ex.exerciseId, result });
+  }
+
+  return { sessionId, results };
 }
 
 export function todayISO(): string {

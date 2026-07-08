@@ -2,7 +2,8 @@ import { cn } from "@/lib/utils";
 
 export interface PBCardProps {
   lift: string;
-  value: number;
+  /** Primary display — number or preformatted string (e.g. Cable Row `12 × 8`). */
+  value: number | string;
   unit?: string;
   achievedAt?: string;
   isPB?: boolean;
@@ -35,7 +36,9 @@ export function PBCard({
         <span className="font-numeric text-5xl font-semibold leading-none text-primary">
           {value}
         </span>
-        <span className="text-lg font-medium text-muted-foreground">{unit}</span>
+        {unit.trim() !== "" && (
+          <span className="text-lg font-medium text-muted-foreground">{unit}</span>
+        )}
       </div>
       {achievedAt && (
         <div className="mt-3 text-xs text-muted-foreground">{achievedAt}</div>

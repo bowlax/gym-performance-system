@@ -23,6 +23,7 @@
 		474C7C8FFB4F669B4097E166 /* SwiftDataPerformanceDataAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3FA96B5D0EA3ACD0AA00F2B /* SwiftDataPerformanceDataAccess.swift */; };
 		4E81124D5E9DE16D2ABA265B /* ExerciseRegistryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5915C45DAF68D4D12004DA65 /* ExerciseRegistryTests.swift */; };
 		E1A2B3C4D5E6789012345678 /* PBEvaluationVectors.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6789012345678 /* PBEvaluationVectors.swift */; };
+		E2B3C4D5E6789012345678901 /* PBCascadeVectors.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2B3C4D5E6789012345678901 /* PBCascadeVectors.swift */; };
 		580126B24230D98126D2EAED /* DefaultExerciseRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADDF2B6F3BC6152D292E5773 /* DefaultExerciseRegistry.swift */; };
 		58587507A2674BF9C7537302 /* ValueFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D681DD67C21113352AC1948 /* ValueFormatting.swift */; };
 		628F6ADE7EF6399315AD1927 /* UserIdentityModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07AC0CF1145E610B1E874BF4 /* UserIdentityModel.swift */; };
@@ -107,6 +108,7 @@
 		57A44DA68CCF7E29D0D5988E /* AppDependencies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDependencies.swift; sourceTree = "<group>"; };
 		5915C45DAF68D4D12004DA65 /* ExerciseRegistryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExerciseRegistryTests.swift; sourceTree = "<group>"; };
 		F1A2B3C4D5E6789012345678 /* PBEvaluationVectors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PBEvaluationVectors.swift; sourceTree = "<group>"; };
+		F2B3C4D5E6789012345678901 /* PBCascadeVectors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PBCascadeVectors.swift; sourceTree = "<group>"; };
 		5CA4D5D0AD1C0300B1B54713 /* ConfigurationDataAccessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurationDataAccessTests.swift; sourceTree = "<group>"; };
 		615B126715A719EF4C219376 /* ModelSet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelSet.swift; sourceTree = "<group>"; };
 		64665AD0A1679AAF670961DE /* BoardExerciseRouting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardExerciseRouting.swift; sourceTree = "<group>"; };
@@ -268,6 +270,7 @@
 				B4E9CB3FF536958EB818A645 /* .gitkeep */,
 				5915C45DAF68D4D12004DA65 /* ExerciseRegistryTests.swift */,
 				F1A2B3C4D5E6789012345678 /* PBEvaluationVectors.swift */,
+				F2B3C4D5E6789012345678901 /* PBCascadeVectors.swift */,
 				1C2AC98914E314222E077351 /* MemberPerformanceTests.swift */,
 				BD95AA975973083D6F07A659 /* PersonalBestRankingTests.swift */,
 			);
@@ -463,6 +466,7 @@
 				7720351EC9138E3730B08E89 /* ConfigurationDataAccessTests.swift in Sources */,
 				4E81124D5E9DE16D2ABA265B /* ExerciseRegistryTests.swift in Sources */,
 				E1A2B3C4D5E6789012345678 /* PBEvaluationVectors.swift in Sources */,
+				E2B3C4D5E6789012345678901 /* PBCascadeVectors.swift in Sources */,
 				2187E5B4EB726C8B44AEAF11 /* MemberPerformanceTests.swift in Sources */,
 				DD1392EB9AFC3CB660F0FDB3 /* OnboardingPBSaverTests.swift in Sources */,
 				BCA3AE52863ACBB29E9AC06A /* PerformanceDataAccessTests.swift in Sources */,

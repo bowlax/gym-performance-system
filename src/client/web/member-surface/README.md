@@ -13,6 +13,7 @@ The web experience for gym members. Covers session logging, PB tracking, progres
 
 - **Reads and simple writes** — direct Supabase client calls under RLS (broker-minted JWT)
 - **PB logging** — `log-set` Edge Function (`/functions/v1/log-set`)
+- **Progression actions** — `add-manual-pb`, `reset-current-pb`, `delete-personal-best`
 - **Authentication** — `token-broker` Edge Function (`/functions/v1/token-broker`); currently uses a stub TeamUp broker for pre-release testing
 
 ## Environment variables
@@ -29,6 +30,9 @@ Edge function URLs are derived from `GYMPERF_SUPABASE_URL`:
 
 - `{SUPABASE_URL}/functions/v1/token-broker`
 - `{SUPABASE_URL}/functions/v1/log-set`
+- `{SUPABASE_URL}/functions/v1/add-manual-pb`
+- `{SUPABASE_URL}/functions/v1/reset-current-pb`
+- `{SUPABASE_URL}/functions/v1/delete-personal-best`
 
 ## Local development
 

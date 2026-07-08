@@ -5,11 +5,33 @@ export type MeasurementType =
   | "distanceOnly"
   | "repsOnly";
 
+export const CABLE_ROW_NAME = "Cable Row";
+
+export function isCableRow(exerciseName: string | null | undefined): boolean {
+  return exerciseName === CABLE_ROW_NAME;
+}
+
+export interface FormatPBOptions {
+  /** Exercise name — used for Cable Row stack formatting. */
+  exerciseName?: string | null;
+  /** Reps when formatting weightAndReps display (e.g. `80kg × 5` or `12 × 8`). */
+  reps?: number | null;
+}
+
 /** Format a scalar personal-best value based on its exercise measurement type. */
 export function formatPBValue(
   value: number,
   measurementType: MeasurementType | string,
+  options?: FormatPBOptions,
 ): { primary: string; unit: string } {
+  if (isCableRow(options?.exerciseName) && measurementType === "weightAndReps") {
+    const reps = options?.reps;
+    if (typeof reps === "number") {
+      return { primary: `${formatNumber(value)} × ${reps}`, unit: "" };
+    }
+    return { primary: formatNumber(value), unit: "" };
+  }
+
   switch (measurementType) {
     case "weightAndReps":
     case "weightAndTime":
@@ -25,17 +47,69 @@ export function formatPBValue(
   }
 }
 
+/**
+ * Full set / PB display string matching iOS `PBFormatter.formatValues`.
+ */
+export function formatSetValues(params: {
+  weight?: number | null;
+  reps?: number | null;
+  timeSeconds?: number | null;
+  distance?: number | null;
+  measurementType: MeasurementType | string;
+  exerciseName?: string | null;
+}): string {
+  const {
+    weight,
+    reps,
+    timeSeconds,
+    distance,
+    measurementType,
+    exerciseName,
+  } = params;
+
+  if (isCableRow(exerciseName)) {
+    return `${formatNumber(weight ?? 0)} × ${reps ?? 0}`;
+  }
+
+  switch (measurementType) {
+    case "weightAndReps":
+      return `${formatNumber(weight ?? 0)}kg × ${reps ?? 0}`;
+    case "weightAndTime":
+      return `${formatNumber(weight ?? 0)}kg × ${formatRawSeconds(timeSeconds)}`;
+    case "timeOnly":
+      return formatTime(timeSeconds ?? 0);
+    case "distanceOnly":
+      return `${Math.round(distance ?? 0)}m`;
+    case "repsOnly":
+      return `${reps ?? 0} reps`;
+    default: {
+      const parts: string[] = [];
+      if (typeof weight === "number") parts.push(`${formatNumber(weight)}kg`);
+      if (typeof reps === "number") parts.push(`${reps} reps`);
+      if (typeof timeSeconds === "number") parts.push(formatTime(timeSeconds));
+      if (typeof distance === "number") parts.push(`${distance} m`);
+      return parts.length > 0 ? parts.join(" × ") : "—";
+    }
+  }
+}
+
 export function formatNumber(v: number): string {
   if (!Number.isFinite(v)) return "–";
   return Number.isInteger(v) ? String(v) : v.toFixed(1);
 }
 
+/** iOS-parity display: always `m:ss` (e.g. `0:52`, `1:52`). */
 export function formatTime(totalSeconds: number): string {
   if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return "–";
-  if (totalSeconds < 60) return `${formatNumber(totalSeconds)}s`;
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = Math.round(totalSeconds % 60);
+  const total = Math.round(totalSeconds);
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function formatRawSeconds(seconds: number | null | undefined): string {
+  if (seconds == null || !Number.isFinite(seconds)) return "0s";
+  return `${Math.round(seconds)}s`;
 }
 
 export function fieldsForMeasurement(measurementType: MeasurementType | string) {
@@ -53,4 +127,71 @@ export function fieldsForMeasurement(measurementType: MeasurementType | string) 
     default:
       return [] as const;
   }
+}
+
+/** Split total seconds into mm / ss for form inputs. */
+export function splitMmSs(totalSeconds: number | null | undefined): {
+  mm: string;
+  ss: string;
+} {
+  if (totalSeconds == null || !Number.isFinite(totalSeconds) || totalSeconds < 0) {
+    return { mm: "", ss: "" };
+  }
+  const total = Math.round(totalSeconds);
+  return {
+    mm: String(Math.floor(total / 60)),
+    ss: String(total % 60),
+  };
+}
+
+/**
+ * Combine mm + ss form strings into total seconds.
+ * Returns null if either part is missing/invalid.
+ */
+export function combineMmSs(
+  mmRaw: string | undefined,
+  ssRaw: string | undefined,
+): number | null {
+  const mmTrim = mmRaw?.trim() ?? "";
+  const ssTrim = ssRaw?.trim() ?? "";
+  if (mmTrim === "" && ssTrim === "") return null;
+  const mm = mmTrim === "" ? 0 : Number(mmTrim);
+  const ss = ssTrim === "" ? 0 : Number(ssTrim);
+  if (!Number.isFinite(mm) || !Number.isFinite(ss) || mm < 0 || ss < 0) {
+    return null;
+  }
+  if (ss >= 60) return null;
+  return Math.round(mm) * 60 + Math.round(ss);
+}
+
+export function fieldLabel(
+  field: string,
+  measurementType: MeasurementType | string,
+  exerciseName?: string | null,
+): string {
+  if (field === "weight" && isCableRow(exerciseName)) return "Stack";
+  if (field === "time" && measurementType === "timeOnly") return "Time";
+  const labels: Record<string, string> = {
+    weight: "Weight",
+    reps: "Reps",
+    time: "Time",
+    distance: "Distance",
+  };
+  return labels[field] ?? field;
+}
+
+export function fieldUnit(
+  field: string,
+  measurementType: MeasurementType | string,
+  exerciseName?: string | null,
+): string {
+  if (field === "weight" && isCableRow(exerciseName)) return "";
+  if (field === "time" && measurementType === "timeOnly") return "";
+  const units: Record<string, string> = {
+    weight: "kg",
+    reps: "",
+    time: "s",
+    distance: "m",
+  };
+  return units[field] ?? "";
 }

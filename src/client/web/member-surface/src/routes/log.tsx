@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Plus, Trophy, ChevronLeft, X } from "lucide-react";
+import { Plus, ChevronLeft, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/gp/form-field";
+import { MmSsFields } from "@/components/gp/mm-ss-fields";
 import {
   AppShell,
   AuthGate,
@@ -19,8 +20,16 @@ import {
   type SessionEntryRow,
   type SessionSetRow,
 } from "@/lib/gp/queries";
-import { fieldsForMeasurement, formatPBValue, formatTime } from "@/lib/gp/format";
-import { logSet, todayISO, type LogSetResult } from "@/lib/gp/log-set";
+import {
+  combineMmSs,
+  fieldLabel,
+  fieldUnit,
+  fieldsForMeasurement,
+  formatSetValues,
+  isCableRow,
+} from "@/lib/gp/format";
+import { logSession, todayISO } from "@/lib/gp/log-set";
+import { stashSessionSaveSummary } from "@/lib/gp/session-save-summary";
 
 export const Route = createFileRoute("/log")({
   head: () => ({
@@ -102,6 +111,7 @@ type PerExerciseValues = Record<string, Record<string, string>>;
 function LogSessionForm() {
   const { supabase, session } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const exercisesQuery = useQuery({
     queryKey: ["exercises", session?.token?.slice(-8) ?? "anon"],
@@ -120,9 +130,6 @@ function LogSessionForm() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<
-    { exercise: ExerciseRow; result: LogSetResult }[] | null
-  >(null);
 
   const exercises = exercisesQuery.data ?? [];
   const selectedExercises = useMemo(
@@ -155,34 +162,83 @@ function LogSessionForm() {
     e.preventDefault();
     if (!session) return;
     setError(null);
-    setResults(null);
     setSubmitting(true);
     try {
-      const out: { exercise: ExerciseRow; result: LogSetResult }[] = [];
+      const caloriesTrimmed = calories.trim();
+      let caloriesBurned: number | null = null;
+      if (caloriesTrimmed !== "") {
+        const n = Number(caloriesTrimmed);
+        if (!Number.isFinite(n)) {
+          throw new Error("Please enter a valid calories value.");
+        }
+        caloriesBurned = n;
+      }
+
+      const exercisesToLog: {
+        exerciseId: string;
+        weight?: number;
+        reps?: number;
+        time?: number;
+        distance?: number;
+      }[] = [];
+
       for (const ex of selectedExercises) {
         const fields = fieldsForMeasurement(ex.measurement_type);
-        const payload: Record<string, unknown> = {
-          sessionDate,
-          exerciseId: ex.id,
-        };
+        const entry: (typeof exercisesToLog)[number] = { exerciseId: ex.id };
         for (const f of fields) {
+          if (f === "time" && ex.measurement_type === "timeOnly") {
+            const total = combineMmSs(
+              values[ex.id]?.mm,
+              values[ex.id]?.ss,
+            );
+            if (total == null) {
+              throw new Error(
+                `Please enter a valid time (mm:ss) for ${ex.name}.`,
+              );
+            }
+            entry.time = total;
+            continue;
+          }
           const raw = values[ex.id]?.[f];
           const n = raw == null || raw === "" ? NaN : Number(raw);
           if (!Number.isFinite(n)) {
             throw new Error(
-              `Please enter a valid ${LABELS[f]?.toLowerCase() ?? f} for ${ex.name}.`,
+              `Please enter a valid ${fieldLabel(f, ex.measurement_type, ex.name).toLowerCase()} for ${ex.name}.`,
             );
           }
-          payload[f] = n;
+          entry[f as keyof typeof entry] = n;
         }
-        const r = await logSet(session.token, payload as never);
-        out.push({ exercise: ex, result: r });
+        exercisesToLog.push(entry);
       }
-      setResults(out);
-      setValues({});
-      setSelectedIds([]);
+
+      if (exercisesToLog.length === 0) {
+        throw new Error("Add at least one exercise before saving.");
+      }
+
+      const sessionResult = await logSession(session.token, {
+        sessionDate,
+        notes: notes.trim() === "" ? null : notes.trim(),
+        calories_burned: caloriesBurned,
+        exercises: exercisesToLog,
+      });
+
+      stashSessionSaveSummary({
+        items: sessionResult.results.map(({ exerciseId, result }) => {
+          const exercise = selectedExercises.find((e) => e.id === exerciseId);
+          return {
+            exerciseId,
+            exerciseName: exercise?.name ?? "Exercise",
+            isPersonalBest: result.isPersonalBest,
+          };
+        }),
+      });
+
       await queryClient.invalidateQueries({ queryKey: ["board"] });
       await queryClient.invalidateQueries({ queryKey: ["personal-bests"] });
+      await queryClient.invalidateQueries({ queryKey: ["session-history"] });
+      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+
+      void navigate({ to: "/" });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -289,36 +345,8 @@ function LogSessionForm() {
         </div>
       )}
 
-      {results && results.length > 0 && (
-        <div className="rounded-[16px] bg-card p-4 space-y-2">
-          <div className="text-sm font-semibold text-foreground">
-            Session saved
-          </div>
-          {results.map(({ exercise, result }) => (
-            <div
-              key={exercise.id}
-              className="flex items-center justify-between text-sm"
-            >
-              <span className="text-foreground">{exercise.name}</span>
-              {result.isPersonalBest ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-pb-badge px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-pb-foreground">
-                  <Trophy className="size-3" strokeWidth={2.5} />
-                  New PB
-                </span>
-              ) : (
-                <span className="text-xs text-muted-foreground">Logged</span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
       <Button type="submit" disabled={submitting}>
-        {submitting
-          ? "Saving…"
-          : selectedExercises.length === 0
-            ? "Save session"
-            : "Save session"}
+        {submitting ? "Saving…" : "Save session"}
       </Button>
     </form>
   );
@@ -336,6 +364,8 @@ function ExerciseEntry({
   onRemove: () => void;
 }) {
   const fields = fieldsForMeasurement(exercise.measurement_type);
+  const useMmSs = exercise.measurement_type === "timeOnly";
+
   return (
     <div className="rounded-[12px] border border-border/60 p-3">
       <div className="mb-3 flex items-center justify-between">
@@ -351,19 +381,35 @@ function ExerciseEntry({
           <X className="size-4" />
         </button>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {fields.map((f) => (
-          <FormField
-            key={f}
-            label={LABELS[f] ?? f}
-            numeric
-            inputMode="decimal"
-            value={values[f] ?? ""}
-            onChange={(e) => onChange(f, e.target.value)}
-            trailing={UNITS[f]}
-          />
-        ))}
-      </div>
+      {useMmSs ? (
+        <MmSsFields
+          idPrefix={`ex-${exercise.id}`}
+          mm={values.mm ?? ""}
+          ss={values.ss ?? ""}
+          onChange={(part, v) => onChange(part, v)}
+        />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {fields.map((f) => (
+            <FormField
+              key={f}
+              label={fieldLabel(f, exercise.measurement_type, exercise.name)}
+              numeric
+              inputMode={
+                f === "reps" || isCableRow(exercise.name)
+                  ? "numeric"
+                  : "decimal"
+              }
+              value={values[f] ?? ""}
+              onChange={(e) => onChange(f, e.target.value)}
+              trailing={
+                fieldUnit(f, exercise.measurement_type, exercise.name) ||
+                undefined
+              }
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -687,7 +733,7 @@ function SessionEntryCard({ entry }: { entry: SessionEntryRow }) {
             >
               <span className="text-muted-foreground">Set {i + 1}</span>
               <span className="text-foreground">
-                {describeSet(set, measurement)}
+                {describeSet(set, measurement, name)}
               </span>
             </li>
           ))}
@@ -697,25 +743,15 @@ function SessionEntryCard({ entry }: { entry: SessionEntryRow }) {
   );
 }
 
-function describeSet(set: SessionSetRow, measurement: string): string {
-  const parts: string[] = [];
-  if (typeof set.weight === "number") {
-    parts.push(`${formatPBValue(set.weight, "weightAndReps").primary} kg`);
-  }
-  if (typeof set.reps === "number") {
-    parts.push(`${set.reps} reps`);
-  }
-  if (typeof set.time_seconds === "number") {
-    parts.push(formatTime(set.time_seconds));
-  }
-  if (typeof set.distance === "number") {
-    parts.push(`${set.distance} m`);
-  }
-  if (parts.length === 0) {
-    // Fallback: at least mention the measurement type.
-    return measurement || "—";
-  }
-  return parts.join(" × ");
+function describeSet(set: SessionSetRow, measurement: string, exerciseName?: string | null): string {
+  return formatSetValues({
+    weight: set.weight,
+    reps: set.reps,
+    timeSeconds: set.time_seconds,
+    distance: set.distance,
+    measurementType: measurement,
+    exerciseName,
+  });
 }
 
 function formatSessionDate(iso: string): string {
@@ -730,16 +766,3 @@ function formatSessionDate(iso: string): string {
     year: "numeric",
   });
 }
-
-const LABELS: Record<string, string> = {
-  weight: "Weight",
-  reps: "Reps",
-  time: "Time",
-  distance: "Distance",
-};
-const UNITS: Record<string, string> = {
-  weight: "kg",
-  reps: "",
-  time: "s",
-  distance: "m",
-};

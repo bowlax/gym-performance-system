@@ -24,6 +24,8 @@ export interface PersonalBestHistoryRow {
   achieved_at: string | null;
   is_current: boolean;
   was_reset: boolean;
+  set_id: string | null;
+  entry_type: string | null;
   raw: Record<string, unknown>;
 }
 
@@ -113,6 +115,8 @@ export async function fetchExerciseHistory(
       null,
     is_current: pickBool(r, ["is_current"]),
     was_reset: pickBool(r, ["was_reset", "is_reset", "reset"]),
+    set_id: typeof r.set_id === "string" ? r.set_id : null,
+    entry_type: typeof r.entry_type === "string" ? r.entry_type : null,
     raw: r,
   }));
 }

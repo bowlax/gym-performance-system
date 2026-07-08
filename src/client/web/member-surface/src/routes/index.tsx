@@ -1,17 +1,20 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Info, ChevronRight } from "lucide-react";
+import { Info, ChevronRight, Trophy } from "lucide-react";
 import {
   format,
   startOfMonth,
   addMonths,
-  differenceInDays,
 } from "date-fns";
 import { PBCard } from "@/components/gp/pb-card";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
@@ -27,6 +30,10 @@ import {
   type SessionRow,
 } from "@/lib/gp/queries";
 import { formatPBValue } from "@/lib/gp/format";
+import {
+  takeSessionSaveSummary,
+  type SessionSaveSummary,
+} from "@/lib/gp/session-save-summary";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -51,6 +58,14 @@ export const Route = createFileRoute("/")({
 function BoardScreen() {
   const auth = useAuth();
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [saveSummary, setSaveSummary] = useState<SessionSaveSummary | null>(
+    null,
+  );
+
+  useEffect(() => {
+    setSaveSummary(takeSessionSaveSummary());
+  }, []);
+
   return (
     <AppShell>
       <div className="mb-6 flex items-center justify-between gap-4">
@@ -74,7 +89,81 @@ function BoardScreen() {
         <BoardContent />
       </AuthGate>
       <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      <SessionSavedDialog
+        summary={saveSummary}
+        onClose={() => setSaveSummary(null)}
+      />
     </AppShell>
+  );
+}
+
+function SessionSavedDialog({
+  summary,
+  onClose,
+}: {
+  summary: SessionSaveSummary | null;
+  onClose: () => void;
+}) {
+  const open = summary != null && summary.items.length > 0;
+  const newPBCount =
+    summary?.items.filter((item) => item.isPersonalBest).length ?? 0;
+  const title =
+    newPBCount > 0
+      ? newPBCount === 1
+        ? "New personal best!"
+        : "New personal bests!"
+      : "Session saved";
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-md gap-4">
+        <DialogHeader>
+          <div className="mx-auto mb-1 flex size-14 items-center justify-center rounded-full bg-pb-badge/20">
+            <Trophy
+              className={
+                newPBCount > 0
+                  ? "size-7 text-pb-foreground"
+                  : "size-7 text-primary"
+              }
+              strokeWidth={2}
+            />
+          </div>
+          <DialogTitle className="text-center text-xl">{title}</DialogTitle>
+          <DialogDescription className="text-center">
+            {newPBCount > 0
+              ? "Here’s what you logged this session."
+              : "Your session was recorded. Keep training."}
+          </DialogDescription>
+        </DialogHeader>
+        {summary && (
+          <ul className="space-y-2">
+            {summary.items.map((item) => (
+              <li
+                key={item.exerciseId}
+                className="flex items-center justify-between rounded-[12px] bg-muted/60 px-3 py-2.5 text-sm"
+              >
+                <span className="font-medium text-foreground">
+                  {item.exerciseName}
+                </span>
+                {item.isPersonalBest ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-pb-badge px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-pb-foreground">
+                    <Trophy className="size-3" strokeWidth={2.5} />
+                    New PB
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Logged</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <DialogFooter>
+          <Button type="button" onClick={onClose} className="w-full">
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -166,8 +255,12 @@ function BoardContent() {
 function BoardCard({ row }: { row: BoardRow }) {
   const { exercise, pb } = row;
   const measurement = exercise.measurement_type ?? "";
-  const formatted = pb ? formatPBValue(pb.value, measurement) : null;
-  const numeric = formatted ? Number(formatted.primary) : NaN;
+  const formatted = pb
+    ? formatPBValue(pb.value, measurement, {
+        exerciseName: exercise.name,
+        reps: pb.reps,
+      })
+    : null;
   return (
     <Link
       to="/progression/$exerciseId"
@@ -178,12 +271,8 @@ function BoardCard({ row }: { row: BoardRow }) {
       {pb && formatted ? (
         <PBCard
           lift={exercise.name}
-          value={
-            Number.isFinite(numeric)
-              ? numeric
-              : (formatted.primary as unknown as number)
-          }
-          unit={formatted.unit || " "}
+          value={formatted.primary}
+          unit={formatted.unit}
           achievedAt={
             pb.achieved_at
               ? `Set on ${new Date(pb.achieved_at).toLocaleDateString(undefined, {

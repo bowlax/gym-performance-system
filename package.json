@@ -3,9 +3,10 @@
   "private": true,
   "scripts": {
     "supabase": "supabase",
-    "functions:check": "cd supabase/functions && deno check token-broker/index.ts log-set/index.ts _shared/pb-evaluation.ts",
+    "functions:check": "cd supabase/functions && deno check token-broker/index.ts log-set/index.ts add-manual-pb/index.ts reset-current-pb/index.ts delete-personal-best/index.ts _shared/pb-evaluation.ts _shared/pb-cascade.ts _shared/member-edge.ts",
     "functions:serve": "supabase functions serve token-broker --no-verify-jwt",
-    "pb-evaluation:test": "cd supabase/functions && deno test --allow-read=../../tests/vectors _shared/pb-evaluation_test.ts"
+    "pb-evaluation:test": "cd supabase/functions && deno test --allow-read=../../tests/vectors _shared/pb-evaluation_test.ts",
+    "pb-cascade:test": "cd supabase/functions && deno test --allow-read=../../tests/vectors _shared/pb-cascade_test.ts"
   },
   "devDependencies": {
     "supabase": "^2.75.0"
