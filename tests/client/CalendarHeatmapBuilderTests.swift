@@ -26,6 +26,22 @@ struct CalendarHeatmapBuilderTests {
         #expect(labels.contains("Jun"))
         #expect(labels.contains("Jul"))
         #expect(!labels.contains("May"))
+        #expect(data.monthLabels.allSatisfy { $0.row == 0 })
+    }
+
+    @Test
+    func adjacentMonthLabelsAreSeparated() throws {
+        let data = try #require(
+            CalendarHeatmapBuilder.build(
+                sessionDates: [date(2026, 6, 2), date(2026, 7, 1)],
+                today: date(2026, 7, 8)
+            )
+        )
+
+        let jun = try #require(data.monthLabels.first { $0.label == "Jun" })
+        let jul = try #require(data.monthLabels.first { $0.label == "Jul" })
+        #expect(jul.centerX > jun.centerX)
+        #expect(jul.centerX - jun.centerX >= 12)
     }
 
     @Test

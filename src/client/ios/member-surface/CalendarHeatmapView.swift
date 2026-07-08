@@ -9,6 +9,8 @@ struct CalendarHeatmapView: View {
     private let labelColumnWidth: CGFloat = 14
     private let gridHeight: CGFloat = 9 * 7 + 2 * 6
 
+    private let monthLabelRowHeight: CGFloat = 16
+
     private var weekStride: CGFloat { cellSize + cellGap }
 
     var body: some View {
@@ -65,7 +67,7 @@ struct CalendarHeatmapView: View {
             Color.clear
                 .frame(
                     width: CGFloat(data.weeks.count) * weekStride - cellGap,
-                    height: 28
+                    height: monthLabelRowHeight
                 )
 
             ForEach(data.monthLabels) { placement in
@@ -79,11 +81,11 @@ struct CalendarHeatmapView: View {
                             cellSize: cellSize,
                             cellGap: cellGap
                         ),
-                        y: placement.row == 0 ? 8 : 22
+                        y: monthLabelRowHeight / 2
                     )
             }
         }
-        .frame(height: 28)
+        .frame(height: monthLabelRowHeight)
     }
 
     private func scrollToRecentWeeks(using proxy: ScrollViewProxy) {

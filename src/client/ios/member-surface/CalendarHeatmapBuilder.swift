@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 enum CalendarHeatmapBuilder {
     struct HeatmapDay: Equatable, Identifiable {
@@ -22,6 +23,7 @@ enum CalendarHeatmapBuilder {
         let weekStartIndex: Int
         let weekEndIndex: Int
         let row: Int
+        let centerX: CGFloat
     }
 
     struct Data: Equatable {
@@ -181,32 +183,136 @@ enum CalendarHeatmapBuilder {
         let label: String
         let weekStartIndex: Int
         let weekEndIndex: Int
+        let year: Int
+        let month: Int
         let sortOrder: Int
     }
 
-    private struct PlacedMonthLabel {
-        let centerX: CGFloat
+    private struct ResolvedLabel {
+        var centerX: CGFloat
+        let minX: CGFloat
+        let maxX: CGFloat
         let width: CGFloat
-        let row: Int
-        let placement: MonthLabelPlacement
+        let candidate: LabelCandidate
     }
 
-    private static let estimatedCharWidth: CGFloat = 7
-    private static let labelPadding: CGFloat = 4
+    private static let labelSeparation: CGFloat = 4
 
     static func placementCenterX(
         _ placement: MonthLabelPlacement,
         cellSize: CGFloat = 9,
         cellGap: CGFloat = 2
     ) -> CGFloat {
-        let stride = cellSize + cellGap
-        let start = CGFloat(placement.weekStartIndex) * stride + cellSize / 2
-        let end = CGFloat(placement.weekEndIndex) * stride + cellSize / 2
-        return (start + end) / 2
+        placement.centerX
     }
 
-    private static func estimatedLabelWidth(_ label: String) -> CGFloat {
-        CGFloat(label.count) * estimatedCharWidth + labelPadding
+    private static func weekIndexCenterX(
+        _ weekIndex: Int,
+        cellSize: CGFloat = 9,
+        cellGap: CGFloat = 2
+    ) -> CGFloat {
+        let columnStride = cellSize + cellGap
+        return CGFloat(weekIndex) * columnStride + cellSize / 2
+    }
+
+    private static func measuredLabelWidth(_ label: String) -> CGFloat {
+        let font = UIFont.systemFont(ofSize: 11, weight: .regular)
+        let size = (label as NSString).size(withAttributes: [.font: font])
+        return ceil(size.width) + 2
+    }
+
+    private static func idealCenterX(
+        weeks: [HeatmapWeek],
+        year: Int,
+        month: Int,
+        cellSize: CGFloat = 9,
+        cellGap: CGFloat = 2
+    ) -> CGFloat {
+        let columnStride = cellSize + cellGap
+        var weightedSum: CGFloat = 0
+        var totalWeight: CGFloat = 0
+
+        for (weekIndex, week) in weeks.enumerated() {
+            let dayCount = week.days.filter { day in
+                guard day.inRange else { return false }
+                let components = calendar.dateComponents([.year, .month], from: day.date)
+                return components.year == year && components.month == month
+            }.count
+
+            if dayCount > 0 {
+                weightedSum += CGFloat(weekIndex) * CGFloat(dayCount)
+                totalWeight += CGFloat(dayCount)
+            }
+        }
+
+        guard totalWeight > 0 else { return 0 }
+        return (weightedSum / totalWeight) * columnStride + cellSize / 2
+    }
+
+    private static func resolveMonthLabelPositions(
+        weeks: [HeatmapWeek],
+        candidates: [LabelCandidate],
+        cellSize: CGFloat = 9,
+        cellGap: CGFloat = 2
+    ) -> [MonthLabelPlacement] {
+        let sorted = candidates.sorted { $0.sortOrder < $1.sortOrder }
+        let columnStride = cellSize + cellGap
+        let expandBy = columnStride
+
+        var resolved: [ResolvedLabel] = []
+
+        for candidate in sorted {
+            let minX = weekIndexCenterX(candidate.weekStartIndex, cellSize: cellSize, cellGap: cellGap)
+            let maxX = weekIndexCenterX(candidate.weekEndIndex, cellSize: cellSize, cellGap: cellGap)
+            let width = measuredLabelWidth(candidate.label)
+            var centerX = idealCenterX(
+                weeks: weeks,
+                year: candidate.year,
+                month: candidate.month,
+                cellSize: cellSize,
+                cellGap: cellGap
+            )
+
+            if let previous = resolved.last {
+                let minAllowed = previous.centerX + (previous.width + width) / 2 + labelSeparation
+                centerX = max(centerX, minAllowed)
+            }
+
+            let softMinX = minX - expandBy
+            let softMaxX = maxX + expandBy
+            centerX = min(max(centerX, softMinX), softMaxX)
+
+            resolved.append(
+                ResolvedLabel(
+                    centerX: centerX,
+                    minX: minX,
+                    maxX: maxX,
+                    width: width,
+                    candidate: candidate
+                )
+            )
+        }
+
+        for index in stride(from: resolved.count - 2, through: 0, by: -1) {
+            let next = resolved[index + 1]
+            var current = resolved[index]
+            let minGap = (current.width + next.width) / 2 + labelSeparation
+            if next.centerX - current.centerX < minGap {
+                current.centerX = next.centerX - minGap
+                current.centerX = max(current.centerX, current.minX - expandBy)
+                resolved[index] = current
+            }
+        }
+
+        return resolved.map { item in
+            MonthLabelPlacement(
+                label: item.candidate.label,
+                weekStartIndex: item.candidate.weekStartIndex,
+                weekEndIndex: item.candidate.weekEndIndex,
+                row: 0,
+                centerX: item.centerX
+            )
+        }
     }
 
     private static func buildMonthLabelPlacements(
@@ -238,6 +344,8 @@ enum CalendarHeatmapBuilder {
                             label: monthLabelFormatter.string(from: monthStart),
                             weekStartIndex: weekIndices.min() ?? 0,
                             weekEndIndex: weekIndices.max() ?? 0,
+                            year: year,
+                            month: month,
                             sortOrder: sortOrder
                         )
                     )
@@ -260,84 +368,13 @@ enum CalendarHeatmapBuilder {
                     label: monthLabelFormatter.string(from: anchorDate),
                     weekStartIndex: targetIndex,
                     weekEndIndex: targetIndex,
+                    year: calendar.component(.year, from: anchorDate),
+                    month: calendar.component(.month, from: anchorDate),
                     sortOrder: 0
                 )
             )
         }
 
-        return resolveMonthLabelCollisions(candidates)
-    }
-
-    private static func resolveMonthLabelCollisions(
-        _ candidates: [LabelCandidate]
-    ) -> [MonthLabelPlacement] {
-        let sorted = candidates.sorted {
-            let leftCenter = placementCenterX(
-                MonthLabelPlacement(
-                    label: $0.label,
-                    weekStartIndex: $0.weekStartIndex,
-                    weekEndIndex: $0.weekEndIndex,
-                    row: 0
-                )
-            )
-            let rightCenter = placementCenterX(
-                MonthLabelPlacement(
-                    label: $1.label,
-                    weekStartIndex: $1.weekStartIndex,
-                    weekEndIndex: $1.weekEndIndex,
-                    row: 0
-                )
-            )
-            if leftCenter != rightCenter {
-                return leftCenter < rightCenter
-            }
-            return $0.sortOrder < $1.sortOrder
-        }
-
-        var placed: [PlacedMonthLabel] = []
-        var result: [MonthLabelPlacement] = []
-
-        for candidate in sorted {
-            let placement = MonthLabelPlacement(
-                label: candidate.label,
-                weekStartIndex: candidate.weekStartIndex,
-                weekEndIndex: candidate.weekEndIndex,
-                row: 0
-            )
-            let centerX = placementCenterX(placement)
-            let width = estimatedLabelWidth(candidate.label)
-
-            var chosenRow: Int?
-            for row in 0..<2 {
-                let collides = placed.contains { existing in
-                    existing.row == row
-                        && abs(centerX - existing.centerX) < (width + existing.width) / 2 + labelPadding
-                }
-                if !collides {
-                    chosenRow = row
-                    break
-                }
-            }
-
-            guard let row = chosenRow else { continue }
-
-            let resolved = MonthLabelPlacement(
-                label: candidate.label,
-                weekStartIndex: candidate.weekStartIndex,
-                weekEndIndex: candidate.weekEndIndex,
-                row: row
-            )
-            placed.append(
-                PlacedMonthLabel(
-                    centerX: centerX,
-                    width: width,
-                    row: row,
-                    placement: resolved
-                )
-            )
-            result.append(resolved)
-        }
-
-        return result
+        return resolveMonthLabelPositions(weeks: weeks, candidates: candidates)
     }
 }
