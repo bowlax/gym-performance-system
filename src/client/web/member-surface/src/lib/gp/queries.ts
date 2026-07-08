@@ -48,6 +48,7 @@ export interface SessionListRow {
   date: string;
   notes: string | null;
   calories_burned: number | null;
+  has_pb?: boolean;
 }
 
 export interface SessionSetRow {
@@ -62,6 +63,7 @@ export interface SessionEntryRow {
   id: string;
   exercise: ExerciseRow | null;
   sets: SessionSetRow[];
+  pbSetIds: string[];
 }
 
 export interface SessionDetail {
@@ -75,6 +77,58 @@ function pickBool(row: Record<string, unknown>, keys: string[]): boolean {
     if (typeof v === "boolean") return v;
   }
   return false;
+}
+
+async function fetchPbSetIds(
+  supabase: SupabaseClient,
+  setIds: string[],
+): Promise<Set<string>> {
+  if (setIds.length === 0) return new Set();
+  const { data, error } = await supabase
+    .from("personal_bests")
+    .select("set_id")
+    .in("set_id", setIds)
+    .is("deleted_at", null);
+  if (error) throw new Error(error.message);
+  return new Set(
+    (data ?? [])
+      .map((row) => row.set_id)
+      .filter((id): id is string => typeof id === "string"),
+  );
+}
+
+async function fetchSessionIdsWithPb(
+  supabase: SupabaseClient,
+  sessionIds: string[],
+): Promise<Set<string>> {
+  if (sessionIds.length === 0) return new Set();
+
+  const { data: entries, error: eErr } = await supabase
+    .from("exercise_entries")
+    .select("session_id, sets(id, deleted_at)")
+    .in("session_id", sessionIds)
+    .is("deleted_at", null);
+  if (eErr) throw new Error(eErr.message);
+
+  const setToSession = new Map<string, string>();
+  for (const entry of entries ?? []) {
+    const sessionId = entry.session_id as string;
+    for (const set of (entry.sets ?? []) as Array<{
+      id: string;
+      deleted_at?: string | null;
+    }>) {
+      if (set.deleted_at != null) continue;
+      setToSession.set(set.id, sessionId);
+    }
+  }
+
+  const pbSetIds = await fetchPbSetIds(supabase, [...setToSession.keys()]);
+  const sessionsWithPb = new Set<string>();
+  for (const setId of pbSetIds) {
+    const sessionId = setToSession.get(setId);
+    if (sessionId) sessionsWithPb.add(sessionId);
+  }
+  return sessionsWithPb;
 }
 
 /** Fetch the exercise definition by id. */
@@ -262,7 +316,15 @@ export async function fetchSessionHistory(
     .order("date", { ascending: false })
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []) as SessionListRow[];
+  const sessions = (data ?? []) as SessionListRow[];
+  const sessionsWithPb = await fetchSessionIdsWithPb(
+    supabase,
+    sessions.map((s) => s.id),
+  );
+  return sessions.map((s) => ({
+    ...s,
+    has_pb: sessionsWithPb.has(s.id),
+  }));
 }
 
 /**
@@ -310,9 +372,19 @@ export async function fetchSessionDetail(
         time_seconds: s.time_seconds,
         distance: s.distance,
       })),
+    pbSetIds: [],
   }));
 
-  return { session: session as SessionListRow, entries: normalized };
+  const allSetIds = normalized.flatMap((entry) => entry.sets.map((set) => set.id));
+  const pbSetIds = await fetchPbSetIds(supabase, allSetIds);
+  const entriesWithPb = normalized.map((entry) => ({
+    ...entry,
+    pbSetIds: entry.sets
+      .map((set) => set.id)
+      .filter((setId) => pbSetIds.has(setId)),
+  }));
+
+  return { session: session as SessionListRow, entries: entriesWithPb };
 }
 
 /**

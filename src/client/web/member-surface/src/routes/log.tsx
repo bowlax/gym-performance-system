@@ -615,8 +615,15 @@ function SessionRowSummary({ s }: { s: SessionListRow }) {
   }
   return (
     <div className="min-w-0 flex-1 pr-3">
-      <div className="text-sm font-medium text-foreground">
-        {formatSessionDate(s.date)}
+      <div className="flex items-center gap-2">
+        <div className="text-sm font-medium text-foreground">
+          {formatSessionDate(s.date)}
+        </div>
+        {s.has_pb && (
+          <span className="rounded-full bg-pb-badge px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-pb-foreground">
+            PB
+          </span>
+        )}
       </div>
       {detail.length > 0 && (
         <div className="mt-0.5 truncate text-xs text-muted-foreground">
@@ -725,9 +732,23 @@ function SessionDetailBody({
 function SessionEntryCard({ entry }: { entry: SessionEntryRow }) {
   const name = entry.exercise?.name ?? "Exercise";
   const measurement = entry.exercise?.measurement_type ?? "";
+  const pbSetIds = new Set(entry.pbSetIds);
+  const hasPb = pbSetIds.size > 0;
   return (
-    <div className="rounded-[16px] bg-card p-4 border-l-4 border-primary">
-      <div className="text-sm font-semibold text-foreground">{name}</div>
+    <div
+      className={
+        "rounded-[16px] bg-card p-4 border-l-4 " +
+        (hasPb ? "border-pb" : "border-primary")
+      }
+    >
+      <div className="flex items-center gap-2">
+        <div className="text-sm font-semibold text-foreground">{name}</div>
+        {hasPb && (
+          <span className="rounded-full bg-pb-badge px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-pb-foreground">
+            PB
+          </span>
+        )}
+      </div>
       {entry.sets.length === 0 ? (
         <div className="mt-2 text-xs text-muted-foreground">
           No sets recorded.
@@ -737,12 +758,19 @@ function SessionEntryCard({ entry }: { entry: SessionEntryRow }) {
           {entry.sets.map((set, i) => (
             <li
               key={set.id}
-              className="flex items-center justify-between text-sm"
+              className="flex items-center justify-between gap-2 text-sm"
             >
               <span className="text-muted-foreground">Set {i + 1}</span>
-              <span className="text-foreground">
-                {describeSet(set, measurement, name)}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-foreground">
+                  {describeSet(set, measurement, name)}
+                </span>
+                {pbSetIds.has(set.id) && (
+                  <span className="rounded-full bg-pb-badge px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-pb-foreground">
+                    PB
+                  </span>
+                )}
+              </div>
             </li>
           ))}
         </ol>
