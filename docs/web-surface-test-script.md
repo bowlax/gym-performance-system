@@ -128,23 +128,44 @@ Set up: have at least two PB records for an exercise (e.g. log ascending sets).
 
 ---
 
-## Cleanup (between sessions, if a clean slate is needed)
+## Cleanup (between sessions)
 
-Run in the Supabase SQL editor, replacing the member id with your test member's id
-(find it via the members table or the token's member_id claim):
+Two variants. Use the data-only cleanup by default - it clears test data 
+but keeps the member, so the member identity stays stable across runs. 
+Only use the full cleanup (which also deletes the member) when 
+specifically testing the create-or-adopt / first-connection path, where 
+you want no member to exist yet.
+
+Set the member id once at the top of the block. Runs in the Supabase web 
+SQL editor (PL/pgSQL DO block).
+
+### Data-only cleanup (default - keeps the member)
 
 ```sql
-delete from personal_bests where member_id = '<test-member-id>';
-delete from sets where exercise_entry_id in (
-  select ee.id from exercise_entries ee
-  join sessions s on s.id = ee.session_id
-  where s.member_id = '<test-member-id>'
-);
-delete from exercise_entries where session_id in (
-  select id from sessions where member_id = '<test-member-id>'
-);
-delete from sessions where member_id = '<test-member-id>';
-delete from members where teamup_customer_id = 'TEST-CUSTOMER-001';
+do $$
+declare
+  target_member uuid := 'your-test-member-id-here';
+begin
+  delete from personal_bests where member_id = target_member;
+  delete from sets where exercise_entry_id in (
+    select ee.id from exercise_entries ee
+    join sessions s on s.id = ee.session_id
+    where s.member_id = target_member
+  );
+  delete from exercise_entries where session_id in (
+    select id from sessions where member_id = target_member
+  );
+  delete from sessions where member_id = target_member;
+  -- member record deliberately kept, so identity stays stable across runs
+end $$;
+```
+
+### Full cleanup (also deletes the member - only for testing first-connection)
+
+Add this line before end $$; in the block above:
+
+```sql
+  delete from members where teamup_customer_id = 'TEST-CUSTOMER-001';
 ```
 
 ---
