@@ -210,6 +210,32 @@ Aliases `brandAccent` and `wolfBlue` are equivalent; `brandAccent` is defined bu
 - Content grouped in `standardCard()` containers with 16 pt padding
 - Within cards: 12 pt spacing; between sections: 24 pt spacing
 
+### Training consistency calendar heat map (Board)
+
+Shown at the top of the **Board** on both **iOS** and the **member web surface**. The two implementations are kept consistent: same layout, colours, and empty-state behaviour.
+
+**Purpose:** At-a-glance view of which days the member trained, from their first logged session through today.
+
+**Layout:**
+
+- Section label: "Training consistency" (`sectionLabelStyle()` / web `SectionHeader`)
+- Grid: 7 rows (day labels `S M T W T F S`, Sunday start), one column per week
+- Range: first session date → today (inclusive); days before the first session or after today are out of range
+- Cell size: 9×9 pt/px with 2 pt/px gap; month short names centred under each month's week span
+- Horizontally scrollable; recent weeks in view on load
+
+**Cell colours (binary):** Members log at most one session per day, so each in-range day is either trained or not — there is **no** intensity gradient by session count.
+
+| State | iOS | Web | Colour |
+|-------|-----|-----|--------|
+| Day with at least one session | `Color.wolfBlue` | `bg-primary` (`#1A5BA6`) | Wolf blue `#1A5BA6` |
+| In-range day, no session | `Color(.separator)` | `bg-border` | Separator / border grey (platform-adaptive; web `--border`: `rgba(60, 60, 67, 0.18)` light, `rgba(84, 84, 88, 0.65)` dark) |
+| Out of range (padding days) | `.clear` | `bg-transparent` | Transparent |
+
+**Empty state:** When the member has no sessions, the section shows a short message (e.g. "No sessions yet" on web, "No sessions logged yet" on iOS) instead of the grid.
+
+**Source files:** `CalendarHeatmapView.swift` / `CalendarHeatmapBuilder.swift` (iOS); `calendar-heatmap.tsx` / `calendar-heatmap.ts` (web).
+
 ---
 
 ## Web Implementation Values

@@ -30,7 +30,7 @@ To make the performance and progression of members measurable over time, enablin
 3. View their own progression over time
 4. View their current personal bests
 5. Review progress against a current goal
-6. View their consistency over time
+6. View their consistency over time — calendar heat map on the Board (binary session-day cells; iOS and web kept consistent; see `docs/design-system.md`)
 7. Log their weight over time
 8. Receive system-generated flags based on their data patterns
 9. Receive commentary or guidance from a coach
@@ -259,6 +259,7 @@ When a second gym is onboarded, `gymId` will be added to all entities. The local
 - Developer account: Wolf Way of Life Fitness (UK limited company)
 - 76+ tests passing across 4 suites
 - Wolf blue (#1A5BA6) primary accent, electric yellow (#FFD600) for PB moments
+- Board **training consistency** calendar heat map (iOS and member web; binary session-day colouring — see `docs/design-system.md`)
 - White wolf head on black app icon
 - Distributed via TestFlight -- App Store release deferred to phase 2 completion
 
@@ -273,6 +274,16 @@ When a second gym is onboarded, `gymId` will be added to all entities. The local
 - Session deletion cascades to sets and associated PB records
 - `ModelSet` naming used instead of Swift's `Set` to avoid type collision
 - `#Predicate` does not support captured enum values -- filter in memory after fetch
+
+#### Training consistency visualisation (Board)
+
+The Board's **training consistency** section uses a **calendar heat map** on iOS and the member web surface (kept consistent). It replaced the earlier dot-plot / sessions-over-time chart.
+
+- **Grid:** Sunday-start weeks from the member's first session through today; one small cell per day
+- **Binary colouring:** wolf blue (`#1A5BA6`) = day with at least one session; separator/border grey = in-range day with no session; transparent = out of range. No intensity gradient (at most one session per day)
+- **Empty state:** Short message when no sessions exist
+
+Full layout tokens and platform mappings: `docs/design-system.md` (Training consistency calendar heat map).
 
 ---
 
@@ -513,7 +524,7 @@ A foundational phase 2 distinction:
 
 **Web access (all members, primarily Android):**
 4. A member signs in to the web surface using TeamUp
-5. A web member views their current PBs, progression, session history, and consistency
+5. A web member views their current PBs, progression, session history, and training consistency (calendar heat map on the Board, matching iOS)
 6. A web member logs a training session in the browser
 7. A web member records a manual PB in the browser
 8. A web member edits or deletes their data in the browser

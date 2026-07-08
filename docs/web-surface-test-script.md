@@ -32,9 +32,19 @@ sessions if a clean slate is needed (see Cleanup at the end).
 - [ ] Exercises with a PB show the current PB value, formatted correctly for their
       measurement type (weight in kg, reps, time in seconds, distance in metres).
 - [ ] Exercises without a PB show an empty / "no PB yet" state.
-- [ ] The training consistency section shows sessions plotted over time (once sessions
-      exist). With no sessions, it shows an appropriate empty state.
-- [ ] Tapping any exercise card opens its Progression screen.
+- [ ] The training consistency section shows a **calendar heat map** (once sessions exist):
+      - Section title: "Training consistency"
+      - Seven day-of-week rows (Sunday–Saturday), columns are weeks from the member's
+        first session through today
+      - Each in-range day is a small cell; **wolf blue** (`#1A5BA6`) when that day has
+        at least one session, **border/separator grey** when the day is in range but has
+        no session (binary — no intensity gradient; members log at most one session per
+        day)
+      - Month labels appear below the grid; the view scrolls horizontally and focuses on
+        recent weeks on load
+      - With no sessions, it shows an appropriate empty state (e.g. "No sessions yet")
+- [ ] Tapping an exercise with a PB opens its Progression screen; tapping an exercise
+      with no PB and no history opens manual PB entry directly.
 
 ---
 
