@@ -9,6 +9,23 @@ supabase/.env
 supabase/.env.*
 !supabase/.env.example
 
+# Web member surface — local secrets and build artefacts
+src/client/web/**/.env
+src/client/web/**/.env.*
+!src/client/web/**/.env.example
+src/client/web/**/.dev.vars
+src/client/web/**/dist/
+src/client/web/**/dist-ssr/
+src/client/web/**/.output/
+src/client/web/**/.vinxi/
+src/client/web/**/.tanstack/
+src/client/web/**/.nitro/
+src/client/web/**/.wrangler/
+src/client/web/**/.lovable/
+
+# Downloaded Lovable export (integrate then remove)
+GymPerformance Web.zip
+
 # Xcode / SwiftPM
 DerivedData/
 *.xcuserstate

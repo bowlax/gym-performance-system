@@ -1,0 +1,226 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * GymPerformance design system.
+ *
+ * Colour language:
+ *   - Wolf blue #1A5BA6 is the primary accent (buttons, focus, links, key data)
+ *   - Electric yellow #FFD600 is reserved for personal-best celebration.
+ *     Use it as an accent — glow, border, star, badge, ring — never as a
+ *     large flat fill.
+ *
+ * Typography mirrors iOS: SF Pro system stack, tabular numerics for weights.
+ * Radii mirror iOS card corners (14–20px).
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-pb: var(--pb);
+  --color-pb-foreground: var(--pb-foreground);
+  --color-pb-glow: var(--pb-glow);
+  --color-pb-fill: var(--pb-fill);
+  --color-pb-badge: var(--pb-badge);
+  --color-primary-disabled: var(--primary-disabled);
+  --color-primary-chart-muted: var(--primary-chart-muted);
+  --color-surface: var(--surface);
+  --color-surface-foreground: var(--surface-foreground);
+  --font-sans:
+    "SF Pro Rounded", -apple-system, BlinkMacSystemFont, system-ui,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-numeric:
+    "SF Pro Rounded", -apple-system, BlinkMacSystemFont, system-ui,
+    "Segoe UI", Roboto, sans-serif;
+}
+
+:root {
+  --radius: 1rem;
+  --background: #ffffff;
+  --foreground: #000000;
+  --surface: #ffffff;
+  --surface-foreground: #000000;
+  --card: #f2f2f7;
+  --card-foreground: #000000;
+  --popover: #ffffff;
+  --popover-foreground: #000000;
+  --primary: #1a5ba6;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f2f7;
+  --secondary-foreground: #000000;
+  --muted: #f2f2f7;
+  --muted-foreground: rgba(60, 60, 67, 0.6);
+  --accent: #f2f2f7;
+  --accent-foreground: #1a5ba6;
+  --destructive: oklch(0.6 0.22 27);
+  --destructive-foreground: #ffffff;
+  --border: rgba(60, 60, 67, 0.18);
+  --input: rgba(60, 60, 67, 0.18);
+  --ring: #1a5ba6;
+  --pb: #ffd600;
+  --pb-foreground: #000000;
+  --pb-glow: color-mix(in oklab, #ffd600 55%, transparent);
+  --pb-fill: color-mix(in oklab, #ffd600 15%, transparent);
+  --pb-badge: color-mix(in oklab, #ffd600 25%, transparent);
+  --primary-disabled: color-mix(in oklab, #1a5ba6 30%, transparent);
+  --primary-chart-muted: color-mix(in oklab, #1a5ba6 50%, transparent);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #000000;
+  --sidebar-primary: #1a5ba6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f2f2f7;
+  --sidebar-accent-foreground: #000000;
+  --sidebar-border: rgba(60, 60, 67, 0.18);
+  --sidebar-ring: #1a5ba6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #000000;
+    --foreground: #ffffff;
+    --surface: #2c2c2e;
+    --surface-foreground: #ffffff;
+    --card: #1c1c1e;
+    --card-foreground: #ffffff;
+    --popover: #1c1c1e;
+    --popover-foreground: #ffffff;
+    --primary: #1a5ba6;
+    --primary-foreground: #ffffff;
+    --secondary: #1c1c1e;
+    --secondary-foreground: #ffffff;
+    --muted: #1c1c1e;
+    --muted-foreground: rgba(235, 235, 245, 0.6);
+    --accent: #1c1c1e;
+    --accent-foreground: #ffffff;
+    --destructive: oklch(0.68 0.2 22);
+    --destructive-foreground: #ffffff;
+    --border: rgba(235, 235, 245, 0.18);
+    --input: rgba(235, 235, 245, 0.18);
+    --ring: #1a5ba6;
+    --pb: #ffd600;
+    --pb-foreground: #000000;
+    --pb-glow: color-mix(in oklab, #ffd600 40%, transparent);
+    --pb-fill: color-mix(in oklab, #ffd600 15%, transparent);
+    --pb-badge: color-mix(in oklab, #ffd600 25%, transparent);
+    --primary-disabled: color-mix(in oklab, #1a5ba6 30%, transparent);
+    --primary-chart-muted: color-mix(in oklab, #1a5ba6 50%, transparent);
+    --sidebar: #000000;
+    --sidebar-foreground: #ffffff;
+    --sidebar-primary: #1a5ba6;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #1c1c1e;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: rgba(235, 235, 245, 0.18);
+    --sidebar-ring: #1a5ba6;
+  }
+}
+
+.dark {
+  --background: #000000;
+  --foreground: #ffffff;
+  --surface: #2c2c2e;
+  --surface-foreground: #ffffff;
+  --card: #1c1c1e;
+  --card-foreground: #ffffff;
+  --popover: #1c1c1e;
+  --popover-foreground: #ffffff;
+  --primary: #1a5ba6;
+  --primary-foreground: #ffffff;
+  --secondary: #1c1c1e;
+  --secondary-foreground: #ffffff;
+  --muted: #1c1c1e;
+  --muted-foreground: rgba(235, 235, 245, 0.6);
+  --accent: #1c1c1e;
+  --accent-foreground: #ffffff;
+  --destructive: oklch(0.68 0.2 22);
+  --destructive-foreground: #ffffff;
+  --border: rgba(235, 235, 245, 0.18);
+  --input: rgba(235, 235, 245, 0.18);
+  --ring: #1a5ba6;
+  --pb: #ffd600;
+  --pb-foreground: #000000;
+  --pb-glow: color-mix(in oklab, #ffd600 40%, transparent);
+  --sidebar: #000000;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #1a5ba6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1c1c1e;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(235, 235, 245, 0.18);
+  --sidebar-ring: #1a5ba6;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Tabular numerics for weights, reps and PB values. */
+@utility font-numeric {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.02em;
+}
+
+/* Celebratory yellow ring used to mark a personal best. */
+@utility pb-ring {
+  box-shadow:
+    0 0 0 1.5px var(--pb),
+    0 12px 40px -12px var(--pb-glow);
+}
