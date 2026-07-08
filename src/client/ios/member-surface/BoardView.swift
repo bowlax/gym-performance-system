@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 
 struct BoardView: View {
     @Environment(AppDependencies.self) private var dependencies
@@ -11,15 +10,9 @@ struct BoardView: View {
     @State private var progressionExerciseId: UUID?
     @State private var sessions: [SessionModel] = []
     @State private var showInfoSheet = false
-    @State private var trainingChartScrollPosition = Date()
-    @State private var trainingChartVisibleDomainLength: TimeInterval = 3 * 30 * 24 * 60 * 60
-    @State private var trainingChartMagnificationBase: TimeInterval?
+    @State private var trainingHeatmapData: CalendarHeatmapBuilder.Data?
 
     private var hasAnyPB: Bool { !pbByExerciseId.isEmpty }
-
-    private var trainingChartConfiguration: ScrollableDateChartConfiguration? {
-        ScrollableDateChartConfiguration.make(earliestDataPoint: sessions.first?.date)
-    }
 
     var body: some View {
         NavigationStack {
@@ -154,46 +147,11 @@ struct BoardView: View {
             if sessions.isEmpty {
                 Text("No sessions logged yet")
                     .captionLabelStyle()
-            } else if let configuration = trainingChartConfiguration {
-                Chart(sessions, id: \.id) { session in
-                    PointMark(
-                        x: .value("Date", session.date),
-                        y: .value("Training", 1.0)
-                    )
-                    .foregroundStyle(Color.wolfBlue)
-                    .symbolSize(64)
-                }
-                .frame(height: 60)
-                .chartYScale(domain: 0...2)
-                .chartYAxis(.hidden)
-                .scrollableDateChart(
-                    scrollPosition: $trainingChartScrollPosition,
-                    visibleDomainLength: $trainingChartVisibleDomainLength,
-                    magnificationBase: $trainingChartMagnificationBase,
-                    configuration: configuration
-                )
-                .chartXAxis {
-                    trainingChartXAxis
-                }
-                .chartPlotStyle { plotArea in
-                    plotArea.background(.clear)
-                }
+            } else if let trainingHeatmapData {
+                CalendarHeatmapView(data: trainingHeatmapData)
             }
         }
         .standardCard()
-    }
-
-    @AxisContentBuilder
-    private var trainingChartXAxis: some AxisContent {
-        if sessions.count == 1, let sessionDate = sessions.first?.date {
-            AxisMarks(values: [sessionDate]) { _ in
-                AxisValueLabel(format: .dateTime.day().month(.abbreviated).year())
-            }
-        } else {
-            AxisMarks(values: .stride(by: .month)) { _ in
-                AxisValueLabel(format: .dateTime.month(.abbreviated))
-            }
-        }
     }
 
     private var pbEntrySheetBinding: Binding<Bool> {
@@ -225,19 +183,16 @@ struct BoardView: View {
             )
             sessions = try dependencies.performanceDataAccess.fetchSessions(memberId: dependencies.memberId)
                 .sorted { $0.date < $1.date }
-            configureTrainingChartViewport()
+            trainingHeatmapData = CalendarHeatmapBuilder.build(
+                sessionDates: sessions.map(\.date)
+            )
         } catch {
             exercises = []
             pbByExerciseId = [:]
             exerciseIdsWithHistory = []
             sessions = []
+            trainingHeatmapData = nil
         }
-    }
-
-    private func configureTrainingChartViewport() {
-        guard let configuration = trainingChartConfiguration else { return }
-        trainingChartVisibleDomainLength = configuration.visibleDomainLength
-        trainingChartScrollPosition = configuration.initialScrollPosition
     }
 
     private func loadExerciseIdsWithHistory(

@@ -1,13 +1,9 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import { Info, ChevronRight, Trophy } from "lucide-react";
-import {
-  format,
-  startOfMonth,
-  addMonths,
-} from "date-fns";
 import { PBCard } from "@/components/gp/pb-card";
+import { CalendarHeatmap } from "@/components/gp/calendar-heatmap";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,7 +23,6 @@ import {
   fetchBoard,
   fetchSessions,
   type BoardRow,
-  type SessionRow,
 } from "@/lib/gp/queries";
 import { formatPBValue } from "@/lib/gp/format";
 import {
@@ -397,97 +392,8 @@ function ConsistencySection() {
         caption={`${sessions.length} session${sessions.length === 1 ? "" : "s"}`}
       />
       <div className="rounded-[16px] bg-card p-4">
-        <SessionDotPlot sessions={sessions} />
+        <CalendarHeatmap sessionDates={sessions.map((s) => s.date)} />
       </div>
-    </div>
-  );
-}
-
-function SessionDotPlot({ sessions }: { sessions: SessionRow[] }) {
-  const { minMs, maxMs, rangeMs } = useMemo(() => {
-    const dates = sessions.map((s) => new Date(s.date).getTime());
-    const min = Math.min(...dates);
-    const max = Math.max(...dates);
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const endMs = Math.max(max, today.getTime());
-
-    const padMs = 1 * 24 * 60 * 60 * 1000;
-    return {
-      minMs: min - padMs,
-      maxMs: endMs + padMs,
-      rangeMs: endMs + padMs - (min - padMs),
-    };
-  }, [sessions]);
-
-  const dayGroups = useMemo(() => {
-    const groups = new Map<string, SessionRow[]>();
-    for (const s of sessions) {
-      const key = s.date.slice(0, 10);
-      const arr = groups.get(key) ?? [];
-      arr.push(s);
-      groups.set(key, arr);
-    }
-    return groups;
-  }, [sessions]);
-
-  const months = useMemo(() => {
-    const markers: { label: string; left: number }[] = [];
-    const minDate = new Date(minMs);
-    const maxDate = new Date(maxMs);
-    let m = startOfMonth(minDate);
-    while (m.getTime() <= maxDate.getTime()) {
-      const pct =
-        rangeMs > 0 ? ((m.getTime() - minMs) / rangeMs) * 100 : 0;
-      if (pct >= -5 && pct <= 105) {
-        markers.push({ label: format(m, "MMM"), left: pct });
-      }
-      m = addMonths(m, 1);
-    }
-    return markers;
-  }, [minMs, maxMs, rangeMs]);
-
-  const trackY = 56;
-
-  return (
-    <div className="relative h-20">
-      <div
-        className="absolute left-0 right-0 h-px bg-border"
-        style={{ top: `${trackY}px` }}
-      />
-
-      {Array.from(dayGroups.entries()).map(([dateKey, daySessions]) => {
-        const d = new Date(dateKey).getTime();
-        const pct = rangeMs > 0 ? ((d - minMs) / rangeMs) * 100 : 50;
-
-        return daySessions.map((s, i) => (
-          <div
-            key={s.id}
-            className="absolute size-2 rounded-full bg-primary"
-            style={{
-              left: `${pct}%`,
-              top: `${trackY - 6 - i * 14}px`,
-              transform: "translateX(-50%)",
-            }}
-            title={format(new Date(s.date), "MMM d, yyyy")}
-          />
-        ));
-      })}
-
-      {months.map((m) => (
-        <span
-          key={m.label + m.left}
-          className="absolute text-[10px] text-muted-foreground"
-          style={{
-            left: `${m.left}%`,
-            top: `${trackY + 8}px`,
-            transform: "translateX(-50%)",
-          }}
-        >
-          {m.label}
-        </span>
-      ))}
     </div>
   );
 }
