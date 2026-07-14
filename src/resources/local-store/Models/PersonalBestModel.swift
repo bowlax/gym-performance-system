@@ -16,6 +16,17 @@ final class PersonalBestModel {
     var wasReset: Bool = false
     var entryType: PBEntryType
     var createdAt: Date
+    /// Optional for SwiftData migration safety; treat nil as `createdAt` for LWW / dirty.
+    var updatedAt: Date?
+    /// Set when this record has been successfully pushed to the central store.
+    var syncedAt: Date?
+    /// Soft-delete timestamp; nil means active.
+    var deletedAt: Date?
+
+    /// Effective write timestamp for LWW and dirty-push checks.
+    var effectiveUpdatedAt: Date {
+        updatedAt ?? createdAt
+    }
 
     init(
         id: UUID = UUID(),
@@ -30,7 +41,10 @@ final class PersonalBestModel {
         isCurrent: Bool = true,
         wasReset: Bool = false,
         entryType: PBEntryType = .sessionDerived,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        updatedAt: Date? = nil,
+        syncedAt: Date? = nil,
+        deletedAt: Date? = nil
     ) {
         self.id = id
         self.memberId = memberId
@@ -45,5 +59,8 @@ final class PersonalBestModel {
         self.wasReset = wasReset
         self.entryType = entryType
         self.createdAt = createdAt
+        self.updatedAt = updatedAt ?? createdAt
+        self.syncedAt = syncedAt
+        self.deletedAt = deletedAt
     }
 }

@@ -1,8 +1,8 @@
 # Gym Performance System -- Project Design Document
 
 **Methodology:** Righting Software (The Method)  
-**Status:** Phase 1 complete -- Phase 2 scoping in progress  
-**Last updated:** June 2026
+**Status:** Phase 1 complete -- Phase 2 in progress  
+**Last updated:** July 2026
 
 ---
 
@@ -702,17 +702,42 @@ The broker is the single place that understands TeamUp. It owns:
 
 The member UUID is the identity *within* the data model. The TeamUp customer ID is the identity *across devices*. The broker reconciles them at connection time.
 
+### Backend-driven TeamUp OAuth (broker owns the handshake)
+
+OAuth is driven by the token broker Edge Function, not by the client holding TeamUp tokens long-term:
+
+1. Browser (or app) hits the broker's authorize route (`?oauth=authorize`) with `deviceMemberId`, `surface`, and optional `returnUrl`
+2. Broker starts authorization-code + PKCE against TeamUp, redirects the user to TeamUp
+3. TeamUp redirects to the broker callback; the broker exchanges the code server-side, verifies identity, runs create-or-adopt, and mints a Supabase JWT
+4. Broker redirects back to `returnUrl` with the Supabase JWT (or returns JSON). TeamUp tokens stay on the server; the client holds only the Supabase JWT for RLS-scoped API calls
+
+A stub POST path (`teamupToken: "stub-token"`) remains for local/dev testing without TeamUp OAuth env vars. Operational detail (env vars, curl, path selection): `supabase/README.md`.
+
 ### Connection flow (create-or-adopt)
 
-1. Member taps "Connect your TeamUp account", authenticates via TeamUp OAuth
-2. App sends the broker: the TeamUp token AND its local member UUID, AND the surface (to set mode/role)
-3. Broker verifies the TeamUp token, extracts customer ID, provider/gym, and mode
-4. Broker looks up members by (gym_id, teamup_customer_id):
+1. Member taps "Connect your TeamUp account" and completes the broker-driven TeamUp OAuth flow above (or the stub mint path in development)
+2. Broker receives the verified TeamUp identity and the device's local member UUID, plus the surface (to set app role)
+3. Broker looks up members by (gym_id, teamup_customer_id):
    - **No existing record** → CREATE a members row using the device's local UUID as primary key, storing the TeamUp customer ID. The local UUID becomes canonical
-   - **Existing record** → ADOPT it. Return the existing member UUID. The device adopts this UUID going forward and merges its local data under it (second-device or returning-member case)
-5. Broker mints a Supabase JWT with claims: member_id (the canonical UUID), gym_id, role (from surface/mode)
-6. App uses the Supabase JWT for all sync requests; RLS reads the claims
-7. App syncs local data up under the canonical member identity
+   - **Existing record** → ADOPT it. Return the existing member UUID. The device adopts this UUID going forward (second-device or returning-member case)
+4. Broker mints a Supabase JWT with claims: `member_id` (canonical UUID), `gym_id`, `app_role` (from surface/mode), and PostgREST `role: "authenticated"`
+5. App uses the Supabase JWT for sync and API requests; RLS reads `member_id`, `gym_id`, and `app_role`
+6. App syncs under the canonical member identity (see section 20)
+
+### JWT claims (PostgREST vs app role)
+
+PostgREST uses the JWT `role` claim as the Postgres session role (`authenticated`, `anon`, or `service_role`). That claim cannot carry the product role.
+
+| Claim | Value | Purpose |
+|---|---|---|
+| `role` | `authenticated` | PostgREST / Postgres role |
+| `app_role` | `member` \| `coach` \| `owner` | RLS and product access |
+| `member_id` | canonical member UUID | Member-scoped RLS |
+| `gym_id` | gym UUID | Gym tenancy in RLS |
+
+### Signing: HS256 interim → ES256 launch gate
+
+The broker currently signs JWTs with the legacy HS256 shared secret so create-or-adopt and sync can be proven while TeamUp verification is still stubbable. Before any sync features ship to real members, issuance must move to Supabase-native ES256 tokens (current project key). Tracked as a launch gate: GitHub issue [#17](https://github.com/bowlax/gym-performance-system/issues/17) (Migrate token broker from legacy HS256 signing to Supabase-native ES256 issuance before launch). Real TeamUp verification belongs in the same piece of work.
 
 ### Second-device reconciliation
 
@@ -721,29 +746,27 @@ When a member connects on a second device:
 - But the same TeamUp customer ID
 - The broker finds the existing members row by TeamUp customer ID and returns the FIRST device's UUID
 - The second device adopts that UUID -- its local data is re-tagged to the canonical UUID before/during sync (same mechanism as the phase 1 legacy-ID migration)
-- Both devices now operate under one canonical member UUID
+- Both devices now operate under one canonical member UUID; data converges via pull-merge-push (section 20)
 
 This is why the member record is create-or-adopt, not always-create. TeamUp customer ID is the stable anchor that prevents a member fragmenting into multiple identities across devices.
 
 ### Role assignment
 
-The broker sets the role claim based on the surface that initiated auth:
-- iOS member app / member web surface → role: member (Customer mode)
-- Coach web surface → role: coach (Provider mode)
-- Owner web surface → role: owner (Provider mode, admin)
+The broker sets `app_role` based on the surface that initiated auth:
+- iOS member app / member web surface → `app_role: member` (Customer mode)
+- Coach web surface → `app_role: coach` (Provider mode)
+- Owner web surface → `app_role: owner` (Provider mode, admin)
 
 TeamUp's own enforcement means a non-staff member cannot obtain a Provider-capable token even if they target the coach surface -- the broker will not be able to mint a coach JWT for them.
 
 ### What RLS then enforces
 
-The Supabase JWT carries member_id, gym_id, and role. RLS policies use these:
-- Every query scoped to the JWT's gym_id
-- role = member → rows where member_id matches the JWT
-- role = coach/owner → all member rows within gym_id
+The Supabase JWT carries `member_id`, `gym_id`, and `app_role`. RLS policies use these:
+- Every query scoped to the JWT's `gym_id`
+- `app_role` = member → rows where `member_id` matches the JWT
+- `app_role` = coach/owner → all member rows within `gym_id`
 - Soft-deleted rows excluded from normal reads
 - GDPR hard-delete is a privileged operation not exposed to member or coach roles
-
-With the auth mapping defined, the deferred RLS policy SQL (supabase-schema.md section) can now be written against these claims.
 
 
 ---
@@ -754,11 +777,17 @@ With the auth mapping defined, the deferred RLS policy SQL (supabase-schema.md s
 
 ### Claims available to policies
 
-The Supabase JWT carries: member_id (canonical member UUID), gym_id, role (member | coach | owner). Policies read these via auth.jwt().
+Policies read via `auth.jwt()`:
+
+- `member_id` — canonical member UUID
+- `gym_id` — gym UUID
+- `app_role` — `member` \| `coach` \| `owner` (not the PostgREST `role` claim, which remains `authenticated`)
+
+Policy SQL is in `docs/supabase-schema-rls.md` and the migrations.
 
 ### Access model
 
-| Role | Read | Write |
+| App role (`app_role`) | Read | Write |
 |---|---|---|
 | Member | Own rows only (member_id matches claim), within gym_id | Own performance data (sessions, entries, sets, PBs) |
 | Coach | All member rows within gym_id | No writes to member performance data in phase 2. Coach features (commentary, goals) added later |
@@ -795,6 +824,8 @@ A member's training data is theirs. Coaches observe (and later comment via dedic
 
 **The Sync Manager keeps the local-first promise: the device is always the source of truth, and sync is an additive layer for connected members.**
 
+**Build status:** First-connect push and the full pull-merge-push cycle are **built** and live-validated against the cloud (stub broker + member JWT). See `docs/ios-sync-first-connect.md` and `docs/ios-sync-pull-merge-push.md`.
+
 ### Responsibilities
 
 - Connection state (anonymous, connected, disconnected)
@@ -805,47 +836,74 @@ A member's training data is theirs. Coaches observe (and later comment via dedic
 - Sync status reporting to the UI
 - Triggering privileged operations (GDPR) via the service-role path
 
-### Change tracking: last-sync-timestamp approach
+### Change tracking: last-pull marker + per-record dirty push
 
-Each device stores the timestamp of its last successful sync. On each sync:
-- Push local records whose updated_at is newer than the last sync time
-- Pull remote records whose updated_at is newer than the last sync time
-- On success, record the new last-sync time
+Pull and push use different change signals:
 
-Chosen for simplicity, appropriate to a single member's small data volume. A change queue / outbox was considered and judged unnecessary machinery at this scale.
+**Pull — cloud-authoritative last-pull marker**
+
+- Each device stores, per member, the high-water mark of cloud `synced_at` from the last successful pull (`SyncLastPullMarker`)
+- Pull queries rows where cloud `synced_at` is later than that marker (`synced_at > marker`)
+- First pull (no marker yet): rows with `synced_at` not null
+- The marker advances only after a fully successful pull-and-merge. Partial failure does not advance it; a re-run re-pulls and merge is idempotent
+
+**Push — per-record dirty criterion**
+
+- A local record is dirty when `synced_at` is null **or** device-set `updated_at` is later than local `synced_at`
+- Dirty rows are pushed in FK order with parent filtering (sessions → exercise_entries → sets → personal_bests), via idempotent UUID-keyed upserts
+- On successful upsert of a batch, local `synced_at` is set so those rows are not re-pushed unless edited again
+
+A change queue / outbox was considered and judged unnecessary at this scale.
 
 ### Sync order: pull, merge, push
 
-1. PULL remote records changed since last sync
-2. MERGE them into the local store using UUID identity and last-write-wins on updated_at
-3. PUSH local records changed since last sync
-4. Record new last-sync time on success
+1. PULL remote records with cloud `synced_at` newer than the last-pull marker
+2. MERGE them into the local store using UUID identity and last-write-wins on device-set `updated_at`
+3. PUSH local dirty records (as above)
+4. Advance the last-pull marker only on successful pull-and-merge (independent of push completion; unpushed local dirtiness remains for the next cycle)
 
 Pull-first resolves conflicts locally before sending the device's version up, keeping the central store clean.
 
 ### Conflict resolution: last-write-wins
 
 - Identity by UUID (same record has same UUID on every device)
-- When a record changed on both sides since last sync, the version with the later updated_at wins; the other is overwritten
+- When a record exists on both sides, the version with the later device-set `updated_at` wins; the other is overwritten
 - Genuine conflicts are rare (a single member editing their own data), making last-write-wins predictable and acceptable
 
-### Timestamps: device-set (accepted trade-off)
+### Marker discipline (merge → push)
 
-updated_at is set by the device, not the server. This is a deliberate simplification.
+After merge:
+
+| Outcome | Local `synced_at` |
+|---|---|
+| Inserted from cloud, or cloud won LWW | Marked synced (matches cloud) — **not** re-pushed |
+| Local won LWW | Unchanged (stays dirty if never pushed or edited after last sync) — push sends it |
+
+Soft-deleted cloud rows (`deleted_at` set) are normal LWW updates; if cloud wins, local `deletedAt` is set and the row is marked synced.
+
+### Timestamps: device-set `updated_at` (accepted trade-off)
+
+`updated_at` is set by the device, not the server. This is a deliberate simplification for LWW.
 - Risk: only material when the same record is edited on two devices with meaningfully skewed clocks before syncing - rare for a single member's own data
-- Mitigation path: if it ever becomes a problem, move to server-set timestamps (Supabase stamping updated_at on write). This is a contained future change requiring no redesign
+- Mitigation path: if it ever becomes a problem, move to server-set timestamps (Supabase stamping `updated_at` on write). This is a contained future change requiring no redesign
 - Recorded as a conscious decision, not an oversight
 
-### Edge cases handled
+Cloud `synced_at` is written on device push and used as the pull high-water mark (cloud-authoritative for "what this device has seen from the cloud"), separate from LWW.
 
-- **Interrupted sync:** a failed sync does not advance the last-sync timestamp; the next sync retries. Idempotent because merging the same record by UUID and timestamp is safe to repeat. Nothing is lost
-- **First sync after connecting:** last-sync time is "never", so the entire local history qualifies and pushes up. Correct; the first sync is the heaviest, a one-time event. This is the phase 1 to phase 2 migration moment
-- **Second device:** reconciled via the token broker's create-or-adopt (see section 18); local data re-tagged to the canonical member UUID, then normal sync applies
+### Multi-device (normal case)
+
+Identity reconciliation is broker create-or-adopt (section 18). Data reconciliation is pull-merge-push under the canonical member UUID. A second device that adopts an existing member re-tags local rows to that UUID, then runs the normal cycle.
+
+### Edge cases
+
+- **Interrupted sync:** a failed pull does not advance the last-pull marker; a failed push leaves unmarked (or still-dirty) local rows unmarked. The next cycle retries. Merge by UUID + LWW is safe to repeat. Nothing is lost for the normal path
+- **First sync after connecting (new cloud member):** first-connect push uploads the device's existing local history under the JWT member (heaviest one-time upload). Then the full cycle applies
+- **Anonymous-local-then-adopt (deferred):** a device with pre-existing **anonymous** local data connects and the broker **adopts** an existing cloud member that **already has cloud data**. Implementation is not built yet. Decided resolution: **discard-cloud-wins** — after a clear informed warning framed as a choice at connect, the local anonymous data is discarded and the device is populated from the cloud (clear local + pull). No re-parenting or de-duplication of two histories. Triggers only when the adopted member already has cloud data
 
 ### Offline behaviour
 
 - All local writes always succeed immediately against the local store, connected or not
-- If connected but offline, changes accumulate locally (identified by updated_at newer than last sync) and sync when connectivity returns
+- If connected but offline, changes accumulate locally (identified by the dirty criterion) and sync when connectivity returns
 - The app is fully functional offline at all times; sync never blocks a local action
 
 ### Sync status reporting

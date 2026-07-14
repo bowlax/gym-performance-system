@@ -10,6 +10,10 @@ final class SessionModel {
     var caloriesBurned: Int?
     var createdAt: Date
     var updatedAt: Date
+    /// Set when this record has been successfully pushed to the central store.
+    var syncedAt: Date?
+    /// Soft-delete timestamp; nil means active.
+    var deletedAt: Date?
 
     init(
         id: UUID = UUID(),
@@ -18,7 +22,9 @@ final class SessionModel {
         notes: String? = nil,
         caloriesBurned: Int? = nil,
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        syncedAt: Date? = nil,
+        deletedAt: Date? = nil
     ) {
         self.id = id
         self.memberId = memberId
@@ -27,5 +33,7 @@ final class SessionModel {
         self.caloriesBurned = caloriesBurned
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.syncedAt = syncedAt
+        self.deletedAt = deletedAt
     }
 }

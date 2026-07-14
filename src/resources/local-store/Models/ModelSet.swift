@@ -11,6 +11,10 @@ final class ModelSet {
     var distance: Double?
     var createdAt: Date
     var updatedAt: Date
+    /// Set when this record has been successfully pushed to the central store.
+    var syncedAt: Date?
+    /// Soft-delete timestamp; nil means active.
+    var deletedAt: Date?
 
     init(
         id: UUID = UUID(),
@@ -20,7 +24,9 @@ final class ModelSet {
         time: Double? = nil,
         distance: Double? = nil,
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        syncedAt: Date? = nil,
+        deletedAt: Date? = nil
     ) {
         self.id = id
         self.exerciseEntryId = exerciseEntryId
@@ -30,5 +36,7 @@ final class ModelSet {
         self.distance = distance
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.syncedAt = syncedAt
+        self.deletedAt = deletedAt
     }
 }
