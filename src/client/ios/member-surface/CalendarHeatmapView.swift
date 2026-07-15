@@ -97,6 +97,8 @@ struct CalendarHeatmapView: View {
 }
 
 private struct HeatmapCell: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let day: CalendarHeatmapBuilder.HeatmapDay
 
     var body: some View {
@@ -108,9 +110,15 @@ private struct HeatmapCell: View {
     private var fillColor: Color {
         guard day.inRange else { return .clear }
 
-        switch CalendarHeatmapBuilder.cellLevel(count: day.count) {
-        case 0:
-            return Color(.separator)
+        let level = CalendarHeatmapBuilder.cellLevel(count: day.count)
+        guard level > 0 else { return Color(.separator) }
+
+        // Low-opacity wolfBlue reads muddy on dark backgrounds; use solid brand blue.
+        if colorScheme == .dark {
+            return Color.wolfBlue
+        }
+
+        switch level {
         case 1:
             return Color.wolfBlue.opacity(0.35)
         case 2:
