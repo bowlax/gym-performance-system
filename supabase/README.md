@@ -34,22 +34,23 @@ Local config lives in `supabase/config.toml`. Edge Functions live in `supabase/f
 
 ## Database migrations
 
-The hosted Supabase project was initially set up by running SQL directly in the
-dashboard SQL editor (schema, RLS policies, Wolf gym row, and exercise seed).
-The files in `supabase/migrations/` capture that state so new environments are
-reproducible from source:
+**As of 2026-07-16**, `supabase/migrations/` is the applied source of truth on
+the linked live project. New schema changes go through `npx supabase db push`.
 
-1. `20260702170000_initial_schema.sql` — tables and indexes
-2. `20260702170001_row_level_security.sql` — RLS enablement and policies
-3. `20260702170002_wolf_gym_seed.sql` — Wolf gym and 19 exercises (idempotent)
+### Provenance (why history looked empty)
 
-**Do not re-apply these to the existing cloud project** — it already has this
-state. Use `npx supabase db reset` locally, or apply to a fresh project / new
-environment:
+The hosted project was initially set up by running SQL in the dashboard SQL
+editor. Repo migration files were a parallel record, not what had been applied
+via the CLI — so `schema_migrations` on live was empty even though tables
+existed. On 2026-07-16 (issue #28 step 4), history was repaired (early versions
+marked applied) and the pending migrations were pushed. Step 2’s
+`exercise_resets` table and member staleness columns were found missing on live
+at that point (never dashboard-applied) and were created by the push. Detail:
+`docs/supabase-schema.md` § Migration history provenance.
 
 ```bash
 npx supabase start          # local: runs all migrations on first start
-npx supabase db push        # remote: only on a new or empty database
+npx supabase db push        # remote: apply pending migrations
 ```
 
 ## Token broker — local development

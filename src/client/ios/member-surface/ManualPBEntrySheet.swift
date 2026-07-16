@@ -8,6 +8,7 @@ struct ManualPBEntrySheet: View {
     @Environment(AppDependencies.self) private var dependencies
 
     @State private var draft = SetDraftValue.empty
+    @State private var includeDate = false
     @State private var selectedDate = Date()
     @State private var feedback: Feedback?
     @State private var currentPB: PersonalBestModel?
@@ -43,18 +44,27 @@ struct ManualPBEntrySheet: View {
                                     .pbValueStyle(size: 28)
                                     .foregroundStyle(Color.wolfBlue)
                             } else {
-                                Text("No PB recorded yet")
+                                Text("No current PB")
                                     .captionLabelStyle()
                             }
                         }
 
-                        DatePicker(
-                            "Date",
-                            selection: $selectedDate,
-                            in: ...Date(),
-                            displayedComponents: .date
-                        )
-                        .datePickerStyle(.compact)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Toggle("Include date", isOn: $includeDate)
+                            if includeDate {
+                                DatePicker(
+                                    "Date",
+                                    selection: $selectedDate,
+                                    in: ...Date(),
+                                    displayedComponents: .date
+                                )
+                                .datePickerStyle(.compact)
+                            } else {
+                                Text("Leave the date off if you only remember the value. It counts toward your lifetime best, not your current PB.")
+                                    .font(.system(.caption, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
 
                         VStack(alignment: .leading, spacing: .cardSpacing) {
                             Text("New PB")
@@ -121,10 +131,10 @@ struct ManualPBEntrySheet: View {
 
     @MainActor
     private func loadCurrentPB() async {
-        currentPB = try? dependencies.performanceDataAccess.fetchCurrentPB(
+        currentPB = try? dependencies.memberPerformance.deriveExerciseReadState(
             memberId: dependencies.memberId,
             exerciseId: exercise.id
-        )
+        ).currentPB
     }
 
     private func save() {
@@ -146,7 +156,7 @@ struct ManualPBEntrySheet: View {
                 reps: values.reps,
                 time: values.time,
                 distance: values.distance,
-                achievedAt: selectedDate
+                achievedAt: includeDate ? selectedDate : nil
             )
 
             if result.isNewPB {
@@ -157,10 +167,10 @@ struct ManualPBEntrySheet: View {
                     dismiss()
                 }
             } else {
-                let current = try dependencies.performanceDataAccess.fetchCurrentPB(
+                let current = try dependencies.memberPerformance.deriveExerciseReadState(
                     memberId: dependencies.memberId,
                     exerciseId: exercise.id
-                )
+                ).currentPB
                 let currentValue = current.map { PBFormatter.formatPB($0, exercise: exercise) } ?? "none"
                 feedback = .notPB(current: currentValue)
             }

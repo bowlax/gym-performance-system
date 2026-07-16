@@ -1,13 +1,15 @@
 import Foundation
 
 struct FirstConnectUploadCounts: Equatable, Sendable {
+    var members: Int = 0
     var sessions: Int = 0
     var exerciseEntries: Int = 0
     var sets: Int = 0
     var personalBests: Int = 0
+    var exerciseResets: Int = 0
 
     var total: Int {
-        sessions + exerciseEntries + sets + personalBests
+        members + sessions + exerciseEntries + sets + personalBests + exerciseResets
     }
 }
 

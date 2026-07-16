@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 
 enum MemberPerformanceError: Error, Equatable {
     case emptySession
@@ -13,10 +14,16 @@ enum MemberPerformanceError: Error, Equatable {
 final class DefaultMemberPerformance: MemberPerformance {
     private let exerciseRegistry: ExerciseRegistry
     private let performanceDataAccess: PerformanceDataAccess
+    private let modelContext: ModelContext
 
-    init(exerciseRegistry: ExerciseRegistry, performanceDataAccess: PerformanceDataAccess) {
+    init(
+        exerciseRegistry: ExerciseRegistry,
+        performanceDataAccess: PerformanceDataAccess,
+        modelContext: ModelContext
+    ) {
         self.exerciseRegistry = exerciseRegistry
         self.performanceDataAccess = performanceDataAccess
+        self.modelContext = modelContext
     }
 
     func saveSession(
@@ -57,6 +64,17 @@ final class DefaultMemberPerformance: MemberPerformance {
             }
         }
 
+        var beforeByExercise: [UUID: PBReadDerivation.ExerciseResult] = [:]
+        for entry in entries {
+            guard let exercise = exercisesByEntryId[entry.id] else { continue }
+            beforeByExercise[entry.exerciseId] = try PBReadDerivation.derive(
+                memberId: session.memberId,
+                exercise: exercise,
+                performanceDataAccess: performanceDataAccess,
+                modelContext: modelContext
+            )
+        }
+
         try performanceDataAccess.saveSession(session)
 
         for entry in entries {
@@ -70,36 +88,30 @@ final class DefaultMemberPerformance: MemberPerformance {
 
         for entry in entries {
             guard let exercise = exercisesByEntryId[entry.id] else { continue }
+            let before = beforeByExercise[entry.exerciseId]
 
+            let after = try PBReadDerivation.derive(
+                memberId: session.memberId,
+                exercise: exercise,
+                performanceDataAccess: performanceDataAccess,
+                modelContext: modelContext
+            )
+
+            var sessionSetIds = Set<UUID>()
+            var sessionSets: [ModelSet] = []
             for set in sets[entry.id] ?? [] {
-                let currentPB = try performanceDataAccess.fetchCurrentPB(
-                    memberId: session.memberId,
-                    exerciseId: entry.exerciseId
-                )
+                sessionSetIds.insert(set.id)
+                sessionSets.append(set)
+            }
 
-                guard exerciseRegistry.isPB(set: set, exercise: exercise, currentPB: currentPB) else {
-                    continue
-                }
-
-                if let currentPB {
-                    try performanceDataAccess.markPBAsSuperseded(id: currentPB.id)
-                }
-
-                let personalBest = PersonalBestModel(
-                    memberId: session.memberId,
-                    exerciseId: entry.exerciseId,
-                    setId: set.id,
-                    weight: set.weight,
-                    reps: set.reps,
-                    time: set.time,
-                    distance: set.distance,
-                    achievedAt: session.date,
-                    isCurrent: true,
-                    entryType: .sessionDerived
-                )
-
-                try performanceDataAccess.savePersonalBest(personalBest)
-                newPBs.append(personalBest)
+            if let celebrated = SessionPBCelebration.earnedNewPB(
+                exercise: exercise,
+                before: before,
+                after: after,
+                sessionSetIds: sessionSetIds,
+                sessionSets: sessionSets
+            ) {
+                newPBs.append(celebrated)
             }
         }
 
@@ -121,7 +133,7 @@ final class DefaultMemberPerformance: MemberPerformance {
         reps: Int?,
         time: Double?,
         distance: Double?,
-        achievedAt: Date
+        achievedAt: Date?
     ) throws -> ManualPBResult {
         guard let exercise = try exerciseRegistry.exercise(id: exerciseId) else {
             throw MemberPerformanceError.invalidExercise(exerciseId)
@@ -147,17 +159,19 @@ final class DefaultMemberPerformance: MemberPerformance {
             distance: distance
         )
 
-        let currentPB = try performanceDataAccess.fetchCurrentPB(
+        let derived = try PBReadDerivation.derive(
             memberId: memberId,
-            exerciseId: exerciseId
+            exercise: exercise,
+            performanceDataAccess: performanceDataAccess,
+            modelContext: modelContext
         )
 
-        guard exerciseRegistry.isPB(set: evaluationSet, exercise: exercise, currentPB: currentPB) else {
+        guard exerciseRegistry.isPB(
+            set: evaluationSet,
+            exercise: exercise,
+            currentPB: derived.currentPB
+        ) else {
             return ManualPBResult(isNewPB: false, personalBest: nil)
-        }
-
-        if let currentPB {
-            try performanceDataAccess.markPBAsSuperseded(id: currentPB.id)
         }
 
         let personalBest = PersonalBestModel(
@@ -169,7 +183,6 @@ final class DefaultMemberPerformance: MemberPerformance {
             time: time,
             distance: distance,
             achievedAt: achievedAt,
-            isCurrent: true,
             entryType: .manualEntry
         )
 
@@ -180,19 +193,28 @@ final class DefaultMemberPerformance: MemberPerformance {
 
     func currentPBs(memberId: UUID) throws -> [PersonalBestModel] {
         let pbExercises = try exerciseRegistry.pbExercises()
-        let displayOrderByExerciseId = Dictionary(
-            uniqueKeysWithValues: pbExercises.map { ($0.id, $0.displayOrder) }
+            .sorted { $0.displayOrder < $1.displayOrder }
+        return try PBReadDerivation.deriveAllCurrentPBs(
+            memberId: memberId,
+            exercises: pbExercises,
+            performanceDataAccess: performanceDataAccess,
+            modelContext: modelContext
         )
-        let pbExerciseIds = Set(pbExercises.map(\.id))
+    }
 
-        let currentPBs = try performanceDataAccess.fetchCurrentPBs(memberId: memberId)
-
-        return currentPBs
-            .filter { pbExerciseIds.contains($0.exerciseId) }
-            .sorted {
-                (displayOrderByExerciseId[$0.exerciseId] ?? Int.max)
-                    < (displayOrderByExerciseId[$1.exerciseId] ?? Int.max)
-            }
+    func deriveExerciseReadState(
+        memberId: UUID,
+        exerciseId: UUID
+    ) throws -> PBReadDerivation.ExerciseResult {
+        guard let exercise = try exerciseRegistry.exercise(id: exerciseId) else {
+            throw MemberPerformanceError.invalidExercise(exerciseId)
+        }
+        return try PBReadDerivation.derive(
+            memberId: memberId,
+            exercise: exercise,
+            performanceDataAccess: performanceDataAccess,
+            modelContext: modelContext
+        )
     }
 
     func pbProgression(
@@ -202,8 +224,11 @@ final class DefaultMemberPerformance: MemberPerformance {
     ) throws -> [PersonalBestModel] {
         let allPBs = try performanceDataAccess.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
         return allPBs
-            .filter { $0.achievedAt >= from }
-            .sorted { $0.achievedAt < $1.achievedAt }
+            .filter { pb in
+                guard pb.entryType == .manualEntry, let achievedAt = pb.achievedAt else { return false }
+                return achievedAt >= from
+            }
+            .sorted { ($0.achievedAt ?? .distantPast) < ($1.achievedAt ?? .distantPast) }
     }
 
     func sessionConsistency(
@@ -243,29 +268,32 @@ final class DefaultMemberPerformance: MemberPerformance {
             throw MemberPerformanceError.invalidExercise(exerciseId)
         }
 
-        let personalBests = try performanceDataAccess.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
-        let pbSetIds = Set(personalBests.compactMap(\.setId))
+        let derived = try deriveExerciseReadState(memberId: memberId, exerciseId: exerciseId)
+        let badgeIds = derived.badgeIds
 
         let sessions = try performanceDataAccess.fetchSessions(memberId: memberId)
-            .filter { $0.date >= from }
+            .filter { $0.deletedAt == nil && $0.date >= from }
             .sorted { $0.date < $1.date }
 
         var history: [ExerciseSetSummary] = []
 
         for session in sessions {
             let entries = try performanceDataAccess.fetchExerciseEntries(sessionId: session.id)
-                .filter { $0.exerciseId == exerciseId }
+                .filter { $0.exerciseId == exerciseId && $0.deletedAt == nil }
 
             guard !entries.isEmpty else { continue }
 
             var sets: [ModelSet] = []
             for entry in entries {
-                sets.append(contentsOf: try performanceDataAccess.fetchSets(exerciseEntryId: entry.id))
+                sets.append(
+                    contentsOf: try performanceDataAccess.fetchSets(exerciseEntryId: entry.id)
+                        .filter { $0.deletedAt == nil }
+                )
             }
 
             guard let bestSet = bestSet(from: sets, exercise: exercise) else { continue }
 
-            let isPB = pbSetIds.contains(bestSet.id)
+            let isPB = badgeIds.contains(bestSet.id.uuidString)
             history.append(
                 ExerciseSetSummary(
                     sessionDate: session.date,
@@ -297,12 +325,6 @@ final class DefaultMemberPerformance: MemberPerformance {
             let sets = try performanceDataAccess.fetchSets(exerciseEntryId: entry.id)
 
             for set in sets {
-                try handlePersonalBestForDeletedSet(
-                    set: set,
-                    memberId: memberId,
-                    exerciseId: entry.exerciseId,
-                    store: store
-                )
                 try store.removeSet(set)
             }
 
@@ -312,19 +334,23 @@ final class DefaultMemberPerformance: MemberPerformance {
         try store.removeSession(session)
     }
 
-    func resetCurrentPB(memberId: UUID, exerciseId: UUID) throws {
-        guard let currentPB = try performanceDataAccess.fetchCurrentPB(
-            memberId: memberId,
-            exerciseId: exerciseId
-        ) else {
-            return
-        }
-
+    func resetCurrentPB(memberId: UUID, exerciseId: UUID, undo: Bool = false) throws {
         guard let store = performanceDataAccess as? SwiftDataPerformanceDataAccess else {
             return
         }
 
-        try store.markPBAsReset(id: currentPB.id)
+        if undo {
+            try store.undoExerciseReset(memberId: memberId, exerciseId: exerciseId)
+            return
+        }
+
+        let todayISO = PBDerivation.formatISODate(Date())
+        let resetDay = PBDerivation.parseISODate(todayISO)
+        _ = try store.upsertExerciseReset(
+            memberId: memberId,
+            exerciseId: exerciseId,
+            resetAt: resetDay
+        )
     }
 
     func deletePersonalBest(id: UUID, memberId: UUID, exerciseId: UUID) throws {
@@ -333,19 +359,10 @@ final class DefaultMemberPerformance: MemberPerformance {
         }
 
         let allPBs = try performanceDataAccess.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
-        guard let pb = allPBs.first(where: { $0.id == id }) else { return }
+        guard let pb = allPBs.first(where: { $0.id == id && $0.entryType == .manualEntry }) else { return }
         guard pb.memberId == memberId else { return }
 
-        let wasCurrent = pb.isCurrent
         try store.removePersonalBest(pb)
-
-        if wasCurrent {
-            try promoteBestRestorablePersonalBest(
-                memberId: memberId,
-                exerciseId: exerciseId,
-                store: store
-            )
-        }
     }
 
     func projectedCurrentPBAfterDeletingHistoryEntry(
@@ -355,35 +372,32 @@ final class DefaultMemberPerformance: MemberPerformance {
         exerciseId: UUID
     ) throws -> PersonalBestModel? {
         guard let exercise = try exerciseRegistry.exercise(id: exerciseId) else { return nil }
-        let allPBs = try performanceDataAccess.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
-        let currentPB = allPBs.first(where: \.isCurrent)
 
+        let derived = try deriveExerciseReadState(memberId: memberId, exerciseId: exerciseId)
         guard deletionRemovesCurrentPB(
             setId: setId,
             personalBestId: personalBestId,
-            currentPB: currentPB,
-            allPBs: allPBs
+            currentPB: derived.currentPB
         ) else {
-            return currentPB
+            return derived.currentPB
         }
 
-        var excludingIds = Set<UUID>()
+        var excludingIds = Set<String>()
         var excludingSetIds = Set<UUID>()
 
         if let personalBestId {
-            excludingIds.insert(personalBestId)
+            excludingIds.insert(personalBestId.uuidString)
         }
         if let setId {
             excludingSetIds.insert(setId)
-            if let linkedPB = allPBs.first(where: { $0.setId == setId }) {
-                excludingIds.insert(linkedPB.id)
-            }
         }
 
-        return PersonalBestRanking.bestRestorable(
-            from: allPBs,
+        return try PBReadDerivation.deriveCurrentPBExcluding(
+            memberId: memberId,
             exercise: exercise,
-            excludingIds: excludingIds,
+            performanceDataAccess: performanceDataAccess,
+            modelContext: modelContext,
+            excludingRecordIds: excludingIds,
             excludingSetIds: excludingSetIds
         )
     }
@@ -404,12 +418,6 @@ final class DefaultMemberPerformance: MemberPerformance {
                 memberId: memberId,
                 exerciseId: exerciseId
             ) {
-                try handlePersonalBestForDeletedSet(
-                    set: set,
-                    memberId: memberId,
-                    exerciseId: exerciseId,
-                    store: store
-                )
                 try store.removeSet(set)
                 return
             }
@@ -450,102 +458,20 @@ final class DefaultMemberPerformance: MemberPerformance {
         return nil
     }
 
-    private func handlePersonalBestForDeletedSet(
-        set: ModelSet,
-        memberId: UUID,
-        exerciseId: UUID,
-        store: SwiftDataPerformanceDataAccess
-    ) throws {
-        let allPBs = try performanceDataAccess.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
-        let matchingPBs = allPBs.filter { $0.setId == set.id }
-        guard let pb = matchingPBs.first(where: \.isCurrent)
-            ?? matchingPBs.max(by: { $0.achievedAt < $1.achievedAt }) else {
-            return
-        }
-
-        let wasCurrent = pb.isCurrent
-        try store.removePersonalBest(pb)
-
-        if wasCurrent {
-            try promoteBestRestorablePersonalBest(
-                memberId: memberId,
-                exerciseId: exerciseId,
-                store: store
-            )
-        }
-    }
-
-    private func promoteBestRestorablePersonalBest(
-        memberId: UUID,
-        exerciseId: UUID,
-        store: SwiftDataPerformanceDataAccess
-    ) throws {
-        guard let exercise = try exerciseRegistry.exercise(id: exerciseId) else { return }
-        let remaining = try performanceDataAccess.fetchAllPBs(
-            memberId: memberId,
-            exerciseId: exerciseId
-        )
-        guard let previous = PersonalBestRanking.bestRestorable(from: remaining, exercise: exercise) else {
-            return
-        }
-        try store.setPersonalBestCurrent(id: previous.id, isCurrent: true)
-    }
-
     private func deletionRemovesCurrentPB(
         setId: UUID?,
         personalBestId: UUID?,
-        currentPB: PersonalBestModel?,
-        allPBs: [PersonalBestModel]
+        currentPB: PersonalBestModel?
     ) -> Bool {
         guard let currentPB else { return false }
         if personalBestId == currentPB.id { return true }
         if let setId, currentPB.setId == setId { return true }
-        if let setId,
-           let linkedPB = allPBs.first(where: { $0.setId == setId }),
-           linkedPB.id == currentPB.id {
-            return true
-        }
         return false
     }
 
     private func bestSet(from sets: [ModelSet], exercise: ExerciseModel) -> ModelSet? {
         guard let pbRule = exercise.pbRule else { return nil }
-
-        switch pbRule {
-        case .heaviestWeightAtReps, .bestWeightAndReps:
-            return sets
-                .filter { $0.weight != nil && $0.reps != nil }
-                .max {
-                    let leftWeight = $0.weight ?? 0
-                    let rightWeight = $1.weight ?? 0
-
-                    if leftWeight != rightWeight {
-                        return leftWeight < rightWeight
-                    }
-
-                    return ($0.reps ?? 0) < ($1.reps ?? 0)
-                }
-
-        case .heaviestWeight:
-            return sets
-                .filter { $0.weight != nil }
-                .max { ($0.weight ?? 0) < ($1.weight ?? 0) }
-
-        case .fastestTime:
-            return sets
-                .filter { $0.time != nil }
-                .min { ($0.time ?? .infinity) < ($1.time ?? .infinity) }
-
-        case .longestDistance:
-            return sets
-                .filter { $0.distance != nil }
-                .max { ($0.distance ?? 0) < ($1.distance ?? 0) }
-
-        case .mostReps:
-            return sets
-                .filter { $0.reps != nil }
-                .max { ($0.reps ?? 0) < ($1.reps ?? 0) }
-        }
+        return PBRuleEvaluator.bestSet(among: sets, rule: pbRule)
     }
 
     private func validateMeasurementFields(

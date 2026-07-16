@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "issue": 28,
+  "purpose": "Progression lifetime PB element visibility. Show iff lifetime strictly beats current under the PB rule (evaluatePB / PBRuleEvaluator). Not record-id inequality: equal measurements can have different ids when current and lifetime resolve ties differently. Ties hide. Lifetime cannot be worse than current (same pool minus filters).",
+  "vectors": [
+    {
+      "id": "TC-LV1",
+      "description": "Tied heaviestWeightAtReps (same weight and reps, different underlying records) — hide",
+      "rule": "heaviestWeightAtReps",
+      "targetReps": 5,
+      "minimumReps": null,
+      "current": { "weight": 100, "reps": 5 },
+      "lifetime": { "weight": 100, "reps": 5 },
+      "expectedShow": false
+    },
+    {
+      "id": "TC-LV2",
+      "description": "Lifetime strictly better under heaviestWeightAtReps — show",
+      "rule": "heaviestWeightAtReps",
+      "targetReps": 5,
+      "minimumReps": null,
+      "current": { "weight": 95, "reps": 5 },
+      "lifetime": { "weight": 105, "reps": 5 },
+      "expectedShow": true
+    },
+    {
+      "id": "TC-LV3",
+      "description": "Current null with lifetime present (undated-only / all expired) — show",
+      "rule": "heaviestWeightAtReps",
+      "targetReps": 5,
+      "minimumReps": null,
+      "current": null,
+      "lifetime": { "weight": 100, "reps": 5 },
+      "expectedShow": true
+    },
+    {
+      "id": "TC-LV4",
+      "description": "Both null — hide",
+      "rule": "heaviestWeightAtReps",
+      "targetReps": 5,
+      "minimumReps": null,
+      "current": null,
+      "lifetime": null,
+      "expectedShow": false
+    },
+    {
+      "id": "TC-LV5",
+      "description": "mostReps: lifetime more reps — show (non-weight rule)",
+      "rule": "mostReps",
+      "targetReps": null,
+      "minimumReps": null,
+      "current": { "reps": 20 },
+      "lifetime": { "reps": 25 },
+      "expectedShow": true
+    },
+    {
+      "id": "TC-LV6",
+      "description": "mostReps: tied reps — hide (non-weight rule)",
+      "rule": "mostReps",
+      "targetReps": null,
+      "minimumReps": null,
+      "current": { "reps": 20 },
+      "lifetime": { "reps": 20 },
+      "expectedShow": false
+    },
+    {
+      "id": "TC-LV7",
+      "description": "fastestTime: lifetime faster — show",
+      "rule": "fastestTime",
+      "targetReps": null,
+      "minimumReps": null,
+      "current": { "time": 60 },
+      "lifetime": { "time": 55 },
+      "expectedShow": true
+    },
+    {
+      "id": "TC-LV8",
+      "description": "fastestTime: equal time — hide",
+      "rule": "fastestTime",
+      "targetReps": null,
+      "minimumReps": null,
+      "current": { "time": 55 },
+      "lifetime": { "time": 55 },
+      "expectedShow": false
+    }
+  ]
+}

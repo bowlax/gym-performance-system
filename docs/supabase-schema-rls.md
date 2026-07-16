@@ -262,7 +262,7 @@ create policy pb_insert_own on personal_bests
         and gym_id = (auth.jwt() ->> 'gym_id')::uuid
     );
 
--- Update: member own (includes is_current changes, reset, soft-delete)
+-- Update: member own (soft-delete, field edits; reset is exercise_resets, not PB flags)
 create policy pb_update_own on personal_bests
     for update
     using (

@@ -3,8 +3,8 @@ import SwiftData
 
 /// Entry point for sync operations: first-connect push and full pull-merge-push cycles.
 ///
-/// The anonymous-local-then-adopt edge case (pre-existing anonymous local data adopting an
-/// existing member) is intentionally not handled here.
+/// Anonymous-local-then-adopt with existing cloud data is **discard-cloud-wins** (#33),
+/// orchestrated by `ConnectFlowService.discardLocalAndPullFromCloud` — not merge/re-parent.
 @MainActor
 final class SyncManager {
     private let modelContext: ModelContext

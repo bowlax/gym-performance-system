@@ -124,15 +124,11 @@ struct SessionHistoryView: View {
                     exerciseNames.append(exercise.name)
 
                     let sets = try dependencies.performanceDataAccess.fetchSets(exerciseEntryId: entry.id)
-                    let setIds = Set(sets.map(\.id))
-                    let pbs = try dependencies.performanceDataAccess.fetchAllPBs(
+                    let derived = try dependencies.memberPerformance.deriveExerciseReadState(
                         memberId: dependencies.memberId,
                         exerciseId: entry.exerciseId
                     )
-                    if pbs.contains(where: { pb in
-                        guard let setId = pb.setId else { return false }
-                        return setIds.contains(setId)
-                    }) {
+                    if sets.contains(where: { derived.badgeIds.contains($0.id.uuidString) }) {
                         sessionContainsPB = true
                     }
                 }

@@ -1,5 +1,12 @@
 # MP1/MP2 -- Member Performance Specification
 
+> **Historical (phase 1 build spec).** Describes the **stored-status** PB model
+> (`isCurrent` / supersede / cascade). That model was superseded by issue **#28**
+> (derived current / lifetime / badges over sets + manuals). Do not implement
+> against this file. Authoritative: `docs/data-schema.md`,
+> `docs/gym-performance-system-design.md` (§ Personal bests — derived model),
+> `docs/supabase-schema.md`, and `tests/vectors/pb-*.json`.
+
 **Activity:** MP1, MP2  
 **Layer:** Business Logic  
 **Phase:** 1 -- Active  

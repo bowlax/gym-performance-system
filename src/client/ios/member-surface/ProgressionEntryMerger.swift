@@ -5,7 +5,9 @@ enum ProgressionEntryMerger {
         sessionHistory: [ExerciseSetSummary],
         personalBests: [PersonalBestModel],
         exercise: ExerciseModel,
-        from: Date
+        from: Date,
+        badgeIds: Set<String> = [],
+        resetAt: Date? = nil
     ) -> [ProgressionEntry] {
         var merged: [ProgressionEntry] = []
         var representedSetIds = Set<UUID>()
@@ -14,32 +16,37 @@ enum ProgressionEntryMerger {
             guard let setId = pb.setId else { return }
             if let existingId = result[setId],
                let existing = personalBests.first(where: { $0.id == existingId }),
-               pb.achievedAt < existing.achievedAt || (!pb.isCurrent && existing.isCurrent) {
+               let pbDate = pb.achievedAt,
+               let existingDate = existing.achievedAt,
+               pbDate < existingDate {
                 return
             }
             result[setId] = pb.id
         }
-        let pbById = Dictionary(uniqueKeysWithValues: personalBests.map { ($0.id, $0) })
 
         for summary in sessionHistory {
             representedSetIds.insert(summary.set.id)
             let personalBestId = pbBySetId[summary.set.id]
-            let linkedPB = personalBestId.flatMap { pbById[$0] }
+            let isPB = !badgeIds.isEmpty
+                ? badgeIds.contains(summary.set.id.uuidString)
+                : summary.isPB
             merged.append(
                 ProgressionEntry(
                     id: summary.set.id,
                     date: summary.sessionDate,
                     formattedValue: PBFormatter.formatSet(summary.set, exercise: exercise),
                     chartValue: PBFormatter.chartValue(set: summary.set, exercise: exercise),
-                    isPB: summary.isPB,
-                    wasReset: linkedPB?.wasReset ?? false,
+                    isPB: isPB,
+                    isResetMarker: false,
                     setId: summary.set.id,
                     personalBestId: personalBestId
                 )
             )
         }
 
-        for pb in personalBests where pb.achievedAt >= from {
+        // Undated manuals never appear in history (#28).
+        for pb in personalBests {
+            guard let achievedAt = pb.achievedAt, achievedAt >= from else { continue }
             if pb.entryType == .sessionDerived {
                 continue
             }
@@ -47,16 +54,34 @@ enum ProgressionEntryMerger {
                 continue
             }
 
+            let isPB = !badgeIds.isEmpty
+                ? badgeIds.contains(pb.id.uuidString)
+                : true
             merged.append(
                 ProgressionEntry(
                     id: pb.id,
-                    date: pb.achievedAt,
+                    date: achievedAt,
                     formattedValue: PBFormatter.formatPB(pb, exercise: exercise),
                     chartValue: PBFormatter.chartValue(pb: pb, exercise: exercise),
-                    isPB: true,
-                    wasReset: pb.wasReset,
+                    isPB: isPB,
+                    isResetMarker: false,
                     setId: pb.setId,
                     personalBestId: pb.id
+                )
+            )
+        }
+
+        if let resetAt, resetAt >= from {
+            merged.append(
+                ProgressionEntry(
+                    id: UUID(),
+                    date: resetAt,
+                    formattedValue: "Reset",
+                    chartValue: 0,
+                    isPB: false,
+                    isResetMarker: true,
+                    setId: nil,
+                    personalBestId: nil
                 )
             )
         }

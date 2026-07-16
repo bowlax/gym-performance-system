@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
-import { Info, ChevronRight, Trophy } from "lucide-react";
+import { Settings, ChevronRight, Trophy } from "lucide-react";
 import { PBCard } from "@/components/gp/pb-card";
 import { CalendarHeatmap } from "@/components/gp/calendar-heatmap";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,13 @@ import {
 } from "@/lib/gp/queries";
 import { formatBoardPBDate, formatBoardPBDisplay } from "@/lib/gp/format";
 import { boardExerciseDestination } from "@/lib/gp/board-exercise-routing";
+import {
+  boardEmptyCaption,
+  currentPBEmptyReason,
+} from "@/lib/gp/current-pb-empty-copy";
+import { fetchMemberStaleness } from "@/lib/gp/derive-pb-reads";
+import { updateMemberStaleness } from "@/lib/gp/member-settings";
+import type { StalenessSetting } from "@gp-shared/pb-derivation.ts";
 import {
   clearSessionSaveSummary,
   readSessionSaveSummary,
@@ -88,10 +95,10 @@ function BoardScreen() {
         <button
           type="button"
           onClick={() => setAboutOpen(true)}
-          aria-label="About"
+          aria-label="Settings"
           className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
         >
-          <Info className="size-5" />
+          <Settings className="size-5" />
         </button>
       </div>
       <AuthGate
@@ -101,7 +108,7 @@ function BoardScreen() {
       >
         <BoardContent />
       </AuthGate>
-      <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      <SettingsDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
       <SessionSavedDialog
         summary={saveSummary}
         onClose={dismissSaveSummary}
@@ -180,21 +187,59 @@ function SessionSavedDialog({
   );
 }
 
-function AboutDialog({
+function SettingsDialog({
   open,
   onClose,
 }: {
   open: boolean;
   onClose: () => void;
 }) {
+  const { supabase } = useAuth();
+  const queryClient = useQueryClient();
+  const [enabled, setEnabled] = useState(false);
+  const [periods, setPeriods] = useState(2);
+  const [unit, setUnit] = useState<"quarters" | "months">("quarters");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const settingsQuery = useQuery({
+    queryKey: ["member-staleness"],
+    queryFn: () => {
+      if (!supabase) throw new Error("Not signed in");
+      return fetchMemberStaleness(supabase);
+    },
+    enabled: open && !!supabase,
+  });
+
+  useEffect(() => {
+    if (!settingsQuery.data) return;
+    setEnabled(settingsQuery.data.enabled);
+    setPeriods(settingsQuery.data.periods);
+    setUnit(settingsQuery.data.unit === "months" ? "months" : "quarters");
+  }, [settingsQuery.data]);
+
+  async function persist(next: StalenessSetting) {
+    if (!supabase) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await updateMemberStaleness(supabase, next);
+      await queryClient.invalidateQueries({ queryKey: ["board"] });
+      await queryClient.invalidateQueries({ queryKey: ["member-staleness"] });
+      await queryClient.invalidateQueries({ queryKey: ["progression"] });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent
-        className="max-w-md gap-0 p-0 [&>button]:hidden"
-      >
+      <DialogContent className="max-w-md gap-0 p-0 [&>button]:hidden">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <span className="w-12" aria-hidden />
-          <DialogTitle className="text-base font-semibold">About</DialogTitle>
+          <DialogTitle className="text-base font-semibold">Settings</DialogTitle>
           <button
             type="button"
             onClick={onClose}
@@ -203,15 +248,98 @@ function AboutDialog({
             Done
           </button>
         </div>
-        <div className="p-2">
-          <Link
-            to="/privacy"
-            onClick={onClose}
-            className="flex items-center justify-between rounded-[10px] px-3 py-3 text-sm font-medium text-foreground hover:bg-muted"
-          >
-            Privacy Policy
-            <ChevronRight className="size-4 text-muted-foreground" />
-          </Link>
+        <div className="space-y-4 p-4">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Personal bests
+            </div>
+            <label className="mt-3 flex items-center justify-between gap-3 text-sm font-medium text-foreground">
+              Let personal bests lapse
+              <input
+                type="checkbox"
+                checked={enabled}
+                disabled={saving || settingsQuery.isLoading}
+                onChange={(e) => {
+                  const nextEnabled = e.target.checked;
+                  setEnabled(nextEnabled);
+                  void persist({
+                    enabled: nextEnabled,
+                    periods,
+                    unit,
+                  });
+                }}
+                className="size-4 accent-primary"
+              />
+            </label>
+            {enabled && (
+              <div className="mt-3 space-y-3 rounded-[12px] bg-muted/50 p-3">
+                <label className="flex items-center justify-between gap-3 text-sm text-foreground">
+                  After
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={periods}
+                    disabled={saving}
+                    onChange={(e) => {
+                      const next = Math.max(
+                        1,
+                        Math.min(12, Number(e.target.value) || 1),
+                      );
+                      setPeriods(next);
+                    }}
+                    onBlur={() =>
+                      void persist({ enabled, periods, unit })
+                    }
+                    className="w-16 rounded-md border border-border bg-background px-2 py-1 text-right tabular-nums"
+                  />
+                </label>
+                <div className="flex gap-2">
+                  {(
+                    [
+                      ["quarters", "Quarters"],
+                      ["months", "Months"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      disabled={saving}
+                      onClick={() => {
+                        setUnit(value);
+                        void persist({ enabled, periods, unit: value });
+                      }}
+                      className={
+                        unit === value
+                          ? "flex-1 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+                          : "flex-1 rounded-md bg-background px-3 py-2 text-sm font-medium text-foreground"
+                      }
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <p className="mt-3 text-xs text-muted-foreground">
+              When this is on, a personal best stops counting as your current
+              best if you don’t maintain it within the window you choose. Your
+              lifetime best is always kept.
+            </p>
+            {error && (
+              <p className="mt-2 text-xs text-destructive">{error}</p>
+            )}
+          </div>
+          <div className="border-t border-border pt-2">
+            <Link
+              to="/privacy"
+              onClick={onClose}
+              className="flex items-center justify-between rounded-[10px] px-1 py-3 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              Privacy Policy
+              <ChevronRight className="size-4 text-muted-foreground" />
+            </Link>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -266,11 +394,18 @@ function BoardContent() {
 }
 
 function BoardCard({ row }: { row: BoardRow }) {
-  const { exercise, pb, hasHistory } = row;
+  const { exercise, pb, hasHistory, hasActiveReset, stalenessEnabled } = row;
   const pbDisplay = pb ? formatBoardPBDisplay(pb, exercise) : undefined;
   const achievedAt =
     pb?.achieved_at != null ? formatBoardPBDate(pb.achieved_at) : undefined;
   const destination = boardExerciseDestination(!!pb, hasHistory);
+  const emptyCaption = boardEmptyCaption(
+    currentPBEmptyReason({
+      hasHistory,
+      hasActiveReset,
+      stalenessEnabled,
+    }),
+  );
 
   return (
     <Link
@@ -288,6 +423,7 @@ function BoardCard({ row }: { row: BoardRow }) {
         lift={exercise.name}
         value={pbDisplay}
         achievedAt={achievedAt}
+        emptyCaption={emptyCaption}
       />
     </Link>
   );

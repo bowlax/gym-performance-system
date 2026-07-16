@@ -1,5 +1,11 @@
 # P1 -- Performance Data Access Interface
 
+> **Historical (phase 1 build spec).** Includes `fetchCurrentPB` /
+> `markPBAsSuperseded` and stored `isCurrent`. Superseded by issue **#28**: current
+> PB is derived; Performance Data Access persists sessions/sets/manuals/resets.
+> Authoritative: `docs/data-schema.md`, live code under
+> `src/data/performance-data-access/`.
+
 **Layer:** Resource Access  
 **Phase:** 1 -- Active  
 **Technology:** SwiftData (iOS 17+)  

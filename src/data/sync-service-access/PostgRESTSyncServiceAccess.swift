@@ -26,6 +26,53 @@ struct PostgRESTSyncServiceAccess: SyncServiceAccess {
         try await upsert(table: "personal_bests", rows: rows)
     }
 
+    func upsertExerciseResets(_ rows: [[String: Any]]) async throws {
+        try await upsert(table: "exercise_resets", rows: rows)
+    }
+
+    func patchMemberSettings(memberId: UUID, fields: [String: Any]) async throws -> Bool {
+        var components = URLComponents(
+            url: credentials.restAPIBaseURL.appendingPathComponent("members"),
+            resolvingAgainstBaseURL: false
+        )
+        components?.queryItems = [
+            URLQueryItem(name: "id", value: "eq.\(memberId.uuidString)"),
+        ]
+
+        guard let url = components?.url else {
+            throw SyncError.uploadFailed(table: "members", statusCode: -1, detail: "Invalid URL")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(credentials.publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
+        // Representation so zero-row matches are visible (empty JSON array), not papered over.
+        request.setValue("return=representation", forHTTPHeaderField: "Prefer")
+        request.httpBody = try JSONSerialization.data(withJSONObject: fields)
+
+        let (data, response) = try await urlSession.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw SyncError.uploadFailed(table: "members", statusCode: -1, detail: "No HTTP response")
+        }
+
+        guard (200 ... 299).contains(http.statusCode) else {
+            let detail = String(data: data, encoding: .utf8) ?? ""
+            throw SyncError.uploadFailed(table: "members", statusCode: http.statusCode, detail: detail)
+        }
+
+        let json = try JSONSerialization.jsonObject(with: data)
+        guard let rows = json as? [[String: Any]] else {
+            throw SyncError.uploadFailed(
+                table: "members",
+                statusCode: http.statusCode,
+                detail: "Expected JSON array representation after PATCH"
+            )
+        }
+        return !rows.isEmpty
+    }
+
     func pullSessions(since: Date?) async throws -> [CloudSessionRow] {
         let data = try await get(table: "sessions", since: since)
         return try CloudRowDecoder.decodeSessions(from: data)
@@ -44,6 +91,16 @@ struct PostgRESTSyncServiceAccess: SyncServiceAccess {
     func pullPersonalBests(since: Date?) async throws -> [CloudPersonalBestRow] {
         let data = try await get(table: "personal_bests", since: since)
         return try CloudRowDecoder.decodePersonalBests(from: data)
+    }
+
+    func pullMembers(since: Date?) async throws -> [CloudMemberRow] {
+        let data = try await get(table: "members", since: since)
+        return try CloudRowDecoder.decodeMembers(from: data)
+    }
+
+    func pullExerciseResets(since: Date?) async throws -> [CloudExerciseResetRow] {
+        let data = try await get(table: "exercise_resets", since: since)
+        return try CloudRowDecoder.decodeExerciseResets(from: data)
     }
 
     private func upsert(table: String, rows: [[String: Any]]) async throws {

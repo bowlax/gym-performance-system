@@ -12,15 +12,20 @@ export interface PersonalBestRecord {
   reps: number | null;
   time_seconds: number | null;
   distance: number | null;
-  achieved_at: string;
-  is_current: boolean;
-  was_reset: boolean;
+  achieved_at: string | null;
   entry_type: string;
+}
+
+export interface ExerciseResetRecord {
+  id: string;
+  exercise_id: string;
+  reset_at: string;
 }
 
 export interface AddManualPBInput {
   exerciseId: string;
-  achievedAt: string;
+  /** Null / omit = undated lifetime entry. */
+  achievedAt?: string | null;
   weight?: number;
   reps?: number;
   time_seconds?: number;
@@ -34,19 +39,16 @@ export interface AddManualPBResult {
 
 export interface ResetCurrentPBResult {
   success: boolean;
-  resetRecord: PersonalBestRecord | null;
+  exerciseReset: ExerciseResetRecord | null;
 }
 
 export interface DeletePersonalBestInput {
   exerciseId: string;
-  personalBestId?: string;
-  setId?: string;
+  personalBestId: string;
 }
 
 export interface DeletePersonalBestResult {
   deleted: PersonalBestRecord | null;
-  deletedSet: { id: string } | null;
-  newCurrent: PersonalBestRecord | null;
 }
 
 async function postJson<T>(
@@ -81,7 +83,7 @@ export async function addManualPB(
 ): Promise<AddManualPBResult> {
   const body: Record<string, unknown> = {
     exerciseId: input.exerciseId,
-    achievedAt: input.achievedAt,
+    achievedAt: input.achievedAt ?? null,
   };
   if (typeof input.weight === "number") body.weight = input.weight;
   if (typeof input.reps === "number") body.reps = input.reps;
@@ -98,13 +100,15 @@ export async function addManualPB(
 export async function resetCurrentPB(
   token: string,
   exerciseId: string,
+  options?: { undo?: boolean },
 ): Promise<ResetCurrentPBResult> {
   const raw = await postJson<Record<string, unknown>>(RESET_CURRENT_PB_URL, token, {
     exerciseId,
+    ...(options?.undo ? { undo: true } : {}),
   });
   return {
     success: Boolean(raw.success ?? true),
-    resetRecord: (raw.resetRecord as PersonalBestRecord | null) ?? null,
+    exerciseReset: (raw.exerciseReset as ExerciseResetRecord | null) ?? null,
   };
 }
 
@@ -112,24 +116,15 @@ export async function deletePersonalBest(
   token: string,
   input: DeletePersonalBestInput,
 ): Promise<DeletePersonalBestResult> {
-  const body: Record<string, unknown> = {
-    exerciseId: input.exerciseId,
-  };
-  if (input.personalBestId) {
-    body.personalBestId = input.personalBestId;
-  }
-  if (input.setId) {
-    body.setId = input.setId;
-  }
-
   const raw = await postJson<Record<string, unknown>>(
     DELETE_PERSONAL_BEST_URL,
     token,
-    body,
+    {
+      exerciseId: input.exerciseId,
+      personalBestId: input.personalBestId,
+    },
   );
   return {
     deleted: (raw.deleted as PersonalBestRecord | null) ?? null,
-    deletedSet: (raw.deletedSet as { id: string } | null) ?? null,
-    newCurrent: (raw.newCurrent as PersonalBestRecord | null) ?? null,
   };
 }

@@ -41,9 +41,10 @@ Order: **PULL → MERGE → PUSH**. First-connect upload remains: `uploadLocalHi
 
 ## Design decisions
 
-### Anonymous-local-then-adopt (deferred): discard-cloud-wins
+### Anonymous-local-then-adopt: discard-cloud-wins
 
-Not built yet. Applies when a member with **anonymous local data** connects and the broker **adopts** an existing cloud member that **already has cloud data**.
+Implemented in `DiscardCloudWins` / `ConnectFlowService.discardLocalAndPullFromCloud` (#33).
+Applies when a member with **anonymous local data** connects and the broker **adopts** an existing cloud member that **already has cloud data**.
 
 **Resolution: discard-cloud-wins** — after a clear informed warning framed as a choice at connect, the local anonymous data is discarded and the device is populated from the cloud (clear local + pull). No re-parenting or de-duplication of two histories. Triggers only when the adopted member already has cloud data.
 

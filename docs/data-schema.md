@@ -1,22 +1,58 @@
 # Data Schema Specification
 
 **Project:** Gym Performance System  
-**Phase:** 1 -- iOS, On-Device, Members Only  
+**Phase:** 1 local store (SwiftData), aligned with live derived PB model (#28)  
 **Technology:** SwiftData (iOS 17+)  
-**Status:** Validated -- ready for implementation  
-**Last updated:** May 2026
+**Status:** Authoritative for local entities; PB *status* is derived, not stored  
+**Last updated:** July 2026
 
-> This document is the authoritative schema specification for phase 1. All Resource Access layer components must implement against this schema. Do not modify without updating the project document and re-validating against use cases.
+> This document is the authoritative local schema for member devices. Resource Access
+> implements against it. PB current / lifetime / badges are **derived at read time**
+> from sets + manual entries (issue #28) — not stored flags. Cloud mirror:
+> `docs/supabase-schema.md`. Design record: `docs/gym-performance-system-design.md`.
 
 ---
 
 ## Design Principles
 
-- **UUID primary keys throughout** -- enables collision-free merging when data centralises in phase 2. Never use auto-incrementing integers.
-- **Soft fields for phase 2 data** -- optional fields anticipated for phase 2 (e.g. `parentExerciseId`) are present but unused in phase 1.
-- **Session deletion with cascade** -- sessions may be deleted. Deletion cascades to exercise entries, sets, and associated personal bests. Previous PBs are restored where they exist. Personal bests are otherwise never deleted.
+- **UUID primary keys throughout** -- enables collision-free merging into the central store.
+- **Soft fields for later work** -- optional fields anticipated for later phases (e.g. `parentExerciseId`) may be present but unused.
+- **Session deletion** -- sessions may be deleted. Deletion removes exercise entries and sets. Current / lifetime PBs re-derive automatically; there is no cascade promotion of stored PB rows.
 - **Nullable measurement fields** -- Set carries nullable fields for all measurement types. The Exercise.measurementType determines which fields are relevant for any given exercise.
-- **PB evaluation is exercise-driven** -- PB rules live on the Exercise entity. Member Performance consults Exercise before evaluating any set.
+- **PB evaluation is exercise-driven** -- PB rules live on the Exercise entity. Derivation and write-time evaluation consult Exercise before comparing records.
+- **Derivation over storage for PB status** -- `sets` plus manual `PersonalBest` entries are the workout record. Current / lifetime / historic badges are computed, not flagged on rows.
+
+---
+
+## Personal-best derivation (as built, #28)
+
+Inputs per member-exercise:
+
+| Input | Role |
+|---|---|
+| Sets (via sessions / entries) | Session-dated candidate records |
+| Manual `PersonalBest` rows | Candidates with no set behind them (`entryType: manualEntry`) |
+| `ExerciseReset.resetAt` (if any) | Line that filters **current** only |
+| Member staleness setting | Whether records expire; window = N complete calendar periods |
+
+Semantics:
+
+- **Fresh** = today is strictly before the record’s expiry. Expiry = start of the period after N complete calendar periods (quarters or months) since `achievedAt`. When staleness is OFF, dated records never expire. Undated manuals have no `achievedAt` and are never fresh.
+- **Current PB** = best record where `achievedAt` is strictly after `resetAt` (if any) **and** the record is fresh. Tie under the PB rule → **most recent `achievedAt` wins**.
+- **Lifetime PB** = best record with **no** reset filter and **no** freshness filter. Reset clears current standing only; lifetime is unaffected.
+- **Historic badges** = running maximum over dated records in `achievedAt` order. Equal to the running max is **not** badged (earliest breakthrough only). Reset does not affect badges. Undated manuals are excluded from badge history.
+- **PB rule** (`bestWeightAndReps`, etc.) is unchanged — applied to the eligible pool.
+
+Display:
+
+- Board: current PB only (empty if none).
+- Progression: current + lifetime element when lifetime **strictly beats** current under the PB rule (ties hide). Not gated on staleness or record-id inequality.
+- Reset appears as a dated timeline marker, not a flag on a PB row.
+
+### Decisions that must not be lost
+
+1. **Existing `was_reset` rows were NOT migrated** into `exercise_resets` (deliberate). Tiny population, reset dates unrecoverable for local-only resets, migration would ship untested. Members who had reset may see a PB reappear and redo the reset in the new undoable model. Recorded on issue #28.
+2. **Real-device check:** all 19 then-current PBs matched derivation and every session-derived `setId` resolved to a live set. Derivation therefore reads **sets + manuals**, not legacy PB rows. If orphan PB rows ever appear without sets in the wild, derivation would lose that history and this needs revisiting.
 
 ---
 
@@ -24,27 +60,32 @@
 
 ### UserIdentity
 
-The identity of a system user. In phase 1, a single hardcoded member record. In phase 2, populated from central authentication.
+The identity / member-state row. On device, the member UUID and display name live in UserDefaults (Access Control); this SwiftData model holds **syncable member state** (staleness), keyed to that UUID via `MemberState`.
 
 | Field | Type | Nullable | Notes |
 |---|---|---|---|
-| id | UUID | No | Primary key |
+| id | UUID | No | Primary key — same as UserDefaults member UUID when present |
 | role | Role | No | See enums |
-| displayName | String | No | Member's name as displayed in the app |
+| displayName | String | No | |
 | createdAt | Date | No | |
+| stalenessEnabled | Bool | No | Default false (OFF) |
+| stalenessPeriods | Int | No | Default 2 |
+| stalenessUnit | StalenessPeriodUnit | No | `quarter` or `month` |
+| updatedAt | Date | No | LWW / dirty push |
+| syncedAt | Date | Yes | Set when pushed |
 
 ---
 
 ### Exercise
 
-Defines an exercise, how it is measured, and -- for PB exercises -- what constitutes a personal best. Authoritative source for all exercise definitions. Read-only in phase 1, bundled with the app.
+Defines an exercise, how it is measured, and — for PB exercises — what constitutes a personal best. Authoritative source for all exercise definitions. Bundled / seeded with the app in phase 1.
 
 | Field | Type | Nullable | Notes |
 |---|---|---|---|
 | id | UUID | No | Primary key |
 | name | String | No | e.g. "Back Squat", "Incline Bench Press" |
 | category | ExerciseCategory | No | See enums |
-| measurementType | MeasurementType | No | See enums -- determines which Set fields are used |
+| measurementType | MeasurementType | No | See enums — determines which Set fields are used |
 | pbRule | PBRule | Yes | Nil for conditioning exercises |
 | targetReps | Int | Yes | Populated only when pbRule is heaviestWeightAtReps |
 | minimumReps | Int | Yes | Populated only when pbRule is bestWeightAndReps |
@@ -79,7 +120,7 @@ A training session on a specific date. The top-level container for all exercise 
 **Rules:**
 - One session per member per date is the expected pattern, but not enforced at schema level
 - Sessions may be edited
-- Sessions may be deleted. Deletion cascades to ExerciseEntries, Sets, and associated PersonalBest records. Previous PBs are restored where they exist.
+- Sessions may be deleted. Deletion removes ExerciseEntries and Sets. PB status re-derives from remaining sets + manuals
 
 ---
 
@@ -103,7 +144,7 @@ One exercise performed within a session. A session contains one or more exercise
 
 ### Set
 
-One logged set within an exercise entry. Members log their best one or best few sets per exercise -- not every warm-up set.
+One logged set within an exercise entry. Members log their best one or best few sets per exercise — not every warm-up set. Sets are candidates for derived current / lifetime / badges.
 
 | Field | Type | Nullable | Notes |
 |---|---|---|---|
@@ -118,7 +159,6 @@ One logged set within an exercise entry. Members log their best one or best few 
 
 **Rules:**
 - The Exercise.measurementType determines which fields must be populated for a valid set
-- Sets may not be deleted, only edited
 - At least one measurement field must be populated
 
 **Populated fields by MeasurementType:**
@@ -136,30 +176,47 @@ One logged set within an exercise entry. Members log their best one or best few 
 
 ### PersonalBest
 
-A PB record for a member against a specific exercise. Derived from Set data by Member Performance using Exercise.pbRule. All PB records are retained for progression history -- only the current PB has `isCurrent: true`.
+**Manual entries only** (no set behind them). Session PBs are not stored — they are derived from sets. Legacy `sessionDerived` rows may still exist from older builds but are not written or used for derivation.
 
 | Field | Type | Nullable | Notes |
 |---|---|---|---|
 | id | UUID | No | Primary key |
 | memberId | UUID | No | Foreign key → UserIdentity.id |
 | exerciseId | UUID | No | Foreign key → Exercise.id |
-| setId | UUID | Yes | Foreign key → Set.id -- the set that achieved this PB. Nil for manual entries |
-| entryType | PBEntryType | No | See enums -- sessionDerived or manualEntry. Internal only, not shown to member |
-| weight | Double | Yes | Mirrors the achieving set's relevant value |
+| setId | UUID | Yes | Always nil for new manuals |
+| entryType | PBEntryType | No | `manualEntry` for writes; `sessionDerived` is legacy only |
+| weight | Double | Yes | |
 | reps | Int | Yes | |
 | time | Double | Yes | |
 | distance | Double | Yes | |
-| achievedAt | Date | No | Date of the session in which this PB was set |
-| isCurrent | Bool | No | True for the current PB, false for historical |
+| achievedAt | Date | No | Date of the PB (optional undated manuals are a product edge — undated never fresh) |
 | createdAt | Date | No | |
+| updatedAt | Date | Yes | LWW / dirty |
+| syncedAt | Date | Yes | |
+| deletedAt | Date | Yes | Soft delete |
 
 **Rules:**
-- Only one PersonalBest per member per exercise may have `isCurrent: true` at any time
-- When a new PB is set, the existing `isCurrent` record is updated to false and a new record is inserted with `isCurrent: true`
-- PersonalBest records are never deleted
-- Only exercises where `category` is `pbExercise` generate PersonalBest records
-- `setId` is nil for manual entries -- `entryType` distinguishes the two paths
-- `entryType` is internal bookkeeping -- not displayed to members
+- Only exercises where `category` is `pbExercise` participate in PB derivation
+- `entryType` is internal bookkeeping — not displayed to members
+- There is **no** `isCurrent` / `wasReset` — status is derived
+- Manual delete soft-deletes (or removes) the row; current standing re-derives
+
+---
+
+### ExerciseReset
+
+One `resetAt` date per member-exercise. Sparse — only written when a reset exists. Undo soft-deletes the row. Affects **current** derivation only.
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| id | UUID | No | Primary key |
+| memberId | UUID | No | |
+| exerciseId | UUID | No | Unique with memberId |
+| resetAt | Date | No | Calendar date of the reset line |
+| createdAt | Date | No | |
+| updatedAt | Date | No | Later resets overwrite `resetAt` (monotonic) |
+| syncedAt | Date | Yes | |
+| deletedAt | Date | Yes | Soft-delete = undo |
 
 ---
 
@@ -167,8 +224,14 @@ A PB record for a member against a specific exercise. Derived from Set data by M
 
 ### PBEntryType
 ```
-sessionDerived    -- PB detected automatically from a logged set in a session
+sessionDerived    -- legacy; no longer written. Session PBs are derived from sets
 manualEntry       -- PB entered directly by the member without a session
+```
+
+### StalenessPeriodUnit
+```
+quarter    -- calendar quarters (Jan–Mar, Apr–Jun, Jul–Sep, Oct–Dec)
+month      -- calendar months
 ```
 
 ### Role
@@ -211,39 +274,40 @@ mostReps                -- highest rep count
 ## Relationships
 
 ```
-UserIdentity  ──(1:many)──  Session
-UserIdentity  ──(1:many)──  PersonalBest
-Session       ──(1:many)──  ExerciseEntry
-ExerciseEntry ──(1:many)──  Set
-Exercise      ──(1:many)──  ExerciseEntry
-Exercise      ──(1:many)──  PersonalBest
-Exercise      ──(0:1)────── Exercise (self -- parentExerciseId for variants)
-Set           ──(1:0:1)──── PersonalBest (a set may or may not be a PB)
+UserIdentity   ──(1:many)──  Session
+UserIdentity   ──(1:many)──  PersonalBest (manual entries)
+UserIdentity   ──(1:many)──  ExerciseReset
+Session        ──(1:many)──  ExerciseEntry
+ExerciseEntry  ──(1:many)──  Set
+Exercise       ──(1:many)──  ExerciseEntry
+Exercise       ──(1:many)──  PersonalBest
+Exercise       ──(1:many)──  ExerciseReset
+Exercise       ──(0:1)────── Exercise (self -- parentExerciseId for variants)
 ```
+
+Derived (not stored): current PB, lifetime PB, badge set IDs — from sets + manuals + reset + staleness.
 
 ---
 
 ## Phase 2 Anticipations
-
-The following schema decisions have been made specifically to ease phase 2 migration:
 
 | Decision | Rationale |
 |---|---|
 | UUID primary keys | Enables collision-free merging of on-device records into a central store |
 | `parentExerciseId` on Exercise | Supports exercise variant grouping in coach and owner analytical views |
 | `role` on UserIdentity | Schema already supports coach and owner roles even though only member is active in phase 1 |
-| `isCurrent` on PersonalBest | Supports full PB history views without schema change in phase 2 |
 | Nullable measurement fields on Set | Accommodates any future exercise measurement types without schema change |
+| Derived PB status | Cloud and device share the same derivation vectors (`tests/vectors/pb-*.json`) |
 
 ---
 
 ## Validation Against Phase 1 Use Cases
 
-| Use Case | Entities Used | Result |
+| Use Case | Entities / path | Result |
 |---|---|---|
 | Record a training session | Session, ExerciseEntry, Set, Exercise | ✅ |
-| Record a personal best | Set, Exercise (pbRule), PersonalBest | ✅ |
-| View progression over time | PersonalBest (history via isCurrent) | ✅ |
-| View current personal bests | PersonalBest (isCurrent: true) | ✅ |
+| Record a personal best | Sets + manuals → derivation; manuals stored in PersonalBest | ✅ |
+| View progression over time | Sets + manuals + badges (derived) + reset markers | ✅ |
+| View current personal bests | Derived current PB over sets + manuals | ✅ |
 | View consistency over time | Session (date, memberId) | ✅ |
 | Goals, weight, injuries, flags, commentary | Out of scope -- phase 2 | ✅ Correctly absent |

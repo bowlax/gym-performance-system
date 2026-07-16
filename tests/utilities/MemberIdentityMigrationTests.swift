@@ -69,8 +69,7 @@ struct MemberIdentityMigrationTests {
                 exerciseId: exerciseId,
                 weight: 90,
                 reps: 5,
-                achievedAt: Date().addingTimeInterval(-86_400),
-                isCurrent: false
+                achievedAt: Date().addingTimeInterval(-86_400)
             )
         )
 

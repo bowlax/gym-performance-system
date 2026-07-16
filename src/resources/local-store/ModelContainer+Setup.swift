@@ -8,7 +8,8 @@ extension ModelContainer {
             SessionModel.self,
             ExerciseEntryModel.self,
             ModelSet.self,
-            PersonalBestModel.self
+            PersonalBestModel.self,
+            ExerciseResetModel.self
         ])
 
         let modelConfiguration = ModelConfiguration(

@@ -18,11 +18,7 @@ protocol PerformanceDataAccess {
     func fetchSets(exerciseEntryId: UUID) throws -> [ModelSet]
     func updateSet(_ set: ModelSet) throws
 
-    // MARK: -- Personal Bests
+    // MARK: -- Personal Bests (manual entries only)
     func savePersonalBest(_ pb: PersonalBestModel) throws
-    func fetchCurrentPB(memberId: UUID, exerciseId: UUID) throws -> PersonalBestModel?
     func fetchAllPBs(memberId: UUID, exerciseId: UUID) throws -> [PersonalBestModel]
-    func fetchCurrentPBs(memberId: UUID) throws -> [PersonalBestModel]
-    func markPBAsSuperseded(id: UUID) throws
 }
-

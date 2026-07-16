@@ -1,5 +1,10 @@
 # MP4 -- Member Performance Test Specification
 
+> **Historical (phase 1 build spec).** Tests assume the **stored-status** PB model
+> (`isCurrent` / cascade / `wasReset`). Superseded by issue **#28**. Live tests live
+> under `tests/core/` and shared vectors under `tests/vectors/`. Authoritative
+> behaviour: `docs/data-schema.md`, `docs/gym-performance-system-design.md`.
+
 **Activity:** MP4  
 **Layer:** Business Logic  
 **Phase:** 1 -- Active  

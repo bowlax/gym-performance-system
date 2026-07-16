@@ -51,6 +51,12 @@ struct SyncPuller {
         let since = SyncLastPullMarker.lastPullSyncedAt(memberId: memberId)
 
         do {
+            let members = try await syncServiceAccess.pullMembers(since: since)
+            for row in members {
+                counts.record(try SyncRecordMerger.mergeMember(row, localDataAccess: localDataAccess))
+                highWater = maxDate(highWater, row.syncedAt)
+            }
+
             let sessions = try await syncServiceAccess.pullSessions(since: since)
             for row in sessions {
                 counts.record(try SyncRecordMerger.mergeSession(row, localDataAccess: localDataAccess))
@@ -72,6 +78,12 @@ struct SyncPuller {
             let personalBests = try await syncServiceAccess.pullPersonalBests(since: since)
             for row in personalBests {
                 counts.record(try SyncRecordMerger.mergePersonalBest(row, localDataAccess: localDataAccess))
+                highWater = maxDate(highWater, row.syncedAt)
+            }
+
+            let exerciseResets = try await syncServiceAccess.pullExerciseResets(since: since)
+            for row in exerciseResets {
+                counts.record(try SyncRecordMerger.mergeExerciseReset(row, localDataAccess: localDataAccess))
                 highWater = maxDate(highWater, row.syncedAt)
             }
 

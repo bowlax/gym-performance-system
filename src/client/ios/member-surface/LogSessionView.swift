@@ -201,13 +201,18 @@ struct LogSessionView: View {
                 sets: setsByEntryId
             )
 
+            // Celebration is fully determined inside saveSession (before/after
+            // derive) before this returns. Kick sync only after that decision
+            // so a pull from *this* trigger cannot land mid-comparison (#32).
             if result.newPBs.isEmpty {
+                dependencies.syncCoordinator.syncAfterSessionSaved()
                 resetSession()
                 dependencies.refresh()
                 switchToBoard()
             } else {
                 celebrationPBs = result.newPBs
                 showCelebration = true
+                dependencies.syncCoordinator.syncAfterSessionSaved()
             }
         } catch {
             saveError = error.localizedDescription

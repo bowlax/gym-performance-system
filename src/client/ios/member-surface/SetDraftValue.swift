@@ -148,7 +148,8 @@ struct ProgressionEntry: Identifiable {
     let formattedValue: String
     let chartValue: Double
     let isPB: Bool
-    let wasReset: Bool
+    /// Timeline marker for `exercise_resets.reset_at` (#28) — not a badge on a record row.
+    let isResetMarker: Bool
     let setId: UUID?
     let personalBestId: UUID?
 }

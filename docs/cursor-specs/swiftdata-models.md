@@ -1,5 +1,10 @@
 # SwiftData Model Definitions
 
+> **Historical (phase 1 build spec).** `PersonalBestModel` here still shows
+> `isCurrent`. That field was removed in issue **#28**; current models also include
+> `ExerciseResetModel` and staleness on `UserIdentityModel`. Authoritative:
+> `docs/data-schema.md` and `src/resources/local-store/Models/`.
+
 **Layer:** Resource  
 **Phase:** 1 -- Active  
 **Technology:** SwiftData (iOS 17+)  

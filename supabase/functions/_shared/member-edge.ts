@@ -59,10 +59,19 @@ export interface PersonalBestRow {
   reps: number | null;
   time_seconds: number | null;
   distance: number | null;
-  achieved_at: string;
-  is_current: boolean;
-  was_reset: boolean;
+  achieved_at: string | null;
   entry_type: string;
+  deleted_at?: string | null;
+}
+
+export interface ExerciseResetRow {
+  id: string;
+  gym_id: string;
+  member_id: string;
+  exercise_id: string;
+  reset_at: string;
+  created_at: string;
+  updated_at: string;
   deleted_at?: string | null;
 }
 
@@ -282,29 +291,6 @@ export async function fetchExercise(
   return exercise;
 }
 
-export async function fetchCurrentPersonalBest(
-  supabase: UserClient,
-  memberId: string,
-  exerciseId: string,
-): Promise<PersonalBestRow | null> {
-  const { data, error } = await supabase
-    .from("personal_bests")
-    .select(
-      "id, gym_id, member_id, exercise_id, set_id, weight, reps, time_seconds, distance, achieved_at, is_current, was_reset, entry_type",
-    )
-    .eq("member_id", memberId)
-    .eq("exercise_id", exerciseId)
-    .eq("is_current", true)
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return (data as PersonalBestRow | null) ?? null;
-}
-
 export async function fetchPersonalBestById(
   supabase: UserClient,
   personalBestId: string,
@@ -315,12 +301,13 @@ export async function fetchPersonalBestById(
   const { data, error } = await supabase
     .from("personal_bests")
     .select(
-      "id, gym_id, member_id, exercise_id, set_id, weight, reps, time_seconds, distance, achieved_at, is_current, was_reset, entry_type",
+      "id, gym_id, member_id, exercise_id, set_id, weight, reps, time_seconds, distance, achieved_at, entry_type",
     )
     .eq("id", personalBestId)
     .eq("member_id", memberId)
     .eq("exercise_id", exerciseId)
     .eq("gym_id", gymId)
+    .eq("entry_type", "manualEntry")
     .is("deleted_at", null)
     .maybeSingle();
 
@@ -334,27 +321,6 @@ export async function fetchPersonalBestById(
   return data as PersonalBestRow;
 }
 
-export async function fetchAllPersonalBests(
-  supabase: UserClient,
-  memberId: string,
-  exerciseId: string,
-): Promise<PersonalBestRow[]> {
-  const { data, error } = await supabase
-    .from("personal_bests")
-    .select(
-      "id, gym_id, member_id, exercise_id, set_id, weight, reps, time_seconds, distance, achieved_at, is_current, was_reset, entry_type",
-    )
-    .eq("member_id", memberId)
-    .eq("exercise_id", exerciseId)
-    .is("deleted_at", null);
-
-  if (error) {
-    throw error;
-  }
-
-  return (data as PersonalBestRow[] | null) ?? [];
-}
-
 export async function softDeletePersonalBest(
   supabase: UserClient,
   personalBestId: string,
@@ -362,7 +328,7 @@ export async function softDeletePersonalBest(
   const now = new Date().toISOString();
   const { error } = await supabase
     .from("personal_bests")
-    .update({ deleted_at: now, updated_at: now, is_current: false })
+    .update({ deleted_at: now, updated_at: now })
     .eq("id", personalBestId);
 
   if (error) {

@@ -31,7 +31,6 @@ final class SwiftDataPerformanceDataAccess: PerformanceDataAccess {
     }
 
     func updateSession(_ session: SessionModel) throws {
-        // SwiftData tracks changes on managed models. Saving persists edits.
         _ = session
         try context.save()
     }
@@ -83,52 +82,12 @@ final class SwiftDataPerformanceDataAccess: PerformanceDataAccess {
         try context.save()
     }
 
-    func fetchCurrentPB(memberId: UUID, exerciseId: UUID) throws -> PersonalBestModel? {
-        let descriptor = FetchDescriptor<PersonalBestModel>(
-            predicate: #Predicate {
-                $0.memberId == memberId && $0.exerciseId == exerciseId && $0.isCurrent == true
-            }
-        )
-        return try context.fetch(descriptor).first
-    }
-
     func fetchAllPBs(memberId: UUID, exerciseId: UUID) throws -> [PersonalBestModel] {
         let descriptor = FetchDescriptor<PersonalBestModel>(
             predicate: #Predicate { $0.memberId == memberId && $0.exerciseId == exerciseId },
             sortBy: [SortDescriptor(\.achievedAt, order: .reverse)]
         )
         return try context.fetch(descriptor)
-    }
-
-    func fetchCurrentPBs(memberId: UUID) throws -> [PersonalBestModel] {
-        let descriptor = FetchDescriptor<PersonalBestModel>(
-            predicate: #Predicate { $0.memberId == memberId && $0.isCurrent == true },
-            sortBy: [SortDescriptor(\.achievedAt, order: .reverse)]
-        )
-        return try context.fetch(descriptor)
-    }
-
-    func markPBAsSuperseded(id: UUID) throws {
-        let descriptor = FetchDescriptor<PersonalBestModel>(
-            predicate: #Predicate { $0.id == id }
-        )
-
-        if let pb = try context.fetch(descriptor).first {
-            pb.isCurrent = false
-            try context.save()
-        }
-    }
-
-    func markPBAsReset(id: UUID) throws {
-        let descriptor = FetchDescriptor<PersonalBestModel>(
-            predicate: #Predicate { $0.id == id }
-        )
-
-        if let pb = try context.fetch(descriptor).first {
-            pb.isCurrent = false
-            pb.wasReset = true
-            try context.save()
-        }
     }
 
     func removeSession(_ session: SessionModel) throws {
@@ -151,15 +110,49 @@ final class SwiftDataPerformanceDataAccess: PerformanceDataAccess {
         try context.save()
     }
 
-    func setPersonalBestCurrent(id: UUID, isCurrent: Bool) throws {
-        let descriptor = FetchDescriptor<PersonalBestModel>(
-            predicate: #Predicate { $0.id == id }
-        )
+    // MARK: -- Exercise resets
 
-        if let pb = try context.fetch(descriptor).first {
-            pb.isCurrent = isCurrent
+    func fetchExerciseReset(memberId: UUID, exerciseId: UUID) throws -> ExerciseResetModel? {
+        let descriptor = FetchDescriptor<ExerciseResetModel>(
+            predicate: #Predicate {
+                $0.memberId == memberId && $0.exerciseId == exerciseId
+            }
+        )
+        return try context.fetch(descriptor).first
+    }
+
+    func upsertExerciseReset(
+        memberId: UUID,
+        exerciseId: UUID,
+        resetAt: Date
+    ) throws -> ExerciseResetModel {
+        let resetDay = PBDerivation.parseISODate(PBDerivation.formatISODate(resetAt))
+
+        if let existing = try fetchExerciseReset(memberId: memberId, exerciseId: exerciseId) {
+            let existingDay = PBDerivation.parseISODate(PBDerivation.formatISODate(existing.resetAt))
+            existing.resetAt = resetDay > existingDay ? resetDay : existingDay
+            existing.deletedAt = nil
+            existing.updatedAt = Date()
             try context.save()
+            return existing
         }
+
+        let reset = ExerciseResetModel(
+            memberId: memberId,
+            exerciseId: exerciseId,
+            resetAt: resetDay
+        )
+        context.insert(reset)
+        try context.save()
+        return reset
+    }
+
+    func undoExerciseReset(memberId: UUID, exerciseId: UUID) throws {
+        guard let existing = try fetchExerciseReset(memberId: memberId, exerciseId: exerciseId) else {
+            return
+        }
+        existing.deletedAt = Date()
+        existing.updatedAt = Date()
+        try context.save()
     }
 }
-

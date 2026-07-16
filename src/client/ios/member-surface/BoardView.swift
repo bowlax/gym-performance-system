@@ -6,11 +6,27 @@ struct BoardView: View {
     @State private var exercises: [ExerciseModel] = []
     @State private var pbByExerciseId: [UUID: PersonalBestModel] = [:]
     @State private var exerciseIdsWithHistory: Set<UUID> = []
+    @State private var resetExerciseIds: Set<UUID> = []
+    @State private var stalenessEnabled = false
     @State private var pbEntryExerciseId: UUID?
     @State private var progressionExerciseId: UUID?
     @State private var sessions: [SessionModel] = []
-    @State private var showInfoSheet = false
+    @State private var menuDestination: MenuDestination?
     @State private var trainingHeatmapData: CalendarHeatmapBuilder.Data?
+
+    private enum MenuDestination: Identifiable {
+        case settings
+        case privacy
+        case about
+
+        var id: String {
+            switch self {
+            case .settings: return "settings"
+            case .privacy: return "privacy"
+            case .about: return "about"
+            }
+        }
+    }
 
     private var hasAnyPB: Bool { !pbByExerciseId.isEmpty }
 
@@ -26,16 +42,55 @@ struct BoardView: View {
             .navigationTitle("Personal Bests")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showInfoSheet = true
+                    Menu {
+                        Button {
+                            menuDestination = .settings
+                        } label: {
+                            Label("Settings", systemImage: "gearshape")
+                        }
+                        Button {
+                            menuDestination = .privacy
+                        } label: {
+                            Label("Privacy", systemImage: "hand.raised")
+                        }
+                        Button {
+                            menuDestination = .about
+                        } label: {
+                            Label("About", systemImage: "info.circle")
+                        }
                     } label: {
-                        Image(systemName: "info.circle")
+                        Image(systemName: "ellipsis.circle")
                     }
-                    .accessibilityLabel("About and privacy")
+                    .accessibilityLabel("Menu")
                 }
             }
-            .sheet(isPresented: $showInfoSheet) {
-                AppInfoSheet()
+            .sheet(item: $menuDestination) { destination in
+                switch destination {
+                case .settings:
+                    AppInfoSheet()
+                case .privacy:
+                    NavigationStack {
+                        PrivacyPolicyView()
+                            .toolbar {
+                                ToolbarItem(placement: .topBarTrailing) {
+                                    Button("Done") { menuDestination = nil }
+                                        .foregroundStyle(Color.wolfBlue)
+                                }
+                            }
+                    }
+                    .tint(Color.wolfBlue)
+                case .about:
+                    NavigationStack {
+                        AboutView()
+                            .toolbar {
+                                ToolbarItem(placement: .topBarTrailing) {
+                                    Button("Done") { menuDestination = nil }
+                                        .foregroundStyle(Color.wolfBlue)
+                                }
+                            }
+                    }
+                    .tint(Color.wolfBlue)
+                }
             }
             .task(id: dependencies.refreshID) {
                 await loadBoard()
@@ -115,8 +170,10 @@ struct BoardView: View {
                         Text(PBFormatter.formatPB(pb, exercise: exercise))
                             .pbValueStyle()
                             .foregroundStyle(Color.wolfBlue)
-                        Text(PBFormatter.shortDate.string(from: pb.achievedAt))
-                            .captionLabelStyle()
+                        if let achievedAt = pb.achievedAt {
+                            Text(PBFormatter.shortDate.string(from: achievedAt))
+                                .captionLabelStyle()
+                        }
                     }
                 }
                 .padding(.cardPadding)
@@ -124,11 +181,16 @@ struct BoardView: View {
             .background(Color(.secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: .cardRadius, style: .continuous))
         } else {
+            let reason = CurrentPBEmptyCopy.reason(
+                hasHistory: exerciseIdsWithHistory.contains(exercise.id),
+                hasActiveReset: resetExerciseIds.contains(exercise.id),
+                stalenessEnabled: stalenessEnabled
+            )
             HStack {
                 Text(exercise.name)
                     .exerciseTitleStyle()
                 Spacer()
-                Text("No PB yet")
+                Text(CurrentPBEmptyCopy.boardCaption(for: reason))
                     .captionLabelStyle()
                     .foregroundStyle(Color(.tertiaryLabel))
             }
@@ -177,7 +239,19 @@ struct BoardView: View {
                 .sorted { $0.displayOrder < $1.displayOrder }
             let pbs = try dependencies.memberPerformance.currentPBs(memberId: dependencies.memberId)
             pbByExerciseId = Dictionary(uniqueKeysWithValues: pbs.map { ($0.exerciseId, $0) })
+            if let seconds = PBReadDerivation.lastBoardDerivationSeconds {
+                print(String(format: "[PBReadDerivation] board derive across %d exercises: %.3fms", exercises.count, seconds * 1000))
+            }
             exerciseIdsWithHistory = try loadExerciseIdsWithHistory(
+                exercises: exercises,
+                memberId: dependencies.memberId
+            )
+            let staleness = try MemberState.stalenessSetting(
+                in: dependencies.modelContext,
+                memberId: dependencies.memberId
+            )
+            stalenessEnabled = staleness.enabled
+            resetExerciseIds = try loadResetExerciseIds(
                 exercises: exercises,
                 memberId: dependencies.memberId
             )
@@ -190,11 +264,15 @@ struct BoardView: View {
             exercises = []
             pbByExerciseId = [:]
             exerciseIdsWithHistory = []
+            resetExerciseIds = []
+            stalenessEnabled = false
             sessions = []
             trainingHeatmapData = nil
         }
     }
 
+    /// Same pool as `PBReadDerivation.records`: live sets + non-deleted manuals.
+    /// Pre-#28 `sessionDerived` PB leftovers do not count.
     private func loadExerciseIdsWithHistory(
         exercises: [ExerciseModel],
         memberId: UUID
@@ -203,26 +281,44 @@ struct BoardView: View {
         let pbExerciseIds = Set(exercises.map(\.id))
 
         for exercise in exercises {
-            let personalBests = try dependencies.performanceDataAccess.fetchAllPBs(
+            let manuals = try dependencies.performanceDataAccess.fetchAllPBs(
                 memberId: memberId,
                 exerciseId: exercise.id
-            )
-            if !personalBests.isEmpty {
+            ).filter { $0.entryType == .manualEntry && $0.deletedAt == nil }
+            if !manuals.isEmpty {
                 ids.insert(exercise.id)
             }
         }
 
         let sessions = try dependencies.performanceDataAccess.fetchSessions(memberId: memberId)
-        for session in sessions {
+        for session in sessions where session.deletedAt == nil {
             let entries = try dependencies.performanceDataAccess.fetchExerciseEntries(sessionId: session.id)
-            for entry in entries where pbExerciseIds.contains(entry.exerciseId) {
+            for entry in entries where pbExerciseIds.contains(entry.exerciseId) && entry.deletedAt == nil {
                 let sets = try dependencies.performanceDataAccess.fetchSets(exerciseEntryId: entry.id)
+                    .filter { $0.deletedAt == nil }
                 if !sets.isEmpty {
                     ids.insert(entry.exerciseId)
                 }
             }
         }
 
+        return ids
+    }
+
+    private func loadResetExerciseIds(
+        exercises: [ExerciseModel],
+        memberId: UUID
+    ) throws -> Set<UUID> {
+        var ids = Set<UUID>()
+        for exercise in exercises {
+            if try PBReadDerivation.resetAtDate(
+                memberId: memberId,
+                exerciseId: exercise.id,
+                in: dependencies.modelContext
+            ) != nil {
+                ids.insert(exercise.id)
+            }
+        }
         return ids
     }
 }

@@ -39,17 +39,26 @@ import {
 } from "@/components/ui/sheet";
 import { useAuth } from "@/lib/gp/auth-provider";
 import {
+  currentPBEmptyReason,
+  progressionEmptyDetail,
+  progressionEmptyTitle,
+} from "@/lib/gp/current-pb-empty-copy";
+import { shouldShowLifetimePB } from "@gp-shared/pb-derivation.ts";
+import type { PBRule, SetState } from "@gp-shared/pb-evaluation.ts";
+import {
   fetchExercise,
   fetchMergedProgression,
-  type PersonalBestHistoryRow,
+  deleteHistoryEntry,
+  type DerivedPBDisplay,
   type ProgressionEntryRow,
   type ExerciseRow,
+  type MergedProgressionData,
 } from "@/lib/gp/queries";
 import { fieldsForMeasurement, formatPBValue, combineMmSs, fieldLabel, fieldUnit, isCableRow } from "@/lib/gp/format";
 import {
   addManualPB,
-  deletePersonalBest,
   resetCurrentPB,
+  type AddManualPBResult,
 } from "@/lib/gp/pb-actions";
 import { todayISO } from "@/lib/gp/log-set";
 import { cn } from "@/lib/utils";
@@ -171,8 +180,19 @@ function ProgressionContent() {
   }
 
   const history = historyQuery.data?.entries ?? [];
-  const personalBests = historyQuery.data?.personalBests ?? [];
-  const current = personalBests.find((h) => h.is_current) ?? null;
+  const current = historyQuery.data?.currentPB ?? null;
+  const lifetimePB = historyQuery.data?.lifetimePB ?? null;
+  const staleness = historyQuery.data?.staleness ?? { enabled: false, periods: 2, unit: "quarters" as const };
+  const resetAt = historyQuery.data?.resetAt ?? null;
+  const hasHistory =
+    history.some((entry) => !entry.isResetMarker) ||
+    lifetimePB != null ||
+    current != null;
+  const emptyReason = currentPBEmptyReason({
+    hasHistory,
+    hasActiveReset: resetAt != null,
+    stalenessEnabled: staleness.enabled,
+  });
 
   if (manual) {
     return (
@@ -186,9 +206,20 @@ function ProgressionContent() {
           exercise={exercise}
           current={current}
           token={session?.token ?? null}
-          onSaved={async (isNewPB) => {
-            if (isNewPB) setCelebrate(true);
+          onSaved={async (result) => {
             await refreshProgression();
+            const data = queryClient.getQueryData<MergedProgressionData>([
+              "pb-history",
+              exerciseId,
+              tokenTag,
+            ]);
+            if (
+              result.isNewPB &&
+              result.personalBest &&
+              data?.currentPB?.id === result.personalBest.id
+            ) {
+              setCelebrate(true);
+            }
           }}
         />
       </div>
@@ -198,7 +229,7 @@ function ProgressionContent() {
   const openDeleteDialog = (row: ProgressionEntryRow) => {
     setPendingDelete(row);
     setDeleteMessage(
-      deleteConfirmationMessage(row, history, current, personalBests),
+      deleteConfirmationMessage(row, history, current),
     );
     setDeleteOpen(true);
   };
@@ -219,14 +250,15 @@ function ProgressionContent() {
   };
 
   const handleDelete = async () => {
-    if (!session?.token || !pendingDelete) return;
+    if (!session?.token || !pendingDelete || !supabase) return;
     setActing(true);
     setActionError(null);
     try {
-      await deletePersonalBest(session.token, {
+      await deleteHistoryEntry(supabase, {
         exerciseId,
         personalBestId: pendingDelete.personalBestId ?? undefined,
         setId: pendingDelete.setId ?? undefined,
+        token: session.token,
       });
       setDeleteOpen(false);
       setPendingDelete(null);
@@ -244,7 +276,14 @@ function ProgressionContent() {
         <div className="min-w-0 flex-1">
           <CurrentPBHero
             exercise={exercise}
-            pb={current}
+            currentPB={current}
+            lifetimePB={lifetimePB}
+            showLifetime={shouldShowLifetimeForExercise(
+              exercise.pb_rule,
+              current,
+              lifetimePB,
+            )}
+            emptyReason={emptyReason}
             celebrate={celebrate}
           />
         </div>
@@ -294,9 +333,20 @@ function ProgressionContent() {
         exercise={exercise}
         current={current}
         token={session?.token ?? null}
-        onSaved={async (isNewPB) => {
-          if (isNewPB) setCelebrate(true);
+        onSaved={async (result) => {
           await refreshProgression();
+          const data = queryClient.getQueryData<MergedProgressionData>([
+            "pb-history",
+            exerciseId,
+            tokenTag,
+          ]);
+          if (
+            result.isNewPB &&
+            result.personalBest &&
+            data?.currentPB?.id === result.personalBest.id
+          ) {
+            setCelebrate(true);
+          }
         }}
       />
 
@@ -357,6 +407,33 @@ function ProgressionContent() {
   );
 }
 
+function displayToSetState(pb: DerivedPBDisplay): SetState {
+  const raw = pb.raw;
+  const num = (key: string): number | null =>
+    typeof raw[key] === "number" && Number.isFinite(raw[key] as number)
+      ? (raw[key] as number)
+      : null;
+  return {
+    weight: num("weight"),
+    reps: pb.reps,
+    time: num("time") ?? num("time_seconds"),
+    distance: num("distance"),
+  };
+}
+
+function shouldShowLifetimeForExercise(
+  pbRule: string | null | undefined,
+  current: DerivedPBDisplay | null,
+  lifetime: DerivedPBDisplay | null,
+): boolean {
+  if (!pbRule) return false;
+  return shouldShowLifetimePB(
+    lifetime ? displayToSetState(lifetime) : null,
+    current ? displayToSetState(current) : null,
+    pbRule as PBRule,
+  );
+}
+
 function formatExercisePB(
   value: number,
   measurement: string,
@@ -371,50 +448,61 @@ function formatExercisePB(
 
 function CurrentPBHero({
   exercise,
-  pb,
+  currentPB,
+  lifetimePB,
+  showLifetime,
+  emptyReason,
   celebrate,
 }: {
   exercise: ExerciseRow;
-  pb: PersonalBestHistoryRow | null;
+  currentPB: DerivedPBDisplay | null;
+  lifetimePB: DerivedPBDisplay | null;
+  showLifetime: boolean;
+  emptyReason: ReturnType<typeof currentPBEmptyReason>;
   celebrate: boolean;
 }) {
   const measurement = exercise.measurement_type ?? "";
-  const formatted = pb
-    ? formatExercisePB(pb.value, measurement, exercise, pb.reps)
+  const currentFormatted = currentPB
+    ? formatExercisePB(currentPB.value, measurement, exercise, currentPB.reps)
     : null;
+  const lifetimeFormatted =
+    showLifetime && lifetimePB
+      ? formatExercisePB(lifetimePB.value, measurement, exercise, lifetimePB.reps)
+      : null;
+
   return (
     <div
       className={cn(
-        celebrate && pb && "rounded-[16px] p-4 pb-ring transition-shadow",
+        celebrate && currentPB && "rounded-[16px] p-4 pb-ring transition-shadow",
       )}
     >
       <div className="flex items-center gap-2">
         <div className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {exercise.name}
         </div>
-        {celebrate && pb && (
+        {celebrate && currentPB && (
           <span className="inline-flex items-center gap-1 rounded-full bg-pb-badge px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-pb-foreground">
             <Trophy className="size-3" strokeWidth={2.5} />
             New PB
           </span>
         )}
       </div>
-      {pb && formatted ? (
+      {currentPB && currentFormatted ? (
         <>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="font-numeric text-6xl font-semibold leading-none tabular-nums text-primary">
-              {formatted.primary}
+              {currentFormatted.primary}
             </span>
-            {formatted.unit && (
+            {currentFormatted.unit && (
               <span className="text-2xl font-semibold text-primary/80">
-                {formatted.unit}
+                {currentFormatted.unit}
               </span>
             )}
           </div>
-          {pb.achieved_at && (
+          {currentPB.achieved_at && (
             <div className="mt-2 text-xs text-muted-foreground">
               Set on{" "}
-              {new Date(pb.achieved_at).toLocaleDateString(undefined, {
+              {new Date(currentPB.achieved_at).toLocaleDateString(undefined, {
                 day: "numeric",
                 month: "short",
                 year: "numeric",
@@ -425,11 +513,50 @@ function CurrentPBHero({
       ) : (
         <div className="mt-3 rounded-[16px] bg-card p-4">
           <div className="text-sm font-semibold text-foreground">
-            No current PB
+            {progressionEmptyTitle(emptyReason)}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Log a set for this exercise to establish your first PB.
-          </p>
+          {progressionEmptyDetail(emptyReason) && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {progressionEmptyDetail(emptyReason)}
+            </p>
+          )}
+        </div>
+      )}
+      {showLifetime && (
+        <div className="mt-4 rounded-[16px] bg-card p-4">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Lifetime PB
+          </div>
+          {lifetimePB && lifetimeFormatted ? (
+            <>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="font-numeric text-2xl font-semibold tabular-nums text-foreground">
+                  {lifetimeFormatted.primary}
+                </span>
+                {lifetimeFormatted.unit && (
+                  <span className="text-sm font-semibold text-muted-foreground">
+                    {lifetimeFormatted.unit}
+                  </span>
+                )}
+              </div>
+              {lifetimePB.achieved_at ? (
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Set on{" "}
+                  {new Date(lifetimePB.achieved_at).toLocaleDateString(undefined, {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </div>
+              ) : (
+                <div className="mt-1 text-xs text-muted-foreground">Undated</div>
+              )}
+            </>
+          ) : (
+            <div className="mt-1 font-numeric text-2xl font-semibold text-muted-foreground">
+              No lifetime PB
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -447,13 +574,14 @@ function ManualPBSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   exercise: ExerciseRow;
-  current: PersonalBestHistoryRow | null;
+  current: DerivedPBDisplay | null;
   token: string | null;
-  onSaved: (isNewPB: boolean) => Promise<void>;
+  onSaved: (result: AddManualPBResult) => Promise<void>;
 }) {
   const measurement = exercise.measurement_type ?? "";
   const fields = fieldsForMeasurement(measurement);
   const useMmSs = measurement === "timeOnly";
+  const [includeDate, setIncludeDate] = useState(false);
   const [achievedAt, setAchievedAt] = useState(todayISO());
   const [values, setValues] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<
@@ -463,6 +591,7 @@ function ManualPBSheet({
 
   useEffect(() => {
     if (!open) return;
+    setIncludeDate(false);
     setAchievedAt(todayISO());
     setValues({});
     setFeedback(null);
@@ -482,7 +611,7 @@ function ManualPBSheet({
       });
       return;
     }
-    if (achievedAt > todayISO()) {
+    if (includeDate && achievedAt > todayISO()) {
       setFeedback({ type: "error", message: "Date cannot be in the future." });
       return;
     }
@@ -492,13 +621,13 @@ function ManualPBSheet({
     try {
       const result = await addManualPB(token, {
         exerciseId: exercise.id,
-        achievedAt,
+        achievedAt: includeDate ? achievedAt : null,
         ...payload,
       });
 
       if (result.isNewPB) {
         setFeedback({ type: "success" });
-        await onSaved(true);
+        await onSaved(result);
         window.setTimeout(() => onOpenChange(false), 800);
       } else {
         const currentFormatted = current
@@ -509,7 +638,7 @@ function ManualPBSheet({
             (currentFormatted.unit ? ` ${currentFormatted.unit}` : "")
           : "none";
         setFeedback({ type: "notPB", current: currentLabel });
-        await onSaved(false);
+        await onSaved(result);
       }
     } catch (e) {
       setFeedback({
@@ -549,17 +678,35 @@ function ManualPBSheet({
                 </div>
               </div>
             ) : (
-              <p className="mt-2 text-xs text-muted-foreground">No PB recorded yet</p>
+              <p className="mt-2 text-xs text-muted-foreground">No current PB</p>
             )}
           </div>
 
-          <FormField
-            label="Date"
-            type="date"
-            max={todayISO()}
-            value={achievedAt}
-            onChange={(e) => setAchievedAt(e.target.value)}
-          />
+          <div className="space-y-3">
+            <label className="flex items-center justify-between gap-3 text-sm font-medium text-foreground">
+              Include date
+              <input
+                type="checkbox"
+                checked={includeDate}
+                onChange={(e) => setIncludeDate(e.target.checked)}
+                className="size-4 accent-primary"
+              />
+            </label>
+            {includeDate ? (
+              <FormField
+                label="Date"
+                type="date"
+                max={todayISO()}
+                value={achievedAt}
+                onChange={(e) => setAchievedAt(e.target.value)}
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Leave the date off if you only remember the value. It counts
+                toward your lifetime best, not your current PB.
+              </p>
+            )}
+          </div>
 
           <div className="rounded-[16px] bg-card p-4 space-y-3">
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -697,7 +844,7 @@ function ProgressionChart({
                       cy?: number;
                       payload?: { isPB?: boolean };
                     };
-                    if (cx == null || cy == null) return null;
+                    if (cx == null || cy == null) return <g />;
                     const isPb = payload?.isPB ?? false;
                     return (
                       <circle
@@ -750,7 +897,7 @@ function HistoryList({
                 key={row.id}
                 className={cn(
                   "flex items-stretch border-b border-border/50 last:border-0",
-                  row.wasReset && "bg-muted/40",
+                  row.isResetMarker && "bg-muted/40",
                 )}
               >
                 {row.isPB && (
@@ -759,7 +906,7 @@ function HistoryList({
                 <div className="flex min-w-0 flex-1 items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
                     <div className="font-numeric text-base font-semibold tabular-nums text-foreground">
-                      {row.formattedValue}
+                      {row.isResetMarker ? "Current PB reset" : row.formattedValue}
                     </div>
                     <div className="mt-0.5 text-xs text-muted-foreground">
                       {row.date
@@ -777,19 +924,21 @@ function HistoryList({
                         PB
                       </span>
                     )}
-                    {row.wasReset && (
+                    {row.isResetMarker && (
                       <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                         Reset
                       </span>
                     )}
-                    <button
-                      type="button"
-                      aria-label="Delete history entry"
-                      onClick={() => onDelete(row)}
-                      className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-destructive"
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
+                    {!row.isResetMarker && (
+                      <button
+                        type="button"
+                        aria-label="Delete history entry"
+                        onClick={() => onDelete(row)}
+                        className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-destructive"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </li>
@@ -803,17 +952,13 @@ function HistoryList({
 function deleteConfirmationMessage(
   row: ProgressionEntryRow,
   history: ProgressionEntryRow[],
-  current: PersonalBestHistoryRow | null,
-  personalBests: PersonalBestHistoryRow[],
+  current: DerivedPBDisplay | null,
 ): string {
   const removesCurrent =
     current != null &&
     (row.personalBestId === current.id ||
       (row.setId != null && row.setId === current.set_id) ||
-      (row.setId != null &&
-        personalBests.some(
-          (pb) => pb.set_id === row.setId && pb.id === current.id,
-        )));
+      (row.setId != null && row.setId === current.id));
 
   if (!removesCurrent) {
     return "This cannot be undone.";

@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "issue": 28,
+  "purpose": "Historic PB badges by running maximum over ALL dated records in achievedAt order. A record is badged iff it strictly beats the running best under the exercise PB rule when it is achieved. Equal to running max is NOT badged. Undated manuals are excluded from badge history entirely. Badges have no resetAt input — reset does not affect lifetime milestones.",
+  "openQuestions": [
+    {
+      "id": "OQ-B1",
+      "topic": "tie at running maximum",
+      "question": "Asserted NOT badged when equal to running max (matches evaluation vectors: equal weight/reps is notPB). Confirmed decision.",
+      "proposedDefault": "strictly beats only"
+    }
+  ],
+  "vectors": [
+    {
+      "id": "TC-B1",
+      "description": "Simple ascending sequence — every record is a lifetime milestone",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "records": [
+        { "id": "rec-a", "achievedAt": "2026-01-10", "weight": 80, "reps": 5, "entryKind": "session" },
+        { "id": "rec-b", "achievedAt": "2026-02-10", "weight": 90, "reps": 5, "entryKind": "session" },
+        { "id": "rec-c", "achievedAt": "2026-03-10", "weight": 100, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedBadgedIds": ["rec-a", "rec-b", "rec-c"]
+    },
+    {
+      "id": "TC-B2",
+      "description": "A record that does not beat the running max is not badged",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "records": [
+        { "id": "rec-peak", "achievedAt": "2026-01-10", "weight": 100, "reps": 5, "entryKind": "session" },
+        { "id": "rec-lower", "achievedAt": "2026-02-10", "weight": 90, "reps": 5, "entryKind": "session" },
+        { "id": "rec-new-peak", "achievedAt": "2026-03-10", "weight": 105, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedBadgedIds": ["rec-peak", "rec-new-peak"]
+    },
+    {
+      "id": "TC-B3",
+      "description": "Equal to the running max is NOT badged (did not beat it)",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "records": [
+        { "id": "rec-first", "achievedAt": "2026-01-10", "weight": 100, "reps": 5, "entryKind": "session" },
+        { "id": "rec-tie", "achievedAt": "2026-02-10", "weight": 100, "reps": 5, "entryKind": "session" },
+        { "id": "rec-better", "achievedAt": "2026-03-10", "weight": 105, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedBadgedIds": ["rec-first", "rec-better"],
+      "notes": "See OQ-B1. Aligns with pb-evaluation equal measurements = notPB."
+    },
+    {
+      "id": "TC-B4",
+      "description": "Backdated manual entry retroactively strips a badge from a later record that no longer beats the running max",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "records": [
+        { "id": "rec-jan", "achievedAt": "2026-01-10", "weight": 90, "reps": 5, "entryKind": "session" },
+        { "id": "rec-mar", "achievedAt": "2026-03-10", "weight": 100, "reps": 5, "entryKind": "session" },
+        { "id": "rec-backdated", "achievedAt": "2026-02-10", "weight": 110, "reps": 5, "entryKind": "manual" }
+      ],
+      "expectedBadgedIds": ["rec-jan", "rec-backdated"],
+      "notes": "Processing order is by achievedAt, not insertion order. After backdate, Mar 100 no longer beats Feb 110."
+    },
+    {
+      "id": "TC-B6",
+      "description": "Undated manual entries are excluded from badge history entirely (even if heavier)",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "records": [
+        { "id": "rec-a", "achievedAt": "2026-01-10", "weight": 90, "reps": 5, "entryKind": "session" },
+        { "id": "rec-undated", "achievedAt": null, "weight": 150, "reps": 5, "entryKind": "manualUndated" },
+        { "id": "rec-b", "achievedAt": "2026-02-10", "weight": 100, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedBadgedIds": ["rec-a", "rec-b"],
+      "notes": "Undated still affects lifetimePB elsewhere, but never appears in dated badge history."
+    },
+    {
+      "id": "TC-B7",
+      "description": "bestWeightAndReps running max: weight increase badges; lower weight higher reps does not",
+      "rule": "bestWeightAndReps",
+      "exerciseName": "45-Degree Dumbbell Press",
+      "targetReps": null,
+      "minimumReps": null,
+      "records": [
+        { "id": "rec-a", "achievedAt": "2026-01-10", "weight": 20, "reps": 8, "entryKind": "session" },
+        { "id": "rec-b", "achievedAt": "2026-02-10", "weight": 20, "reps": 10, "entryKind": "session" },
+        { "id": "rec-c", "achievedAt": "2026-03-10", "weight": 18, "reps": 15, "entryKind": "session" },
+        { "id": "rec-d", "achievedAt": "2026-04-10", "weight": 22, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedBadgedIds": ["rec-a", "rec-b", "rec-d"]
+    },
+    {
+      "id": "TC-B8",
+      "description": "bestWeightAndReps: backdated heavier manual strips later same-weight higher-reps badge that no longer beats running max",
+      "rule": "bestWeightAndReps",
+      "exerciseName": "45-Degree Dumbbell Press",
+      "targetReps": null,
+      "minimumReps": null,
+      "records": [
+        { "id": "rec-jan", "achievedAt": "2026-01-10", "weight": 20, "reps": 8, "entryKind": "session" },
+        { "id": "rec-mar", "achievedAt": "2026-03-10", "weight": 20, "reps": 12, "entryKind": "session" },
+        { "id": "rec-backdated", "achievedAt": "2026-02-10", "weight": 24, "reps": 5, "entryKind": "manual" }
+      ],
+      "expectedBadgedIds": ["rec-jan", "rec-backdated"],
+      "notes": "Mar 20x12 was a milestone before the backdate; after Feb 24x5 enters the timeline it no longer beats running max."
+    },
+    {
+      "id": "TC-B9",
+      "description": "Badge ties reward only the breakthrough: equal later record is not badged, so only the earliest equal record badges",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "records": [
+        { "id": "rec-first", "achievedAt": "2026-06-23", "weight": 45, "reps": 5, "entryKind": "manual" },
+        { "id": "rec-repeat", "achievedAt": "2026-07-05", "weight": 45, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedBadgedIds": ["rec-first"],
+      "notes": "Running maximum + equal-not-badged means the earliest equal record keeps the badge."
+    }
+  ]
+}

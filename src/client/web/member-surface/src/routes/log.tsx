@@ -163,7 +163,7 @@ function LogSessionForm() {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!session) return;
+    if (!supabase || !session) return;
     setError(null);
     setSubmitting(true);
     try {
@@ -218,12 +218,17 @@ function LogSessionForm() {
         throw new Error("Add at least one exercise before saving.");
       }
 
-      const sessionResult = await logSession(session.token, {
-        sessionDate,
-        notes: notes.trim() === "" ? null : notes.trim(),
-        calories_burned: caloriesBurned,
-        exercises: exercisesToLog,
-      });
+      const sessionResult = await logSession(
+        supabase,
+        session.token,
+        {
+          sessionDate,
+          notes: notes.trim() === "" ? null : notes.trim(),
+          calories_burned: caloriesBurned,
+          exercises: exercisesToLog,
+        },
+        new Map(selectedExercises.map((exercise) => [exercise.id, exercise])),
+      );
 
       const saveSummary: SessionSaveSummary = {
         items: sessionResult.results.map(({ exerciseId, result }) => {

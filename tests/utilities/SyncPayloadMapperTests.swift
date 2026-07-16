@@ -44,4 +44,65 @@ struct SyncPayloadMapperTests {
         #expect(row["weight"] as? Double == 80)
         #expect(row["reps"] as? Int == 5)
     }
+
+    @Test
+    func personalBestRowMapsNullAchievedAt() {
+        let gymId = UUID(uuidString: "0abc9301-b048-40f5-8bdc-9bb389916b59")!
+        let deviceId = UUID()
+        let pb = PersonalBestModel(
+            memberId: UUID(),
+            exerciseId: UUID(),
+            weight: 100,
+            reps: 5,
+            achievedAt: nil,
+            entryType: .manualEntry
+        )
+
+        let row = SyncPayloadMapper.personalBestRow(
+            pb,
+            gymId: gymId,
+            deviceId: deviceId,
+            syncedAt: Date()
+        )
+
+        #expect(row["achieved_at"] is NSNull)
+    }
+
+    @Test
+    func memberSettingsPatchMapsStalenessOnly() {
+        let memberId = UUID(uuidString: "AAAAAAAA-0000-0000-0000-000000000002")!
+        let deviceId = UUID()
+        let member = UserIdentityModel(id: memberId, role: .member, displayName: "Lee")
+
+        let row = SyncPayloadMapper.memberSettingsPatch(member, deviceId: deviceId, syncedAt: Date())
+
+        #expect(row["staleness_enabled"] as? Bool == false)
+        #expect(row["staleness_periods"] as? Int == 2)
+        #expect(row["staleness_unit"] as? String == "quarter")
+        #expect(row["id"] == nil)
+        #expect(row["gym_id"] == nil)
+        #expect(row["source_device_id"] as? String == deviceId.uuidString)
+    }
+
+    @Test
+    func exerciseResetRowMapsCalendarDate() {
+        let gymId = UUID(uuidString: "0abc9301-b048-40f5-8bdc-9bb389916b59")!
+        let deviceId = UUID()
+        let resetAt = Date(timeIntervalSince1970: 1_735_689_600) // 2025-01-01 UTC
+        let reset = ExerciseResetModel(
+            memberId: UUID(),
+            exerciseId: UUID(),
+            resetAt: resetAt
+        )
+
+        let row = SyncPayloadMapper.exerciseResetRow(
+            reset,
+            gymId: gymId,
+            deviceId: deviceId,
+            syncedAt: Date()
+        )
+
+        #expect(row["reset_at"] as? String == "2025-01-01")
+        #expect(row["gym_id"] as? String == gymId.uuidString)
+    }
 }

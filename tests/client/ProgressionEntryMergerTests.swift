@@ -28,7 +28,6 @@ struct ProgressionEntryMergerTests {
             weight: weight,
             reps: reps,
             achievedAt: achievedAt,
-            isCurrent: true,
             entryType: .manualEntry
         )
     }
@@ -54,6 +53,28 @@ struct ProgressionEntryMergerTests {
         #expect(entries.first?.personalBestId == manual.id)
         #expect(entries.first?.isPB == true)
         #expect(entries.first?.formattedValue == "100kg × 5")
+    }
+
+    @Test
+    func skipsUndatedManualPBs() {
+        let squat = exercise(named: "Free Squat")
+        let undated = PersonalBestModel(
+            memberId: memberId,
+            exerciseId: squat.id,
+            weight: 120,
+            reps: 5,
+            achievedAt: nil,
+            entryType: .manualEntry
+        )
+
+        let entries = ProgressionEntryMerger.merge(
+            sessionHistory: [],
+            personalBests: [undated],
+            exercise: squat,
+            from: .distantPast
+        )
+
+        #expect(entries.isEmpty)
     }
 
     @Test
@@ -96,7 +117,6 @@ struct ProgressionEntryMergerTests {
             weight: 100,
             reps: 5,
             achievedAt: sessionDate,
-            isCurrent: true,
             entryType: .sessionDerived
         )
 
@@ -124,7 +144,8 @@ struct ProgressionEntryMergerTests {
         let performanceDataAccess = SwiftDataPerformanceDataAccess(context: context)
         let memberPerformance = DefaultMemberPerformance(
             exerciseRegistry: exerciseRegistry,
-            performanceDataAccess: performanceDataAccess
+            performanceDataAccess: performanceDataAccess,
+            modelContext: context
         )
         let squat = exercise(named: "Free Squat")
         let calendar = Calendar.current
@@ -184,7 +205,8 @@ struct ProgressionEntryMergerTests {
         let performanceDataAccess = SwiftDataPerformanceDataAccess(context: context)
         let memberPerformance = DefaultMemberPerformance(
             exerciseRegistry: exerciseRegistry,
-            performanceDataAccess: performanceDataAccess
+            performanceDataAccess: performanceDataAccess,
+            modelContext: context
         )
         let squat = exercise(named: "Free Squat")
 
@@ -239,7 +261,8 @@ struct ProgressionEntryMergerTests {
         let performanceDataAccess = SwiftDataPerformanceDataAccess(context: context)
         let memberPerformance = DefaultMemberPerformance(
             exerciseRegistry: exerciseRegistry,
-            performanceDataAccess: performanceDataAccess
+            performanceDataAccess: performanceDataAccess,
+            modelContext: context
         )
         let squat = exercise(named: "Free Squat")
 
@@ -300,7 +323,6 @@ struct ProgressionEntryMergerTests {
             weight: 80,
             reps: 5,
             achievedAt: Date().addingTimeInterval(-86_400),
-            isCurrent: false,
             entryType: .sessionDerived
         )
         let newer = PersonalBestModel(
@@ -310,7 +332,6 @@ struct ProgressionEntryMergerTests {
             weight: 80,
             reps: 5,
             achievedAt: Date(),
-            isCurrent: true,
             entryType: .sessionDerived
         )
 
@@ -336,7 +357,8 @@ struct ProgressionEntryMergerTests {
         let performanceDataAccess = SwiftDataPerformanceDataAccess(context: context)
         let memberPerformance = DefaultMemberPerformance(
             exerciseRegistry: exerciseRegistry,
-            performanceDataAccess: performanceDataAccess
+            performanceDataAccess: performanceDataAccess,
+            modelContext: context
         )
         let squat = exercise(named: "Free Squat")
 

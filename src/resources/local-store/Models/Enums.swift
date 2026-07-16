@@ -33,3 +33,10 @@ enum PBEntryType: String, Codable {
     case sessionDerived
     case manualEntry
 }
+
+/// Cloud / local storage unit for member staleness windows (#28).
+/// Derivation vectors use plural (`quarters` / `months`); map at wire time.
+enum StalenessPeriodUnit: String, Codable, Sendable {
+    case quarter
+    case month
+}

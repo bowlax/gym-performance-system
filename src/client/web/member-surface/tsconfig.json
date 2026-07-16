@@ -21,7 +21,10 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@gp-shared/*": [
+        "../../../../supabase/functions/_shared/*"
+      ]
     }
   }
 }

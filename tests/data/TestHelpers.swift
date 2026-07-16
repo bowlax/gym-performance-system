@@ -10,7 +10,8 @@ enum TestHelpers {
             SessionModel.self,
             ExerciseEntryModel.self,
             ModelSet.self,
-            PersonalBestModel.self
+            PersonalBestModel.self,
+            ExerciseResetModel.self
         ])
 
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)

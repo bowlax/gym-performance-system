@@ -1,0 +1,229 @@
+{
+  "schemaVersion": 1,
+  "issue": 28,
+  "purpose": "Freshness predicate in isolation: given achievedAt, staleness setting, and evaluatedAt, is the record fresh? Expiry = start of the period following the elapse of N complete calendar periods after the period that contains achievedAt. Fresh = evaluatedAt < expiry (expiry day itself is stale).",
+  "vectors": [
+    {
+      "id": "TC-X1",
+      "description": "Quarters periods=2: achieved 1 Jan (Q1) expires 1 Oct; still fresh on 30 Sep",
+      "achievedAt": "2026-01-01",
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "evaluatedAt": "2026-09-30",
+      "expectedExpiryAt": "2026-10-01",
+      "expectedFresh": true
+    },
+    {
+      "id": "TC-X2",
+      "description": "Quarters periods=2: achieved 1 Jan (Q1) is STALE on exact expiry 1 Oct",
+      "achievedAt": "2026-01-01",
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "evaluatedAt": "2026-10-01",
+      "expectedExpiryAt": "2026-10-01",
+      "expectedFresh": false
+    },
+    {
+      "id": "TC-X3",
+      "description": "Quarters periods=2: achieved 31 Mar (still Q1) expires 1 Oct — same as 1 Jan",
+      "achievedAt": "2026-03-31",
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "evaluatedAt": "2026-09-30",
+      "expectedExpiryAt": "2026-10-01",
+      "expectedFresh": true
+    },
+    {
+      "id": "TC-X4",
+      "description": "Quarters periods=2: achieved 31 Mar is STALE on 1 Oct",
+      "achievedAt": "2026-03-31",
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "evaluatedAt": "2026-10-01",
+      "expectedExpiryAt": "2026-10-01",
+      "expectedFresh": false
+    },
+    {
+      "id": "TC-X5",
+      "description": "Quarters periods=2: achieved 1 Apr (Q2) expires 1 Jan 2027 — a day after 31 Mar but three months later expiry",
+      "achievedAt": "2026-04-01",
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "evaluatedAt": "2026-12-31",
+      "expectedExpiryAt": "2027-01-01",
+      "expectedFresh": true
+    },
+    {
+      "id": "TC-X6",
+      "description": "Quarters periods=2: achieved 1 Apr is STALE on 1 Jan 2027",
+      "achievedAt": "2026-04-01",
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "evaluatedAt": "2027-01-01",
+      "expectedExpiryAt": "2027-01-01",
+      "expectedFresh": false
+    },
+    {
+      "id": "TC-X7",
+      "description": "Quarters periods=2: achieved 30 Jun (still Q2) expires 1 Jan 2027 — same as 1 Apr",
+      "achievedAt": "2026-06-30",
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "evaluatedAt": "2026-12-31",
+      "expectedExpiryAt": "2027-01-01",
+      "expectedFresh": true
+    },
+    {
+      "id": "TC-X8",
+      "description": "Quarters periods=2: achieved 30 Jun is STALE on 1 Jan 2027",
+      "achievedAt": "2026-06-30",
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "evaluatedAt": "2027-01-01",
+      "expectedExpiryAt": "2027-01-01",
+      "expectedFresh": false
+    },
+    {
+      "id": "TC-X9",
+      "description": "Edge asymmetry: 31 Mar vs 1 Apr — one day apart, expiries three months apart (assert both expiry dates)",
+      "achievedAt": "2026-03-31",
+      "compareAchievedAt": "2026-04-01",
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "expectedExpiryAt": "2026-10-01",
+      "expectedCompareExpiryAt": "2027-01-01",
+      "evaluatedAt": "2026-10-01",
+      "expectedFresh": false,
+      "expectedCompareFresh": true
+    },
+    {
+      "id": "TC-X10",
+      "description": "Quarters periods=1: achieved Q1 expires at start of Q3 (1 Jul)",
+      "achievedAt": "2026-02-15",
+      "staleness": { "enabled": true, "periods": 1, "unit": "quarters" },
+      "evaluatedAt": "2026-06-30",
+      "expectedExpiryAt": "2026-07-01",
+      "expectedFresh": true
+    },
+    {
+      "id": "TC-X11",
+      "description": "Quarters periods=1: achieved Q1 is STALE on 1 Jul",
+      "achievedAt": "2026-02-15",
+      "staleness": { "enabled": true, "periods": 1, "unit": "quarters" },
+      "evaluatedAt": "2026-07-01",
+      "expectedExpiryAt": "2026-07-01",
+      "expectedFresh": false
+    },
+    {
+      "id": "TC-X12",
+      "description": "Months periods=2: achieved 31 Jan expires 1 Apr; still fresh on 31 Mar",
+      "achievedAt": "2026-01-31",
+      "staleness": { "enabled": true, "periods": 2, "unit": "months" },
+      "evaluatedAt": "2026-03-31",
+      "expectedExpiryAt": "2026-04-01",
+      "expectedFresh": true
+    },
+    {
+      "id": "TC-X13",
+      "description": "Months periods=2: achieved 31 Jan is STALE on exact expiry 1 Apr",
+      "achievedAt": "2026-01-31",
+      "staleness": { "enabled": true, "periods": 2, "unit": "months" },
+      "evaluatedAt": "2026-04-01",
+      "expectedExpiryAt": "2026-04-01",
+      "expectedFresh": false
+    },
+    {
+      "id": "TC-X14",
+      "description": "Months periods=2: achieved 1 Feb expires 1 May — a day after 31 Jan but one month later expiry",
+      "achievedAt": "2026-02-01",
+      "staleness": { "enabled": true, "periods": 2, "unit": "months" },
+      "evaluatedAt": "2026-04-30",
+      "expectedExpiryAt": "2026-05-01",
+      "expectedFresh": true
+    },
+    {
+      "id": "TC-X15",
+      "description": "Months periods=2: achieved 1 Feb is STALE on 1 May",
+      "achievedAt": "2026-02-01",
+      "staleness": { "enabled": true, "periods": 2, "unit": "months" },
+      "evaluatedAt": "2026-05-01",
+      "expectedExpiryAt": "2026-05-01",
+      "expectedFresh": false
+    },
+    {
+      "id": "TC-X16",
+      "description": "Edge asymmetry (months): 31 Jan vs 1 Feb — one day apart, expiries one month apart",
+      "achievedAt": "2026-01-31",
+      "compareAchievedAt": "2026-02-01",
+      "staleness": { "enabled": true, "periods": 2, "unit": "months" },
+      "expectedExpiryAt": "2026-04-01",
+      "expectedCompareExpiryAt": "2026-05-01",
+      "evaluatedAt": "2026-04-01",
+      "expectedFresh": false,
+      "expectedCompareFresh": true
+    },
+    {
+      "id": "TC-X17",
+      "description": "Months periods=1: achieved 31 Jan expires 1 Mar; fresh on 28 Feb",
+      "achievedAt": "2026-01-31",
+      "staleness": { "enabled": true, "periods": 1, "unit": "months" },
+      "evaluatedAt": "2026-02-28",
+      "expectedExpiryAt": "2026-03-01",
+      "expectedFresh": true
+    },
+    {
+      "id": "TC-X18",
+      "description": "Months periods=1: achieved 31 Jan is STALE on 1 Mar",
+      "achievedAt": "2026-01-31",
+      "staleness": { "enabled": true, "periods": 1, "unit": "months" },
+      "evaluatedAt": "2026-03-01",
+      "expectedExpiryAt": "2026-03-01",
+      "expectedFresh": false
+    },
+    {
+      "id": "TC-X19",
+      "description": "Months periods=1: achieved 1 Feb expires 1 Apr",
+      "achievedAt": "2026-02-01",
+      "staleness": { "enabled": true, "periods": 1, "unit": "months" },
+      "evaluatedAt": "2026-03-31",
+      "expectedExpiryAt": "2026-04-01",
+      "expectedFresh": true
+    },
+    {
+      "id": "TC-X20",
+      "description": "Months periods=1: achieved 1 Feb is STALE on 1 Apr",
+      "achievedAt": "2026-02-01",
+      "staleness": { "enabled": true, "periods": 1, "unit": "months" },
+      "evaluatedAt": "2026-04-01",
+      "expectedExpiryAt": "2026-04-01",
+      "expectedFresh": false
+    },
+    {
+      "id": "TC-X21",
+      "description": "Staleness disabled: long-past record is still fresh; no expiry",
+      "achievedAt": "2024-01-01",
+      "staleness": { "enabled": false, "periods": 2, "unit": "quarters" },
+      "evaluatedAt": "2026-12-31",
+      "expectedExpiryAt": null,
+      "expectedFresh": true
+    },
+    {
+      "id": "TC-X22",
+      "description": "Staleness disabled: recent record is fresh regardless of unit settings retained in the payload",
+      "achievedAt": "2026-06-01",
+      "staleness": { "enabled": false, "periods": 1, "unit": "months" },
+      "evaluatedAt": "2026-12-31",
+      "expectedExpiryAt": null,
+      "expectedFresh": true
+    },
+    {
+      "id": "TC-X23",
+      "description": "Long-past (2024) is stale under default quarters periods=2 when evaluated in 2026",
+      "achievedAt": "2024-06-15",
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "evaluatedAt": "2026-01-01",
+      "expectedExpiryAt": "2025-01-01",
+      "expectedFresh": false
+    },
+    {
+      "id": "TC-X24",
+      "description": "Long-past (2024) is stale under months periods=2",
+      "achievedAt": "2024-06-15",
+      "staleness": { "enabled": true, "periods": 2, "unit": "months" },
+      "evaluatedAt": "2026-01-01",
+      "expectedExpiryAt": "2024-09-01",
+      "expectedFresh": false
+    }
+  ]
+}

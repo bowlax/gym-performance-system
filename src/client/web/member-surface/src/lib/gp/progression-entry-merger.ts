@@ -1,10 +1,11 @@
 import { bestSetFromSets } from "./best-set";
 import { chartValue, formatSetValues } from "./format";
 import type {
-  ExerciseRow,
-  PersonalBestHistoryRow,
-  SessionSetRow,
-} from "./queries";
+  DerivedManualPBRow,
+  DerivedPBDisplay,
+} from "./derive-pb-reads";
+import type { StalenessSetting } from "@gp-shared/pb-derivation.ts";
+import type { ExerciseRow, SessionSetRow } from "./queries";
 
 export interface ExerciseSetSummary {
   sessionDate: string;
@@ -18,45 +19,13 @@ export interface ProgressionEntryRow {
   formattedValue: string;
   chartValue: number;
   isPB: boolean;
-  wasReset: boolean;
+  isResetMarker: boolean;
   setId: string | null;
   personalBestId: string | null;
   reps: number | null;
 }
 
 const SESSION_DERIVED = "sessionDerived";
-
-function pickPbBySetId(
-  personalBests: PersonalBestHistoryRow[],
-): Map<string, string> {
-  const pbBySetId = new Map<string, string>();
-
-  for (const pb of personalBests) {
-    if (!pb.set_id) continue;
-    const existingId = pbBySetId.get(pb.set_id);
-    if (!existingId) {
-      pbBySetId.set(pb.set_id, pb.id);
-      continue;
-    }
-
-    const existing = personalBests.find((candidate) => candidate.id === existingId);
-    if (!existing) {
-      pbBySetId.set(pb.set_id, pb.id);
-      continue;
-    }
-
-    const pbDate = pb.achieved_at ? new Date(pb.achieved_at).getTime() : 0;
-    const existingDate = existing.achieved_at
-      ? new Date(existing.achieved_at).getTime()
-      : 0;
-    if (pbDate < existingDate || (!pb.is_current && existing.is_current)) {
-      continue;
-    }
-    pbBySetId.set(pb.set_id, pb.id);
-  }
-
-  return pbBySetId;
-}
 
 function setChartInput(set: SessionSetRow) {
   return {
@@ -67,39 +36,34 @@ function setChartInput(set: SessionSetRow) {
   };
 }
 
-function pbChartInput(pb: PersonalBestHistoryRow) {
-  const raw = pb.raw;
+function manualPbChartInput(pb: DerivedManualPBRow) {
   return {
-    weight: typeof raw.weight === "number" ? raw.weight : null,
+    weight: pb.weight,
     reps: pb.reps,
-    timeSeconds:
-      typeof raw.time_seconds === "number"
-        ? raw.time_seconds
-        : typeof raw.time === "number"
-          ? raw.time
-          : null,
-    distance: typeof raw.distance === "number" ? raw.distance : null,
+    timeSeconds: pb.time_seconds,
+    distance: pb.distance,
   };
 }
 
 export function mergeProgressionEntries(params: {
   sessionHistory: ExerciseSetSummary[];
-  personalBests: PersonalBestHistoryRow[];
+  manualPersonalBests: DerivedManualPBRow[];
   exercise: ExerciseRow;
+  badgeIdSet: ReadonlySet<string>;
+  resetAt: string | null;
   from: Date;
 }): ProgressionEntryRow[] {
-  const { sessionHistory, personalBests, exercise, from } = params;
+  const { sessionHistory, manualPersonalBests, exercise, badgeIdSet, resetAt, from } =
+    params;
   const measurementType = exercise.measurement_type ?? "";
   const fromTime = from.getTime();
-  const pbBySetId = pickPbBySetId(personalBests);
-  const pbById = new Map(personalBests.map((pb) => [pb.id, pb]));
   const representedSetIds = new Set<string>();
   const merged: ProgressionEntryRow[] = [];
 
   for (const summary of sessionHistory) {
     representedSetIds.add(summary.set.id);
-    const personalBestId = pbBySetId.get(summary.set.id) ?? null;
-    const linkedPB = personalBestId ? (pbById.get(personalBestId) ?? null) : null;
+    const isPB = badgeIdSet.has(summary.set.id);
+    const personalBestId = isPB ? summary.set.id : null;
 
     merged.push({
       id: summary.set.id,
@@ -113,24 +77,26 @@ export function mergeProgressionEntries(params: {
         ...setChartInput(summary.set),
         measurementType,
       }),
-      isPB: summary.isPB,
-      wasReset: linkedPB?.was_reset ?? false,
+      isPB,
+      isResetMarker: false,
       setId: summary.set.id,
       personalBestId,
       reps: summary.set.reps,
     });
   }
 
-  for (const pb of personalBests) {
-    const achievedTime = pb.achieved_at ? new Date(pb.achieved_at).getTime() : 0;
+  // Undated manuals never appear in history (#28).
+  for (const pb of manualPersonalBests) {
+    if (pb.achieved_at == null) continue;
+    const achievedTime = new Date(pb.achieved_at).getTime();
     if (achievedTime < fromTime) continue;
     if (pb.entry_type === SESSION_DERIVED) continue;
     if (pb.set_id && representedSetIds.has(pb.set_id)) continue;
 
-    const chartInput = pbChartInput(pb);
+    const chartInput = manualPbChartInput(pb);
     merged.push({
       id: pb.id,
-      date: pb.achieved_at ?? new Date(0).toISOString(),
+      date: pb.achieved_at,
       formattedValue: formatSetValues({
         ...chartInput,
         measurementType,
@@ -140,12 +106,29 @@ export function mergeProgressionEntries(params: {
         ...chartInput,
         measurementType,
       }),
-      isPB: true,
-      wasReset: pb.was_reset,
+      isPB: badgeIdSet.has(pb.id),
+      isResetMarker: false,
       setId: pb.set_id,
       personalBestId: pb.id,
       reps: pb.reps,
     });
+  }
+
+  if (resetAt) {
+    const resetTime = new Date(resetAt).getTime();
+    if (resetTime >= fromTime) {
+      merged.push({
+        id: `reset:${exercise.id}`,
+        date: resetAt,
+        formattedValue: "Reset",
+        chartValue: NaN,
+        isPB: false,
+        isResetMarker: true,
+        setId: null,
+        personalBestId: null,
+        reps: null,
+      });
+    }
   }
 
   return merged.sort((left, right) => {
@@ -154,3 +137,5 @@ export function mergeProgressionEntries(params: {
     return leftTime - rightTime;
   });
 }
+
+export type { DerivedPBDisplay, StalenessSetting };

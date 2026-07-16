@@ -52,10 +52,34 @@ struct CloudPersonalBestRow: Equatable, Sendable {
     var reps: Int?
     var timeSeconds: Double?
     var distance: Double?
-    var achievedAt: Date
-    var isCurrent: Bool
-    var wasReset: Bool
+    var achievedAt: Date?
     var entryType: String
+    var createdAt: Date
+    var updatedAt: Date
+    var syncedAt: Date?
+    var deletedAt: Date?
+    var sourceDeviceId: UUID?
+}
+
+struct CloudMemberRow: Equatable, Sendable {
+    var id: UUID
+    var gymId: UUID
+    var displayName: String
+    var stalenessEnabled: Bool
+    var stalenessPeriods: Int
+    var stalenessUnit: String
+    var createdAt: Date
+    var updatedAt: Date
+    var syncedAt: Date?
+    var sourceDeviceId: UUID?
+}
+
+struct CloudExerciseResetRow: Equatable, Sendable {
+    var id: UUID
+    var gymId: UUID
+    var memberId: UUID
+    var exerciseId: UUID
+    var resetAt: Date
     var createdAt: Date
     var updatedAt: Date
     var syncedAt: Date?
@@ -154,10 +178,44 @@ enum CloudRowDecoder {
                 reps: intValue(object["reps"]),
                 timeSeconds: doubleValue(object["time_seconds"]),
                 distance: doubleValue(object["distance"]),
-                achievedAt: try calendarDate(object, "achieved_at"),
-                isCurrent: (object["is_current"] as? Bool) ?? false,
-                wasReset: (object["was_reset"] as? Bool) ?? false,
-                entryType: (object["entry_type"] as? String) ?? PBEntryType.sessionDerived.rawValue,
+                achievedAt: try optionalCalendarDate(object, "achieved_at"),
+                entryType: (object["entry_type"] as? String) ?? PBEntryType.manualEntry.rawValue,
+                createdAt: try date(object, "created_at"),
+                updatedAt: try date(object, "updated_at"),
+                syncedAt: optionalDate(object, "synced_at"),
+                deletedAt: optionalDate(object, "deleted_at"),
+                sourceDeviceId: optionalUUID(object, "source_device_id")
+            )
+        }
+    }
+
+    static func decodeMembers(from data: Data) throws -> [CloudMemberRow] {
+        let objects = try decodeObjectArray(data)
+        return try objects.map { object in
+            CloudMemberRow(
+                id: try uuid(object, "id"),
+                gymId: try uuid(object, "gym_id"),
+                displayName: (object["display_name"] as? String) ?? "Member",
+                stalenessEnabled: (object["staleness_enabled"] as? Bool) ?? false,
+                stalenessPeriods: intValue(object["staleness_periods"]) ?? 2,
+                stalenessUnit: (object["staleness_unit"] as? String) ?? StalenessPeriodUnit.quarter.rawValue,
+                createdAt: try date(object, "created_at"),
+                updatedAt: try date(object, "updated_at"),
+                syncedAt: optionalDate(object, "synced_at"),
+                sourceDeviceId: optionalUUID(object, "source_device_id")
+            )
+        }
+    }
+
+    static func decodeExerciseResets(from data: Data) throws -> [CloudExerciseResetRow] {
+        let objects = try decodeObjectArray(data)
+        return try objects.map { object in
+            CloudExerciseResetRow(
+                id: try uuid(object, "id"),
+                gymId: try uuid(object, "gym_id"),
+                memberId: try uuid(object, "member_id"),
+                exerciseId: try uuid(object, "exercise_id"),
+                resetAt: try calendarDate(object, "reset_at"),
                 createdAt: try date(object, "created_at"),
                 updatedAt: try date(object, "updated_at"),
                 syncedAt: optionalDate(object, "synced_at"),
@@ -200,9 +258,20 @@ enum CloudRowDecoder {
     }
 
     private static func calendarDate(_ object: [String: Any], _ key: String) throws -> Date {
-        guard let string = object[key] as? String else {
+        guard let value = try optionalCalendarDate(object, key) else {
             throw SyncError.pullFailed(table: key, statusCode: -1, detail: "Missing calendar date \(key)")
         }
+        return value
+    }
+
+    /// Null / missing calendar dates are allowed (undated manual PBs). Invalid
+    /// non-null strings still fail the pull.
+    private static func optionalCalendarDate(_ object: [String: Any], _ key: String) throws -> Date? {
+        guard let raw = object[key], !(raw is NSNull) else { return nil }
+        guard let string = raw as? String else {
+            throw SyncError.pullFailed(table: key, statusCode: -1, detail: "Invalid calendar date \(key)")
+        }
+        if string.isEmpty { return nil }
         if let value = calendarDateFormatter.date(from: string) {
             return value
         }

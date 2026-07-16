@@ -1,19 +1,14 @@
 /**
  * Add Manual PB — Supabase Edge Function
  *
- * Records a manual personal-best entry for a web member. Uses the caller's JWT
- * (RLS enforced) and shared pb-evaluation logic.
- *
- * iOS semantics (DefaultMemberPerformance.recordManualPB):
- * - If the entry is not a PB, nothing is persisted; returns isNewPB false.
- * - If it is a PB, supersedes the current PB and inserts a manualEntry row.
+ * Records a manual personal-best entry. Compares against derived current PB (#28 step 4).
+ * `achievedAt` may be null (undated lifetime entry) or a YYYY-MM-DD string.
+ * Missing / null → store null. Invalid non-null string → 400 (never invent today).
  */
 
-import { evaluatePB } from "../_shared/pb-evaluation.ts";
 import {
   createUserClient,
   DATE_PATTERN,
-  fetchCurrentPersonalBest,
   fetchExercise,
   handleEdgeRequest,
   isFutureDate,
@@ -21,11 +16,13 @@ import {
   isUuid,
   jsonResponse,
   optionalNumber,
-  personalBestToEvaluationState,
-  todayUtcDateString,
   validateMeasurementFields,
   type PersonalBestRow,
 } from "../_shared/member-edge.ts";
+import {
+  deriveCurrentPBState,
+  isManualPB,
+} from "../_shared/edge-pb-reads.ts";
 
 interface AddManualPBRequest {
   exerciseId: string;
@@ -33,31 +30,56 @@ interface AddManualPBRequest {
   reps: number | null;
   time_seconds: number | null;
   distance: number | null;
-  achievedAt: string;
+  /** Null = undated lifetime entry. */
+  achievedAt: string | null;
 }
 
-function parseAddManualPBRequest(body: unknown): AddManualPBRequest | null {
+type ParseResult =
+  | { ok: true; request: AddManualPBRequest }
+  | { ok: false; error: string };
+
+function parseAchievedAt(raw: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) {
+    return { ok: true, value: null };
+  }
+  if (typeof raw !== "string") {
+    return { ok: false, error: "achievedAt must be a YYYY-MM-DD string or null" };
+  }
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    return { ok: true, value: null };
+  }
+  if (!DATE_PATTERN.test(trimmed)) {
+    return { ok: false, error: "achievedAt must be a valid YYYY-MM-DD date or null" };
+  }
+  return { ok: true, value: trimmed };
+}
+
+function parseAddManualPBRequest(body: unknown): ParseResult {
   if (typeof body !== "object" || body === null) {
-    return null;
+    return { ok: false, error: "Invalid request body. Provide exerciseId and measurement values." };
   }
 
   const record = body as Record<string, unknown>;
   if (typeof record.exerciseId !== "string" || !isUuid(record.exerciseId)) {
-    return null;
+    return { ok: false, error: "Invalid request body. Provide exerciseId and measurement values." };
   }
 
-  const achievedAtRaw = record.achievedAt;
-  const achievedAt = typeof achievedAtRaw === "string" && DATE_PATTERN.test(achievedAtRaw)
-    ? achievedAtRaw
-    : todayUtcDateString();
+  const achievedAt = parseAchievedAt(record.achievedAt);
+  if (!achievedAt.ok) {
+    return { ok: false, error: achievedAt.error };
+  }
 
   return {
-    exerciseId: record.exerciseId,
-    weight: optionalNumber(record.weight),
-    reps: optionalNumber(record.reps),
-    time_seconds: optionalNumber(record.time_seconds),
-    distance: optionalNumber(record.distance),
-    achievedAt,
+    ok: true,
+    request: {
+      exerciseId: record.exerciseId,
+      weight: optionalNumber(record.weight),
+      reps: optionalNumber(record.reps),
+      time_seconds: optionalNumber(record.time_seconds),
+      distance: optionalNumber(record.distance),
+      achievedAt: achievedAt.value,
+    },
   };
 }
 
@@ -69,15 +91,13 @@ handleEdgeRequest(async (req, claims, authHeader) => {
     return jsonResponse({ error: "Invalid JSON body" }, 400);
   }
 
-  const request = parseAddManualPBRequest(body);
-  if (!request) {
-    return jsonResponse(
-      { error: "Invalid request body. Provide exerciseId and measurement values." },
-      400,
-    );
+  const parsed = parseAddManualPBRequest(body);
+  if (!parsed.ok) {
+    return jsonResponse({ error: parsed.error }, 400);
   }
+  const request = parsed.request;
 
-  if (isFutureDate(request.achievedAt)) {
+  if (request.achievedAt != null && isFutureDate(request.achievedAt)) {
     return jsonResponse({ error: "achievedAt cannot be in the future" }, 400);
   }
 
@@ -104,42 +124,21 @@ handleEdgeRequest(async (req, claims, authHeader) => {
     return jsonResponse({ isNewPB: false, personalBest: null }, 200);
   }
 
-  const currentPB = await fetchCurrentPersonalBest(
+  const { currentPB } = await deriveCurrentPBState(
     supabase,
     claims.memberId,
-    request.exerciseId,
+    exercise,
   );
 
-  const evaluation = evaluatePB({
-    rule: exercise.pb_rule,
-    currentPB: currentPB ? personalBestToEvaluationState(currentPB) : null,
-    newSet: {
-      weight: request.weight,
-      reps: request.reps,
-      time: request.time_seconds,
-      distance: request.distance,
-    },
-    ruleParameters: {
-      targetReps: exercise.target_reps,
-      minimumReps: exercise.minimum_reps,
-    },
-  });
+  const candidate = {
+    weight: request.weight,
+    reps: request.reps,
+    time: request.time_seconds,
+    distance: request.distance,
+  };
 
-  if (!evaluation.isPB) {
+  if (!isManualPB(exercise, currentPB, candidate)) {
     return jsonResponse({ isNewPB: false, personalBest: null }, 200);
-  }
-
-  if (currentPB) {
-    const { error: supersedeError } = await supabase
-      .from("personal_bests")
-      .update({ is_current: false, updated_at: new Date().toISOString() })
-      .eq("id", currentPB.id)
-      .eq("member_id", claims.memberId)
-      .eq("gym_id", claims.gymId);
-
-    if (supersedeError) {
-      throw supersedeError;
-    }
   }
 
   const { data, error } = await supabase
@@ -155,12 +154,10 @@ handleEdgeRequest(async (req, claims, authHeader) => {
       time_seconds: request.time_seconds,
       distance: request.distance,
       achieved_at: request.achievedAt,
-      is_current: true,
       entry_type: "manualEntry",
-      was_reset: false,
     })
     .select(
-      "id, gym_id, member_id, exercise_id, set_id, weight, reps, time_seconds, distance, achieved_at, is_current, was_reset, entry_type",
+      "id, gym_id, member_id, exercise_id, set_id, weight, reps, time_seconds, distance, achieved_at, entry_type",
     )
     .single();
 

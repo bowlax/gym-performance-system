@@ -12,6 +12,9 @@ struct ProgressionView: View {
     @State private var entryPendingDelete: ProgressionEntry?
     @State private var deleteAlertMessage = ""
     @State private var currentPB: PersonalBestModel?
+    @State private var lifetimePB: PersonalBestModel?
+    @State private var showLifetimePB = false
+    @State private var emptyReason: CurrentPBEmptyReason = .neverTrained
     @State private var entries: [ProgressionEntry] = []
     @State private var loadGeneration = 0
     @State private var chartScrollPosition = Date()
@@ -19,17 +22,26 @@ struct ProgressionView: View {
     @State private var magnificationBase: TimeInterval?
 
     private var mostRecentPBPoint: ProgressionEntry? {
-        entries.filter(\.isPB).max(by: { $0.date < $1.date })
+        entries.filter { $0.isPB && !$0.isResetMarker }.max(by: { $0.date < $1.date })
     }
 
     private var progressionChartConfiguration: ScrollableDateChartConfiguration? {
-        ScrollableDateChartConfiguration.make(earliestDataPoint: entries.first?.date)
+        ScrollableDateChartConfiguration.make(
+            earliestDataPoint: entries.first(where: { !$0.isResetMarker })?.date
+        )
+    }
+
+    private var chartPlotEntries: [ProgressionEntry] {
+        entries.filter { !$0.isResetMarker }
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: .sectionSpacing) {
                 currentPBSection
+                if showLifetimePB {
+                    lifetimePBSection
+                }
                 chartSection
                 historySection
             }
@@ -88,8 +100,35 @@ struct ProgressionView: View {
                     .pbValueStyle(size: 44)
                     .foregroundStyle(Color.wolfBlue)
             } else {
-                Text("No PB yet")
+                Text(CurrentPBEmptyCopy.progressionTitle(for: emptyReason))
                     .pbValueStyle(size: 44)
+                    .foregroundStyle(.secondary)
+                if let detail = CurrentPBEmptyCopy.progressionDetail(for: emptyReason) {
+                    Text(detail)
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var lifetimePBSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Lifetime PB")
+                .sectionLabelStyle()
+
+            if let lifetimePB {
+                Text(PBFormatter.formatPB(lifetimePB, exercise: exercise))
+                    .pbValueStyle(size: 28)
+                    .foregroundStyle(Color.primary)
+                if lifetimePB.achievedAt == nil {
+                    Text("Undated")
+                        .captionLabelStyle()
+                }
+            } else {
+                Text("No lifetime PB")
+                    .pbValueStyle(size: 28)
                     .foregroundStyle(.secondary)
             }
         }
@@ -102,13 +141,13 @@ struct ProgressionView: View {
             Text("Exercise History")
                 .exerciseTitleStyle()
 
-            if entries.isEmpty {
+            if chartPlotEntries.isEmpty {
                 EmptyStateView(
                     symbol: "chart.line.uptrend.xyaxis",
                     message: "No exercise history yet"
                 )
             } else if let configuration = progressionChartConfiguration {
-                Chart(entries) { point in
+                Chart(chartPlotEntries) { point in
                     AreaMark(
                         x: .value("Date", point.date),
                         y: .value("Value", point.chartValue)
@@ -192,12 +231,14 @@ struct ProgressionView: View {
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
-                                    entryPendingDelete = entry
-                                    deleteAlertMessage = deleteConfirmationMessage(for: entry)
-                                    showDeleteAlert = true
-                                } label: {
-                                    Text("Delete")
+                                if !entry.isResetMarker {
+                                    Button(role: .destructive) {
+                                        entryPendingDelete = entry
+                                        deleteAlertMessage = deleteConfirmationMessage(for: entry)
+                                        showDeleteAlert = true
+                                    } label: {
+                                        Text("Delete")
+                                    }
                                 }
                             }
                     }
@@ -224,22 +265,28 @@ struct ProgressionView: View {
                 RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                     .fill(Color.pbYellow)
                     .frame(width: 3)
+            } else if entry.isResetMarker {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(Color(.tertiaryLabel))
+                    .frame(width: 3)
             }
 
             HStack {
                 HStack(spacing: 6) {
                     Text(PBFormatter.shortDate.string(from: entry.date))
                         .captionLabelStyle()
-                    if entry.wasReset {
+                    if entry.isResetMarker {
                         Text("Reset")
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(Color(.tertiaryLabel))
                     }
                 }
                 Spacer()
-                Text(entry.formattedValue)
-                    .font(Font.system(.body, design: .rounded).weight(.medium))
-                    .monospacedDigit()
+                if !entry.isResetMarker {
+                    Text(entry.formattedValue)
+                        .font(Font.system(.body, design: .rounded).weight(.medium))
+                        .monospacedDigit()
+                }
                 if entry.isPB {
                     Text("PB")
                         .font(.system(.caption2, design: .rounded).weight(.semibold))
@@ -250,30 +297,22 @@ struct ProgressionView: View {
             }
             .padding(.cardPadding)
         }
-        .background(entry.wasReset ? Color(.systemGray6) : Color(.secondarySystemBackground))
+        .background(entry.isResetMarker ? Color(.systemGray6) : Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: .cardRadius, style: .continuous))
     }
 
     private func deleteConfirmationMessage(for entry: ProgressionEntry) -> String {
         do {
-            let currentPB = try dependencies.performanceDataAccess.fetchCurrentPB(
+            let derived = try dependencies.memberPerformance.deriveExerciseReadState(
                 memberId: dependencies.memberId,
                 exerciseId: exercise.id
             )
-            let allPBs = try dependencies.performanceDataAccess.fetchAllPBs(
-                memberId: dependencies.memberId,
-                exerciseId: exercise.id
-            )
+            let currentPB = derived.currentPB
 
             let removesCurrent: Bool = {
                 guard let currentPB else { return false }
                 if entry.personalBestId == currentPB.id { return true }
                 if let setId = entry.setId, currentPB.setId == setId { return true }
-                if let setId = entry.setId,
-                   let linkedPB = allPBs.first(where: { $0.setId == setId }),
-                   linkedPB.id == currentPB.id {
-                    return true
-                }
                 return false
             }()
 
@@ -339,9 +378,16 @@ struct ProgressionView: View {
     private func reloadProgression() {
         do {
             let from = Date.distantPast
-            currentPB = try dependencies.performanceDataAccess.fetchCurrentPB(
+            let derived = try dependencies.memberPerformance.deriveExerciseReadState(
                 memberId: dependencies.memberId,
                 exerciseId: exercise.id
+            )
+            currentPB = derived.currentPB
+            lifetimePB = derived.lifetimePB
+            showLifetimePB = LifetimePBVisibility.shouldShow(
+                lifetime: derived.lifetimePB,
+                current: derived.currentPB,
+                rule: exercise.pbRule
             )
             let sessionHistory = try dependencies.memberPerformance.exerciseHistory(
                 memberId: dependencies.memberId,
@@ -352,11 +398,23 @@ struct ProgressionView: View {
                 memberId: dependencies.memberId,
                 exerciseId: exercise.id
             )
+            // Match derivation / board: sets + manuals only (ignore sessionDerived leftovers).
+            let hasManualHistory = personalBests.contains {
+                $0.entryType == .manualEntry && $0.deletedAt == nil
+            }
+            let hasHistory = !sessionHistory.isEmpty || hasManualHistory
+            emptyReason = CurrentPBEmptyCopy.reason(
+                hasHistory: hasHistory,
+                hasActiveReset: derived.resetAt != nil,
+                stalenessEnabled: derived.stalenessEnabled
+            )
             entries = ProgressionEntryMerger.merge(
                 sessionHistory: sessionHistory,
                 personalBests: personalBests,
                 exercise: exercise,
-                from: from
+                from: from,
+                badgeIds: derived.badgeIds,
+                resetAt: derived.resetAt
             )
             configureProgressionChartViewport()
         } catch is CancellationError {

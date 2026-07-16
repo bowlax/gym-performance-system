@@ -6,6 +6,8 @@ enum SyncError: Error, LocalizedError, Equatable {
     case brokerRejected(statusCode: Int, detail: String)
     case uploadFailed(table: String, statusCode: Int, detail: String)
     case pullFailed(table: String, statusCode: Int, detail: String)
+    /// PATCH matched zero member rows — broker has not created-or-adopted yet.
+    case memberIdentityNotEstablished
 
     var errorDescription: String? {
         switch self {
@@ -19,6 +21,8 @@ enum SyncError: Error, LocalizedError, Equatable {
             return "Upload to \(table) failed (\(statusCode)): \(detail)"
         case .pullFailed(let table, let statusCode, let detail):
             return "Pull from \(table) failed (\(statusCode)): \(detail)"
+        case .memberIdentityNotEstablished:
+            return "Cannot sync member settings: no cloud member row yet (broker create-or-adopt has not established identity). Settings were not marked synced."
         }
     }
 }

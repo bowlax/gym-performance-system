@@ -1,4 +1,15 @@
 import { LOG_SET_URL } from "./env";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  deriveExerciseReadState,
+  fetchBoardDerivationBundle,
+} from "./derive-pb-reads";
+import type { ExerciseRow } from "./queries";
+import {
+  measurementAsSetState,
+  sessionSetEarnedCelebration,
+} from "./session-pb-celebration";
+import type { PBRule } from "@gp-shared/pb-evaluation.ts";
 
 export interface LogSetInput {
   sessionDate: string; // YYYY-MM-DD
@@ -105,28 +116,43 @@ export async function logSet(
     throw new Error(msg);
   }
 
-  const isPersonalBest = Boolean(
-    raw.isPersonalBest ?? raw.isNewPB ?? raw.isPB ?? raw.pb ?? false,
-  );
-  const previousValue = typeof raw.previousValue === "number" ? raw.previousValue : undefined;
-  const newValue = typeof raw.newValue === "number" ? raw.newValue : undefined;
-  return { isPersonalBest, previousValue, newValue, raw };
+  return { isPersonalBest: false, raw };
 }
 
 /**
- * Log multiple exercises into a single session. The first set creates the session;
- * subsequent sets reuse the same sessionId (iOS saveSession parity).
+ * Log multiple exercises into a single session. Derives PB celebration client-side
+ * (before/after current PB comparison; strict improvement only).
  */
 export async function logSession(
+  supabase: SupabaseClient,
   token: string,
   input: LogSessionInput,
+  exercisesById: Map<string, ExerciseRow>,
 ): Promise<LogSessionResult> {
   if (input.exercises.length === 0) {
     throw new Error("At least one exercise is required to log a session.");
   }
 
+  const bundleBefore = await fetchBoardDerivationBundle(supabase);
+  const beforeCurrentByExercise = new Map<string, ReturnType<typeof deriveExerciseReadState>["currentPB"]>();
+
+  for (const ex of input.exercises) {
+    const exercise = exercisesById.get(ex.exerciseId);
+    if (!exercise?.pb_rule) continue;
+    const before = deriveExerciseReadState({
+      pbRule: exercise.pb_rule,
+      measurementType: exercise.measurement_type,
+      sets: bundleBefore.setsByExercise.get(ex.exerciseId) ?? [],
+      manualPBs: bundleBefore.manualPBsByExercise.get(ex.exerciseId) ?? [],
+      staleness: bundleBefore.staleness,
+      resetAt: bundleBefore.resetAtByExercise.get(ex.exerciseId) ?? null,
+    });
+    beforeCurrentByExercise.set(ex.exerciseId, before.currentPB);
+  }
+
   const sessionId = crypto.randomUUID();
   const results: LogSessionResult["results"] = [];
+  const loggedSetIdsByExercise = new Map<string, Set<string>>();
 
   for (let i = 0; i < input.exercises.length; i++) {
     const ex = input.exercises[i]!;
@@ -141,7 +167,48 @@ export async function logSession(
           }
         : { sessionId }),
     });
+
+    const setId =
+      typeof result.raw.set === "object" &&
+      result.raw.set !== null &&
+      typeof (result.raw.set as Record<string, unknown>).id === "string"
+        ? ((result.raw.set as Record<string, unknown>).id as string)
+        : undefined;
+
+    if (setId) {
+      const ids = loggedSetIdsByExercise.get(ex.exerciseId) ?? new Set<string>();
+      ids.add(setId);
+      loggedSetIdsByExercise.set(ex.exerciseId, ids);
+    }
+
     results.push({ exerciseId: ex.exerciseId, result });
+  }
+
+  const bundleAfter = await fetchBoardDerivationBundle(supabase);
+
+  for (const entry of results) {
+    const exercise = exercisesById.get(entry.exerciseId);
+    if (!exercise?.pb_rule) continue;
+
+    const after = deriveExerciseReadState({
+      pbRule: exercise.pb_rule,
+      measurementType: exercise.measurement_type,
+      sets: bundleAfter.setsByExercise.get(entry.exerciseId) ?? [],
+      manualPBs: bundleAfter.manualPBsByExercise.get(entry.exerciseId) ?? [],
+      staleness: bundleAfter.staleness,
+      resetAt: bundleAfter.resetAtByExercise.get(entry.exerciseId) ?? null,
+    });
+
+    const logged = input.exercises.find((ex) => ex.exerciseId === entry.exerciseId);
+    if (!logged) continue;
+
+    entry.result.isPersonalBest = sessionSetEarnedCelebration({
+      rule: exercise.pb_rule as PBRule,
+      beforeCurrent: beforeCurrentByExercise.get(entry.exerciseId) ?? null,
+      afterCurrent: after.currentPB,
+      loggedSetIds: loggedSetIdsByExercise.get(entry.exerciseId) ?? new Set(),
+      loggedSet: measurementAsSetState(logged),
+    });
   }
 
   return { sessionId, results };

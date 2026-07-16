@@ -6,13 +6,21 @@ export interface PBCardProps {
   value?: string;
   /** Short date under the PB value (e.g. `8 Jul`). */
   achievedAt?: string;
+  /** Caption when there is no current PB. */
+  emptyCaption?: string;
   className?: string;
 }
 
 /**
  * Board exercise card — mirrors iOS `BoardView.row` layout.
  */
-export function PBCard({ lift, value, achievedAt, className }: PBCardProps) {
+export function PBCard({
+  lift,
+  value,
+  achievedAt,
+  emptyCaption = "No PB yet",
+  className,
+}: PBCardProps) {
   return (
     <div
       className={cn(
@@ -38,7 +46,9 @@ export function PBCard({ lift, value, achievedAt, className }: PBCardProps) {
             ) : null}
           </div>
         ) : (
-          <span className="shrink-0 text-xs text-muted-foreground">No PB yet</span>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {emptyCaption}
+          </span>
         )}
       </div>
     </div>

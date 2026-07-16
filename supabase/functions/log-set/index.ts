@@ -1,54 +1,12 @@
 /**
  * Log Set — Supabase Edge Function
  *
- * Logs a single set for a web member and evaluates whether it is a personal best
- * using the shared pure logic in `_shared/pb-evaluation.ts`. Uses the caller's
- * JWT (RLS enforced) — not the service role.
+ * Logs a single set for a web member. PB evaluation is client-side via derivation (#28 step 4).
  *
  * Requires `Authorization: Bearer <supabase-jwt>` with claims: member_id, gym_id.
- * Hosted runtime verifies the JWT before this handler runs (verify_jwt = true).
- *
- * Environment variables:
- *   SUPABASE_URL      — project API URL (provided automatically on hosted runtime)
- *   SUPABASE_ANON_KEY — anon/publishable key for user-scoped client (RLS)
- *
- * Request (POST, application/json):
- *   {
- *     "sessionId": "uuid",              // use an existing session (optional if session provided)
- *     "session": {                      // create a session when sessionId omitted
- *       "id": "uuid",                   // optional client id; generated if omitted
- *       "date": "YYYY-MM-DD",           // required when creating
- *       "notes": "string | null",
- *       "calories_burned": number | null
- *     },
- *     "exerciseId": "uuid",             // required
- *     "exerciseEntryId": "uuid",        // optional; found or created per session + exercise
- *     "set": {                          // required
- *       "id": "uuid",                   // optional client id; generated if omitted
- *       "weight": number | null,
- *       "reps": number | null,
- *       "time_seconds": number | null,
- *       "distance": number | null
- *     }
- *   }
- *
- * Response (200):
- *   {
- *     "set": { id, exercise_entry_id, gym_id, weight, reps, time_seconds, distance, ... },
- *     "isNewPB": boolean,
- *     "personalBest": { id, exercise_id, set_id, weight, reps, time_seconds, distance, achieved_at, is_current, entry_type } | null
- *   }
- *
- * PB evaluation semantics are governed by tests/vectors/pb-evaluation-vectors.json
- * (must stay in sync with Swift DefaultExerciseRegistry).
  */
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
-import {
-  evaluatePB,
-  type PBRule,
-  type SetState,
-} from "../_shared/pb-evaluation.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -60,15 +18,6 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
-const PB_RULES: readonly PBRule[] = [
-  "heaviestWeight",
-  "heaviestWeightAtReps",
-  "bestWeightAndReps",
-  "fastestTime",
-  "longestDistance",
-  "mostReps",
-];
 
 interface JwtClaims {
   memberId: string;
@@ -108,9 +57,6 @@ interface SessionRow {
 interface ExerciseRow {
   id: string;
   gym_id: string;
-  pb_rule: string | null;
-  target_reps: number | null;
-  minimum_reps: number | null;
   category: string;
   is_active: boolean;
 }
@@ -134,21 +80,6 @@ interface SetRow {
   updated_at: string;
 }
 
-interface PersonalBestRow {
-  id: string;
-  gym_id: string;
-  member_id: string;
-  exercise_id: string;
-  set_id: string | null;
-  weight: number | null;
-  reps: number | null;
-  time_seconds: number | null;
-  distance: number | null;
-  achieved_at: string;
-  is_current: boolean;
-  entry_type: string;
-}
-
 type UserClient = SupabaseClient;
 
 function jsonResponse(body: Record<string, unknown>, status: number): Response {
@@ -160,10 +91,6 @@ function jsonResponse(body: Record<string, unknown>, status: number): Response {
 
 function isUuid(value: string): boolean {
   return UUID_PATTERN.test(value);
-}
-
-function isPbRule(value: string): value is PBRule {
-  return (PB_RULES as readonly string[]).includes(value);
 }
 
 function requireEnv(name: string): string {
@@ -187,7 +114,6 @@ function parseNamedKeys(envName: string): string | null {
       return defaultKey;
     }
   } catch {
-    // not JSON — treat as a plain key string below
     if (raw.length > 0) {
       return raw;
     }
@@ -356,24 +282,6 @@ function parseLogSetRequest(body: unknown): LogSetRequest | null {
   };
 }
 
-function setInputToEvaluationState(set: SetInput): SetState {
-  return {
-    weight: set.weight ?? null,
-    reps: set.reps ?? null,
-    time: set.time_seconds ?? null,
-    distance: set.distance ?? null,
-  };
-}
-
-function personalBestToEvaluationState(pb: PersonalBestRow): SetState {
-  return {
-    weight: pb.weight,
-    reps: pb.reps,
-    time: pb.time_seconds,
-    distance: pb.distance,
-  };
-}
-
 async function resolveSession(
   supabase: UserClient,
   request: LogSetRequest,
@@ -438,7 +346,7 @@ async function fetchExercise(
 ): Promise<ExerciseRow> {
   const { data, error } = await supabase
     .from("exercises")
-    .select("id, gym_id, pb_rule, target_reps, minimum_reps, category, is_active")
+    .select("id, gym_id, category, is_active")
     .eq("id", exerciseId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -573,102 +481,6 @@ async function insertSet(
   return data as SetRow;
 }
 
-async function fetchCurrentPersonalBest(
-  supabase: UserClient,
-  memberId: string,
-  exerciseId: string,
-): Promise<PersonalBestRow | null> {
-  const { data, error } = await supabase
-    .from("personal_bests")
-    .select(
-      "id, gym_id, member_id, exercise_id, set_id, weight, reps, time_seconds, distance, achieved_at, is_current, entry_type",
-    )
-    .eq("member_id", memberId)
-    .eq("exercise_id", exerciseId)
-    .eq("is_current", true)
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return (data as PersonalBestRow | null) ?? null;
-}
-
-async function recordPersonalBest(
-  supabase: UserClient,
-  params: {
-    gymId: string;
-    memberId: string;
-    exerciseId: string;
-    set: SetRow;
-    achievedAt: string;
-    supersedeId: string | null;
-  },
-): Promise<PersonalBestRow> {
-  if (params.supersedeId) {
-    const { error: supersedeError } = await supabase
-      .from("personal_bests")
-      .update({ is_current: false })
-      .eq("id", params.supersedeId)
-      .eq("member_id", params.memberId)
-      .eq("gym_id", params.gymId);
-
-    if (supersedeError) {
-      throw supersedeError;
-    }
-  }
-
-  const { data, error } = await supabase
-    .from("personal_bests")
-    .insert({
-      id: crypto.randomUUID(),
-      gym_id: params.gymId,
-      member_id: params.memberId,
-      exercise_id: params.exerciseId,
-      set_id: params.set.id,
-      weight: params.set.weight,
-      reps: params.set.reps,
-      time_seconds: params.set.time_seconds,
-      distance: params.set.distance,
-      achieved_at: params.achievedAt,
-      is_current: true,
-      entry_type: "sessionDerived",
-      was_reset: false,
-    })
-    .select(
-      "id, gym_id, member_id, exercise_id, set_id, weight, reps, time_seconds, distance, achieved_at, is_current, entry_type",
-    )
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
-  return data as PersonalBestRow;
-}
-
-interface PostgrestErrorLike {
-  message?: string;
-  details?: string;
-  hint?: string;
-  code?: string;
-}
-
-function logSupabaseError(context: string, error: PostgrestErrorLike): void {
-  console.error(`log-set supabase ${context} error message:`, error.message);
-  if (error.details) {
-    console.error(`log-set supabase ${context} error details:`, error.details);
-  }
-  if (error.hint) {
-    console.error(`log-set supabase ${context} error hint:`, error.hint);
-  }
-  if (error.code) {
-    console.error(`log-set supabase ${context} error code:`, error.code);
-  }
-}
-
 function logCaughtError(error: unknown): void {
   console.error("log-set failed");
   if (error instanceof Error) {
@@ -679,10 +491,6 @@ function logCaughtError(error: unknown): void {
     return;
   }
   if (error instanceof Response) {
-    return;
-  }
-  if (typeof error === "object" && error !== null) {
-    logSupabaseError("unknown", error as PostgrestErrorLike);
     return;
   }
   console.error("log-set error value:", String(error));
@@ -725,7 +533,7 @@ Deno.serve(async (req) => {
     const supabase = createUserClient(authHeader!);
 
     const session = await resolveSession(supabase, request, claims);
-    const exercise = await fetchExercise(supabase, request.exerciseId, claims.gymId);
+    await fetchExercise(supabase, request.exerciseId, claims.gymId);
     const exerciseEntry = await resolveExerciseEntry(
       supabase,
       session,
@@ -740,48 +548,7 @@ Deno.serve(async (req) => {
       request.set,
     );
 
-    let personalBest: PersonalBestRow | null = null;
-    let isNewPB = false;
-
-    if (
-      exercise.category === "pbExercise" &&
-      exercise.pb_rule &&
-      isPbRule(exercise.pb_rule)
-    ) {
-      const currentPB = await fetchCurrentPersonalBest(
-        supabase,
-        claims.memberId,
-        request.exerciseId,
-      );
-
-      const evaluation = evaluatePB({
-        rule: exercise.pb_rule,
-        currentPB: currentPB ? personalBestToEvaluationState(currentPB) : null,
-        newSet: setInputToEvaluationState(request.set),
-        ruleParameters: {
-          targetReps: exercise.target_reps,
-          minimumReps: exercise.minimum_reps,
-        },
-      });
-
-      if (evaluation.isPB) {
-        personalBest = await recordPersonalBest(supabase, {
-          gymId: claims.gymId,
-          memberId: claims.memberId,
-          exerciseId: request.exerciseId,
-          set: createdSet,
-          achievedAt: session.date,
-          supersedeId: currentPB?.id ?? null,
-        });
-        isNewPB = true;
-      }
-    }
-
-    return jsonResponse({
-      set: createdSet,
-      isNewPB,
-      personalBest,
-    }, 200);
+    return jsonResponse({ set: createdSet }, 200);
   } catch (error) {
     if (error instanceof Response) {
       return error;

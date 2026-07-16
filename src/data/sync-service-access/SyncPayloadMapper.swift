@@ -94,15 +94,50 @@ enum SyncPayloadMapper {
             "reps": jsonValue(pb.reps),
             "time_seconds": jsonValue(pb.time),
             "distance": jsonValue(pb.distance),
-            "achieved_at": calendarDateString(pb.achievedAt),
-            "is_current": pb.isCurrent,
-            "was_reset": pb.wasReset,
+            "achieved_at": jsonValue(pb.achievedAt.map(calendarDateString)),
             "entry_type": pb.entryType.rawValue,
             "created_at": iso8601(pb.createdAt),
             "updated_at": iso8601(pb.effectiveUpdatedAt),
             "synced_at": iso8601(syncedAt),
             "source_device_id": deviceId.uuidString,
             "deleted_at": jsonValue(pb.deletedAt.map(iso8601)),
+        ]
+    }
+
+    /// Settings-only PATCH body for `members`. Must not include `id` or `gym_id`
+    /// (identity stays broker-owned; filter is `id=eq.{jwt member_id}`).
+    static func memberSettingsPatch(
+        _ member: UserIdentityModel,
+        deviceId: UUID,
+        syncedAt: Date
+    ) -> [String: Any] {
+        [
+            "staleness_enabled": member.stalenessEnabled,
+            "staleness_periods": member.stalenessPeriods,
+            "staleness_unit": member.stalenessUnit.rawValue,
+            "updated_at": iso8601(member.updatedAt),
+            "synced_at": iso8601(syncedAt),
+            "source_device_id": deviceId.uuidString,
+        ]
+    }
+
+    static func exerciseResetRow(
+        _ reset: ExerciseResetModel,
+        gymId: UUID,
+        deviceId: UUID,
+        syncedAt: Date
+    ) -> [String: Any] {
+        [
+            "id": reset.id.uuidString,
+            "gym_id": gymId.uuidString,
+            "member_id": reset.memberId.uuidString,
+            "exercise_id": reset.exerciseId.uuidString,
+            "reset_at": calendarDateString(reset.resetAt),
+            "created_at": iso8601(reset.createdAt),
+            "updated_at": iso8601(reset.updatedAt),
+            "synced_at": iso8601(syncedAt),
+            "source_device_id": deviceId.uuidString,
+            "deleted_at": jsonValue(reset.deletedAt.map(iso8601)),
         ]
     }
 

@@ -24,7 +24,8 @@ struct MemberPerformanceTests {
         let performanceDataAccess = SwiftDataPerformanceDataAccess(context: context)
         let memberPerformance = DefaultMemberPerformance(
             exerciseRegistry: exerciseRegistry,
-            performanceDataAccess: performanceDataAccess
+            performanceDataAccess: performanceDataAccess,
+            modelContext: context
         )
         return TestContext(
             memberPerformance: memberPerformance,
@@ -73,25 +74,31 @@ struct MemberPerformanceTests {
         time: Double? = nil,
         distance: Double? = nil,
         achievedAt: Date = Date(),
-        isCurrent: Bool = true,
-        wasReset: Bool = false,
-        entryType: PBEntryType = .sessionDerived
+        entryType: PBEntryType = .manualEntry
     ) throws -> PersonalBestModel {
         let pb = PersonalBestModel(
             memberId: testMemberId,
             exerciseId: exerciseId,
-            setId: UUID(),
+            setId: nil,
             weight: weight,
             reps: reps,
             time: time,
             distance: distance,
             achievedAt: achievedAt,
-            isCurrent: isCurrent,
-            wasReset: wasReset,
             entryType: entryType
         )
         try performanceDataAccess.savePersonalBest(pb)
         return pb
+    }
+
+    private func derivedCurrentPB(
+        memberPerformance: DefaultMemberPerformance,
+        exerciseId: UUID
+    ) throws -> PersonalBestModel? {
+        try memberPerformance.deriveExerciseReadState(
+            memberId: testMemberId,
+            exerciseId: exerciseId
+        ).currentPB
     }
 
     private func mondayCalendar() -> Calendar {
@@ -123,7 +130,6 @@ struct MemberPerformanceTests {
         #expect(result.newPBs.count == 1)
         #expect(result.newPBs.first?.exerciseId == freeSquatId)
         #expect(result.newPBs.first?.entryType == .sessionDerived)
-        #expect(result.newPBs.first?.isCurrent == true)
     }
 
     @Test
@@ -149,12 +155,11 @@ struct MemberPerformanceTests {
         )
 
         #expect(result.newPBs.isEmpty)
-        let currentPB = try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        let currentPB = try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: freeSquatId
         )
         #expect(currentPB?.weight == 100.0)
-        #expect(currentPB?.isCurrent == true)
     }
 
     @Test
@@ -162,11 +167,12 @@ struct MemberPerformanceTests {
         let test = try makeMemberPerformance()
         let freeSquatId = seedExerciseId(named: "Free Squat")
 
-        let oldPB = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 80.0,
-            reps: 5
+        let earlierSession = makeSession(date: Date().addingTimeInterval(-86_400))
+        let earlierEntry = makeEntry(sessionId: earlierSession.id, exerciseId: freeSquatId)
+        _ = try test.memberPerformance.saveSession(
+            earlierSession,
+            entries: [earlierEntry],
+            sets: [earlierEntry.id: [makeSet(exerciseEntryId: earlierEntry.id, weight: 80.0, reps: 5)]]
         )
 
         let session = makeSession()
@@ -182,14 +188,19 @@ struct MemberPerformanceTests {
         #expect(result.newPBs.count == 1)
         #expect(result.newPBs.first?.weight == 85.0)
         #expect(result.newPBs.first?.reps == 5)
-        #expect(result.newPBs.first?.isCurrent == true)
 
-        let allPBs = try test.performanceDataAccess.fetchAllPBs(
-            memberId: testMemberId,
+        let currentPB = try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: freeSquatId
         )
-        #expect(allPBs.count == 2)
-        #expect(allPBs.first(where: { $0.id == oldPB.id })?.isCurrent == false)
+        #expect(currentPB?.weight == 85.0)
+        #expect(currentPB?.setId == set.id)
+        #expect(
+            try test.performanceDataAccess.fetchAllPBs(
+                memberId: testMemberId,
+                exerciseId: freeSquatId
+            ).isEmpty
+        )
     }
 
     @Test
@@ -214,7 +225,6 @@ struct MemberPerformanceTests {
         )
 
         #expect(result.newPBs.count == 2)
-        #expect(result.newPBs.allSatisfy { $0.isCurrent == true })
     }
 
     @Test
@@ -300,8 +310,8 @@ struct MemberPerformanceTests {
             sets: [entry.id: [set]]
         )
 
-        let pbBeforeUpdate = try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        let pbBeforeUpdate = try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: freeSquatId
         )
 
@@ -310,8 +320,8 @@ struct MemberPerformanceTests {
         try test.memberPerformance.updateSession(session)
 
         let fetchedSession = try test.performanceDataAccess.fetchSession(id: session.id)
-        let pbAfterUpdate = try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        let pbAfterUpdate = try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: freeSquatId
         )
 
@@ -342,11 +352,14 @@ struct MemberPerformanceTests {
         #expect(result.personalBest != nil)
         #expect(result.personalBest?.entryType == .manualEntry)
         #expect(result.personalBest?.setId == nil)
-        #expect(result.personalBest?.isCurrent == true)
         #expect(
-            Calendar.current.isDate(result.personalBest!.achievedAt, inSameDayAs: Date()),
+            Calendar.current.isDate(result.personalBest!.achievedAt!, inSameDayAs: Date()),
             "Expected achievedAt to be today's date"
         )
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
+            exerciseId: freeSquatId
+        )?.id == result.personalBest?.id)
     }
 
     @Test
@@ -372,13 +385,17 @@ struct MemberPerformanceTests {
         )
 
         #expect(result.isNewPB == true)
-        #expect(result.personalBest?.isCurrent == true)
 
-        let superseded = try test.performanceDataAccess.fetchAllPBs(
+        let allPBs = try test.performanceDataAccess.fetchAllPBs(
             memberId: testMemberId,
             exerciseId: freeSquatId
-        ).first(where: { $0.id == oldPB.id })
-        #expect(superseded?.isCurrent == false)
+        )
+        #expect(allPBs.count == 2)
+        #expect(allPBs.contains { $0.id == oldPB.id })
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
+            exerciseId: freeSquatId
+        )?.id == result.personalBest?.id)
     }
 
     @Test
@@ -406,8 +423,8 @@ struct MemberPerformanceTests {
         #expect(result.isNewPB == false)
         #expect(result.personalBest == nil)
 
-        let currentPB = try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        let currentPB = try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: freeSquatId
         )
         #expect(currentPB?.id == existingPB.id)
@@ -462,9 +479,12 @@ struct MemberPerformanceTests {
             exerciseId: freeSquatId
         )
 
-        #expect(allPBs.count == 2)
-        #expect(allPBs.contains(where: { $0.entryType == .manualEntry }))
-        #expect(allPBs.contains(where: { $0.entryType == .sessionDerived && $0.isCurrent == true }))
+        #expect(allPBs.count == 1)
+        #expect(allPBs.first?.entryType == .manualEntry)
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
+            exerciseId: freeSquatId
+        )?.weight == 85.0)
     }
 
     // MARK: -- Progression Views
@@ -484,14 +504,14 @@ struct MemberPerformanceTests {
         test.context.insert(conditioningExercise)
         try test.context.save()
 
-        _ = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
+        try seedSetForDerivation(
+            test: test,
             exerciseId: freeSquatId,
             weight: 80.0,
             reps: 5
         )
-        _ = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
+        try seedSetForDerivation(
+            test: test,
             exerciseId: conditioningExercise.id,
             time: 90.0
         )
@@ -507,26 +527,25 @@ struct MemberPerformanceTests {
         let test = try makeMemberPerformance()
         let freeSquatId = seedExerciseId(named: "Free Squat")
 
-        _ = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
+        try seedSetForDerivation(
+            test: test,
             exerciseId: freeSquatId,
             weight: 70.0,
             reps: 5,
-            isCurrent: false
+            achievedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
-        _ = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
+        try seedSetForDerivation(
+            test: test,
             exerciseId: freeSquatId,
             weight: 80.0,
             reps: 5,
-            isCurrent: true
+            achievedAt: Date(timeIntervalSince1970: 1_700_086_400)
         )
 
         let currentPBs = try test.memberPerformance.currentPBs(memberId: testMemberId)
 
         #expect(currentPBs.count == 1)
         #expect(currentPBs.first?.weight == 80.0)
-        #expect(currentPBs.first?.isCurrent == true)
     }
 
     @Test
@@ -535,14 +554,14 @@ struct MemberPerformanceTests {
         let overheadPressId = seedExerciseId(named: "Overhead Press")
         let freeSquatId = seedExerciseId(named: "Free Squat")
 
-        _ = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
+        try seedSetForDerivation(
+            test: test,
             exerciseId: freeSquatId,
             weight: 80.0,
             reps: 5
         )
-        _ = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
+        try seedSetForDerivation(
+            test: test,
             exerciseId: overheadPressId,
             weight: 50.0,
             reps: 5
@@ -553,6 +572,30 @@ struct MemberPerformanceTests {
         #expect(currentPBs.count == 2)
         #expect(currentPBs[0].exerciseId == overheadPressId)
         #expect(currentPBs[1].exerciseId == freeSquatId)
+    }
+
+    private func seedSetForDerivation(
+        test: TestContext,
+        exerciseId: UUID,
+        weight: Double? = nil,
+        reps: Int? = nil,
+        time: Double? = nil,
+        distance: Double? = nil,
+        achievedAt: Date = Date()
+    ) throws {
+        let session = SessionModel(memberId: testMemberId, date: achievedAt)
+        let entry = ExerciseEntryModel(sessionId: session.id, exerciseId: exerciseId)
+        let set = ModelSet(
+            exerciseEntryId: entry.id,
+            weight: weight,
+            reps: reps,
+            time: time,
+            distance: distance
+        )
+        test.context.insert(session)
+        test.context.insert(entry)
+        test.context.insert(set)
+        try test.context.save()
     }
 
     @Test
@@ -572,24 +615,21 @@ struct MemberPerformanceTests {
             exerciseId: freeSquatId,
             weight: 70.0,
             reps: 5,
-            achievedAt: eightMonthsAgo,
-            isCurrent: false
+            achievedAt: eightMonthsAgo
         )
         _ = try saveExistingPB(
             performanceDataAccess: test.performanceDataAccess,
             exerciseId: freeSquatId,
             weight: 75.0,
             reps: 5,
-            achievedAt: fiveMonthsAgo,
-            isCurrent: false
+            achievedAt: fiveMonthsAgo
         )
         _ = try saveExistingPB(
             performanceDataAccess: test.performanceDataAccess,
             exerciseId: freeSquatId,
             weight: 80.0,
             reps: 5,
-            achievedAt: oneMonthAgo,
-            isCurrent: true
+            achievedAt: oneMonthAgo
         )
 
         let progression = try test.memberPerformance.pbProgression(
@@ -600,7 +640,8 @@ struct MemberPerformanceTests {
 
         #expect(progression.count == 2)
         #expect(progression.map(\.weight) == [75.0, 80.0])
-        #expect(progression.map(\.achievedAt) == progression.map(\.achievedAt).sorted())
+        let dates = progression.compactMap(\.achievedAt)
+        #expect(dates == dates.sorted())
     }
 
     @Test
@@ -892,69 +933,42 @@ struct MemberPerformanceTests {
         try test.memberPerformance.deleteSession(id: session.id, memberId: testMemberId)
 
         #expect(try test.performanceDataAccess.fetchSession(id: session.id) == nil)
-        #expect(try test.performanceDataAccess.fetchCurrentPB(memberId: testMemberId, exerciseId: freeSquatId) == nil)
-        #expect(try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId).isEmpty)
-    }
-
-    @Test
-    func testTC_MP28_DeleteSessionContainingPBRestoresPreviousPB() throws {
-        let test = try makeMemberPerformance()
-        let freeSquatId = seedExerciseId(named: "Free Squat")
-
-        let oldPB = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 80.0,
-            reps: 5,
-            isCurrent: false
-        )
-
-        let session = makeSession()
-        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
-        _ = try test.memberPerformance.saveSession(
-            session,
-            entries: [entry],
-            sets: [entry.id: [makeSet(exerciseEntryId: entry.id, weight: 85.0, reps: 5)]]
-        )
-
-        try test.memberPerformance.deleteSession(id: session.id, memberId: testMemberId)
-
-        #expect(try test.performanceDataAccess.fetchSession(id: session.id) == nil)
-        let currentPB = try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: freeSquatId
-        )
-        #expect(currentPB?.id == oldPB.id)
-        #expect(currentPB?.isCurrent == true)
-        #expect(currentPB?.weight == 80.0)
+        ) == nil)
+        #expect(try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId).isEmpty)
     }
 
     // MARK: -- PB Management
 
     @Test
-    func testTC_MP29_ResetCurrentPBSetsIsCurrentToFalse() throws {
+    func testTC_MP29_ResetCurrentPBCreatesExerciseResetAndClearsDerivedCurrent() throws {
         let test = try makeMemberPerformance()
         let freeSquatId = seedExerciseId(named: "Free Squat")
-        let pb = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
+
+        try seedSetForDerivation(
+            test: test,
             exerciseId: freeSquatId,
             weight: 85.0,
             reps: 5
         )
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
+            exerciseId: freeSquatId
+        )?.weight == 85.0)
 
         try test.memberPerformance.resetCurrentPB(memberId: testMemberId, exerciseId: freeSquatId)
 
-        #expect(try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
-            exerciseId: freeSquatId
-        ) == nil)
-        let history = try test.performanceDataAccess.fetchAllPBs(
+        let reset = try test.performanceDataAccess.fetchExerciseReset(
             memberId: testMemberId,
             exerciseId: freeSquatId
         )
-        #expect(history.contains { $0.id == pb.id })
-        #expect(history.first { $0.id == pb.id }?.isCurrent == false)
-        #expect(history.first { $0.id == pb.id }?.wasReset == true)
+        #expect(reset != nil)
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
+            exerciseId: freeSquatId
+        ) == nil)
     }
 
     @Test
@@ -968,6 +982,10 @@ struct MemberPerformanceTests {
             memberId: testMemberId,
             exerciseId: freeSquatId
         ).isEmpty)
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
+            exerciseId: freeSquatId
+        ) == nil)
     }
 
     @Test
@@ -978,8 +996,7 @@ struct MemberPerformanceTests {
             performanceDataAccess: test.performanceDataAccess,
             exerciseId: freeSquatId,
             weight: 85.0,
-            reps: 5,
-            isCurrent: false
+            reps: 5
         )
 
         try test.memberPerformance.deletePersonalBest(
@@ -992,43 +1009,6 @@ struct MemberPerformanceTests {
             memberId: testMemberId,
             exerciseId: freeSquatId
         ).isEmpty)
-    }
-
-    @Test
-    func testTC_MP32_DeletePersonalBestRestoresPreviousPBWhenDeletingCurrent() throws {
-        let test = try makeMemberPerformance()
-        let freeSquatId = seedExerciseId(named: "Free Squat")
-        let historical = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 80.0,
-            reps: 5,
-            achievedAt: Date().addingTimeInterval(-86_400),
-            isCurrent: false
-        )
-        let current = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 85.0,
-            reps: 5
-        )
-
-        try test.memberPerformance.deletePersonalBest(
-            id: current.id,
-            memberId: testMemberId,
-            exerciseId: freeSquatId
-        )
-
-        let restored = try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
-            exerciseId: freeSquatId
-        )
-        #expect(restored?.id == historical.id)
-        #expect(restored?.isCurrent == true)
-        #expect(try test.performanceDataAccess.fetchAllPBs(
-            memberId: testMemberId,
-            exerciseId: freeSquatId
-        ).contains { $0.id == historical.id })
     }
 
     @Test
@@ -1048,8 +1028,8 @@ struct MemberPerformanceTests {
             exerciseId: freeSquatId
         )
 
-        #expect(try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: freeSquatId
         ) == nil)
         #expect(try test.performanceDataAccess.fetchAllPBs(
@@ -1090,8 +1070,8 @@ struct MemberPerformanceTests {
 
         #expect(try test.performanceDataAccess.fetchSession(id: session.id) != nil)
         #expect(try test.performanceDataAccess.fetchSets(exerciseEntryId: entry.id).isEmpty)
-        let currentPB = try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        let currentPB = try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: freeSquatId
         )
         #expect(currentPB?.weight == 100)
@@ -1101,44 +1081,47 @@ struct MemberPerformanceTests {
     func testTC_MP35_DeleteSessionDerivedPBRemovesSetAndRestoresPreviousPB() throws {
         let test = try makeMemberPerformance()
         let freeSquatId = seedExerciseId(named: "Free Squat")
+        let calendar = Calendar.current
+        let earlier = calendar.date(byAdding: .day, value: -10, to: Date())!
+        let later = calendar.date(byAdding: .day, value: -5, to: Date())!
 
-        let previousPB = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 80.0,
-            reps: 5,
-            achievedAt: Date().addingTimeInterval(-86_400),
-            isCurrent: false
-        )
-
-        let session = makeSession()
-        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
-        let set = makeSet(exerciseEntryId: entry.id, weight: 85.0, reps: 5)
+        let earlierSession = makeSession(date: earlier)
+        let earlierEntry = makeEntry(sessionId: earlierSession.id, exerciseId: freeSquatId)
+        let earlierSet = makeSet(exerciseEntryId: earlierEntry.id, weight: 80.0, reps: 5)
         _ = try test.memberPerformance.saveSession(
-            session,
-            entries: [entry],
-            sets: [entry.id: [set]]
+            earlierSession,
+            entries: [earlierEntry],
+            sets: [earlierEntry.id: [earlierSet]]
         )
 
-        let currentPB = try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        let laterSession = makeSession(date: later)
+        let laterEntry = makeEntry(sessionId: laterSession.id, exerciseId: freeSquatId)
+        let laterSet = makeSet(exerciseEntryId: laterEntry.id, weight: 85.0, reps: 5)
+        _ = try test.memberPerformance.saveSession(
+            laterSession,
+            entries: [laterEntry],
+            sets: [laterEntry.id: [laterSet]]
+        )
+
+        let currentPB = try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: freeSquatId
         )
-        #expect(currentPB?.setId == set.id)
+        #expect(currentPB?.setId == laterSet.id)
 
         try test.memberPerformance.deleteHistoryEntry(
-            setId: set.id,
-            personalBestId: currentPB?.id,
+            setId: laterSet.id,
+            personalBestId: nil,
             memberId: testMemberId,
             exerciseId: freeSquatId
         )
 
-        #expect(try test.performanceDataAccess.fetchSets(exerciseEntryId: entry.id).isEmpty)
-        let restoredPB = try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        #expect(try test.performanceDataAccess.fetchSets(exerciseEntryId: laterEntry.id).isEmpty)
+        let restoredPB = try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: freeSquatId
         )
-        #expect(restoredPB?.id == previousPB.id)
+        #expect(restoredPB?.setId == earlierSet.id)
         #expect(restoredPB?.weight == 80.0)
     }
 
@@ -1161,8 +1144,8 @@ struct MemberPerformanceTests {
             exerciseId: freeSquatId
         )
 
-        #expect(try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: freeSquatId
         ) == nil)
         #expect(try test.performanceDataAccess.fetchAllPBs(
@@ -1197,15 +1180,15 @@ struct MemberPerformanceTests {
             sets: [laterEntry.id: [laterSet]]
         )
 
-        let currentPB = try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        let currentPB = try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: freeSquatId
         )
         #expect(currentPB?.setId == laterSet.id)
 
         try test.memberPerformance.deleteHistoryEntry(
             setId: laterSet.id,
-            personalBestId: currentPB?.id,
+            personalBestId: nil,
             memberId: testMemberId,
             exerciseId: freeSquatId
         )
@@ -1213,7 +1196,7 @@ struct MemberPerformanceTests {
         let boardPBs = try test.memberPerformance.currentPBs(memberId: testMemberId)
         let restored = boardPBs.first { $0.exerciseId == freeSquatId }
         #expect(restored?.weight == 80.0)
-        #expect(restored?.isCurrent == true)
+        #expect(restored?.setId == earlierSet.id)
     }
 
     @Test
@@ -1226,16 +1209,13 @@ struct MemberPerformanceTests {
             exerciseId: freeSquatId,
             weight: 80.0,
             reps: 5,
-            achievedAt: Date().addingTimeInterval(-86_400),
-            isCurrent: false,
-            entryType: .manualEntry
+            achievedAt: Date().addingTimeInterval(-86_400)
         )
         let current = try saveExistingPB(
             performanceDataAccess: test.performanceDataAccess,
             exerciseId: freeSquatId,
             weight: 100.0,
-            reps: 5,
-            entryType: .manualEntry
+            reps: 5
         )
 
         try test.memberPerformance.deleteHistoryEntry(
@@ -1249,155 +1229,6 @@ struct MemberPerformanceTests {
         let restored = boardPBs.first { $0.exerciseId == freeSquatId }
         #expect(restored?.id == historical.id)
         #expect(restored?.weight == 80.0)
-        #expect(restored?.isCurrent == true)
-    }
-
-    // MARK: -- Reset and cascade transparency
-
-    @Test
-    func testTC_MP39_ResetCurrentPBSetsWasResetToTrue() throws {
-        let test = try makeMemberPerformance()
-        let freeSquatId = seedExerciseId(named: "Free Squat")
-        let pb = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 85.0,
-            reps: 5
-        )
-
-        try test.memberPerformance.resetCurrentPB(memberId: testMemberId, exerciseId: freeSquatId)
-
-        let history = try test.performanceDataAccess.fetchAllPBs(
-            memberId: testMemberId,
-            exerciseId: freeSquatId
-        )
-        #expect(history.first { $0.id == pb.id }?.wasReset == true)
-        #expect(history.first { $0.id == pb.id }?.isCurrent == false)
-    }
-
-    @Test
-    func testTC_MP40_CascadeAfterDeletionSkipsResetRecords() throws {
-        let test = try makeMemberPerformance()
-        let freeSquatId = seedExerciseId(named: "Free Squat")
-        let calendar = Calendar.current
-
-        _ = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 100.0,
-            reps: 5,
-            achievedAt: calendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!,
-            isCurrent: false,
-            wasReset: true
-        )
-        let febPB = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 80.0,
-            reps: 5,
-            achievedAt: calendar.date(from: DateComponents(year: 2024, month: 2, day: 1))!,
-            isCurrent: false
-        )
-        let marPB = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 60.0,
-            reps: 5,
-            achievedAt: calendar.date(from: DateComponents(year: 2024, month: 3, day: 1))!,
-            isCurrent: true
-        )
-
-        try test.memberPerformance.deletePersonalBest(
-            id: marPB.id,
-            memberId: testMemberId,
-            exerciseId: freeSquatId
-        )
-
-        let currentPB = try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
-            exerciseId: freeSquatId
-        )
-        #expect(currentPB?.id == febPB.id)
-        #expect(currentPB?.weight == 80.0)
-    }
-
-    @Test
-    func testTC_MP41_CascadeRestoresBestNonResetRecordNotMostRecent() throws {
-        let test = try makeMemberPerformance()
-        let freeSquatId = seedExerciseId(named: "Free Squat")
-        let calendar = Calendar.current
-
-        let janPB = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 80.0,
-            reps: 5,
-            achievedAt: calendar.date(from: DateComponents(year: 2024, month: 1, day: 1))!,
-            isCurrent: false
-        )
-        _ = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 60.0,
-            reps: 5,
-            achievedAt: calendar.date(from: DateComponents(year: 2024, month: 2, day: 1))!,
-            isCurrent: false
-        )
-        let marPB = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 70.0,
-            reps: 5,
-            achievedAt: calendar.date(from: DateComponents(year: 2024, month: 3, day: 1))!,
-            isCurrent: true
-        )
-
-        try test.memberPerformance.deletePersonalBest(
-            id: marPB.id,
-            memberId: testMemberId,
-            exerciseId: freeSquatId
-        )
-
-        let currentPB = try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
-            exerciseId: freeSquatId
-        )
-        #expect(currentPB?.id == janPB.id)
-        #expect(currentPB?.weight == 80.0)
-    }
-
-    @Test
-    func testTC_MP42_CascadeShowsNoCurrentPBWhenOnlyResetRecordsRemain() throws {
-        let test = try makeMemberPerformance()
-        let freeSquatId = seedExerciseId(named: "Free Squat")
-
-        _ = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 100.0,
-            reps: 5,
-            achievedAt: Date().addingTimeInterval(-86_400),
-            isCurrent: false,
-            wasReset: true
-        )
-        let currentReset = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 90.0,
-            reps: 5,
-            wasReset: true
-        )
-
-        try test.memberPerformance.deletePersonalBest(
-            id: currentReset.id,
-            memberId: testMemberId,
-            exerciseId: freeSquatId
-        )
-
-        #expect(try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
-            exerciseId: freeSquatId
-        ) == nil)
     }
 
     @Test
@@ -1418,8 +1249,33 @@ struct MemberPerformanceTests {
         )
 
         #expect(result.isNewPB == true)
-        #expect(calendar.isDate(result.personalBest!.achievedAt, inSameDayAs: specifiedDate))
-        #expect(!calendar.isDate(result.personalBest!.achievedAt, inSameDayAs: Date()))
+        #expect(calendar.isDate(result.personalBest!.achievedAt!, inSameDayAs: specifiedDate))
+        #expect(!calendar.isDate(result.personalBest!.achievedAt!, inSameDayAs: Date()))
+    }
+
+    @Test
+    func testTC_MP43b_UndatedManualPBStoresNilAchievedAt() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+
+        let result = try test.memberPerformance.recordManualPB(
+            exerciseId: freeSquatId,
+            memberId: testMemberId,
+            weight: 90.0,
+            reps: 5,
+            time: nil,
+            distance: nil,
+            achievedAt: nil
+        )
+
+        #expect(result.isNewPB == true)
+        #expect(result.personalBest?.achievedAt == nil)
+        let derived = try test.memberPerformance.deriveExerciseReadState(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        )
+        #expect(derived.currentPB == nil, "Undated manuals are never current")
+        #expect(derived.lifetimePB?.id == result.personalBest?.id)
     }
 
     @Test
@@ -1449,7 +1305,7 @@ struct MemberPerformanceTests {
 
         #expect(progression.count == 1)
         #expect(progression[0].id == result.personalBest!.id)
-        #expect(calendar.isDate(progression[0].achievedAt, inSameDayAs: sixMonthsAgo))
+        #expect(calendar.isDate(progression[0].achievedAt!, inSameDayAs: sixMonthsAgo))
     }
 }
 
@@ -1478,7 +1334,8 @@ final class MemberPerformanceTests: XCTestCase {
         let performanceDataAccess = SwiftDataPerformanceDataAccess(context: context)
         let memberPerformance = DefaultMemberPerformance(
             exerciseRegistry: exerciseRegistry,
-            performanceDataAccess: performanceDataAccess
+            performanceDataAccess: performanceDataAccess,
+            modelContext: context
         )
         return TestContext(
             memberPerformance: memberPerformance,
@@ -1527,25 +1384,55 @@ final class MemberPerformanceTests: XCTestCase {
         time: Double? = nil,
         distance: Double? = nil,
         achievedAt: Date = Date(),
-        isCurrent: Bool = true,
-        wasReset: Bool = false,
-        entryType: PBEntryType = .sessionDerived
+        entryType: PBEntryType = .manualEntry
     ) throws -> PersonalBestModel {
         let pb = PersonalBestModel(
             memberId: testMemberId,
             exerciseId: exerciseId,
-            setId: UUID(),
+            setId: nil,
             weight: weight,
             reps: reps,
             time: time,
             distance: distance,
             achievedAt: achievedAt,
-            isCurrent: isCurrent,
-            wasReset: wasReset,
             entryType: entryType
         )
         try performanceDataAccess.savePersonalBest(pb)
         return pb
+    }
+
+    private func derivedCurrentPB(
+        memberPerformance: DefaultMemberPerformance,
+        exerciseId: UUID
+    ) throws -> PersonalBestModel? {
+        try memberPerformance.deriveExerciseReadState(
+            memberId: testMemberId,
+            exerciseId: exerciseId
+        ).currentPB
+    }
+
+    private func seedSetForDerivation(
+        test: TestContext,
+        exerciseId: UUID,
+        weight: Double? = nil,
+        reps: Int? = nil,
+        time: Double? = nil,
+        distance: Double? = nil,
+        achievedAt: Date = Date()
+    ) throws {
+        let session = SessionModel(memberId: testMemberId, date: achievedAt)
+        let entry = ExerciseEntryModel(sessionId: session.id, exerciseId: exerciseId)
+        let set = ModelSet(
+            exerciseEntryId: entry.id,
+            weight: weight,
+            reps: reps,
+            time: time,
+            distance: distance
+        )
+        test.context.insert(session)
+        test.context.insert(entry)
+        test.context.insert(set)
+        try test.context.save()
     }
 
     private func mondayCalendar() -> Calendar {
@@ -1566,7 +1453,6 @@ final class MemberPerformanceTests: XCTestCase {
         XCTAssertNotNil(try test.performanceDataAccess.fetchSession(id: session.id))
         XCTAssertEqual(result.newPBs.count, 1)
         XCTAssertEqual(result.newPBs.first?.entryType, .sessionDerived)
-        XCTAssertTrue(result.newPBs.first?.isCurrent == true)
     }
 
     func testTC_MP2_SaveASessionWhereNoPBIsAchieved() throws {
@@ -1583,25 +1469,34 @@ final class MemberPerformanceTests: XCTestCase {
         )
 
         XCTAssertTrue(result.newPBs.isEmpty)
+        XCTAssertEqual(try derivedCurrentPB(memberPerformance: test.memberPerformance, exerciseId: freeSquatId)?.weight, 100.0)
     }
 
     func testTC_MP3_SaveASessionThatBeatsAnExistingPB() throws {
         let test = try makeMemberPerformance()
         let freeSquatId = seedExerciseId(named: "Free Squat")
-        let oldPB = try saveExistingPB(performanceDataAccess: test.performanceDataAccess, exerciseId: freeSquatId, weight: 80.0, reps: 5)
+
+        let earlierSession = makeSession(date: Date().addingTimeInterval(-86_400))
+        let earlierEntry = makeEntry(sessionId: earlierSession.id, exerciseId: freeSquatId)
+        _ = try test.memberPerformance.saveSession(
+            earlierSession,
+            entries: [earlierEntry],
+            sets: [earlierEntry.id: [makeSet(exerciseEntryId: earlierEntry.id, weight: 80.0, reps: 5)]]
+        )
 
         let session = makeSession()
         let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
+        let set = makeSet(exerciseEntryId: entry.id, weight: 85.0, reps: 5)
         let result = try test.memberPerformance.saveSession(
             session,
             entries: [entry],
-            sets: [entry.id: [makeSet(exerciseEntryId: entry.id, weight: 85.0, reps: 5)]]
+            sets: [entry.id: [set]]
         )
 
         XCTAssertEqual(result.newPBs.count, 1)
-        let allPBs = try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId)
-        XCTAssertEqual(allPBs.count, 2)
-        XCTAssertFalse(allPBs.first(where: { $0.id == oldPB.id })?.isCurrent ?? true)
+        XCTAssertEqual(try derivedCurrentPB(memberPerformance: test.memberPerformance, exerciseId: freeSquatId)?.weight, 85.0)
+        XCTAssertEqual(try derivedCurrentPB(memberPerformance: test.memberPerformance, exerciseId: freeSquatId)?.setId, set.id)
+        XCTAssertTrue(try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId).isEmpty)
     }
 
     func testTC_MP4_SaveASessionWithMultipleExercisesMultiplePBs() throws {
@@ -1677,11 +1572,11 @@ final class MemberPerformanceTests: XCTestCase {
             entries: [entry],
             sets: [entry.id: [makeSet(exerciseEntryId: entry.id, weight: 80.0, reps: 5)]]
         )
-        let pbBefore = try test.performanceDataAccess.fetchCurrentPB(memberId: testMemberId, exerciseId: freeSquatId)
+        let pbBefore = try derivedCurrentPB(memberPerformance: test.memberPerformance, exerciseId: freeSquatId)
         session.notes = "Updated notes"
         try test.memberPerformance.updateSession(session)
-        let pbAfter = try test.performanceDataAccess.fetchCurrentPB(memberId: testMemberId, exerciseId: freeSquatId)
-        XCTAssertEqual(pbAfter?.id, pbBefore?.id)
+        let pbAfter = try derivedCurrentPB(memberPerformance: test.memberPerformance, exerciseId: freeSquatId)
+        XCTAssertEqual(pbAfter?.setId, pbBefore?.setId)
     }
 
     func testTC_MP9_RecordAManualPBWithNoExistingPB() throws {
@@ -1714,9 +1609,8 @@ final class MemberPerformanceTests: XCTestCase {
             achievedAt: Date()
         )
         XCTAssertTrue(result.isNewPB)
-        let superseded = try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId)
-            .first(where: { $0.id == oldPB.id })
-        XCTAssertFalse(superseded?.isCurrent ?? true)
+        XCTAssertEqual(try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId).count, 2)
+        XCTAssertEqual(try derivedCurrentPB(memberPerformance: test.memberPerformance, exerciseId: freeSquatId)?.id, result.personalBest?.id)
     }
 
     func testTC_MP11_RecordAManualPBThatDoesNotBeatExistingPB() throws {
@@ -1771,7 +1665,8 @@ final class MemberPerformanceTests: XCTestCase {
             sets: [entry.id: [makeSet(exerciseEntryId: entry.id, weight: 85.0, reps: 5)]]
         )
         let allPBs = try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId)
-        XCTAssertEqual(allPBs.count, 2)
+        XCTAssertEqual(allPBs.count, 1)
+        XCTAssertEqual(try derivedCurrentPB(memberPerformance: test.memberPerformance, exerciseId: freeSquatId)?.weight, 85.0)
     }
 
     func testTC_MP14_CurrentPBsReturnsOnlyPbExerciseExercises() throws {
@@ -1786,8 +1681,8 @@ final class MemberPerformanceTests: XCTestCase {
         )
         test.context.insert(conditioningExercise)
         try test.context.save()
-        try saveExistingPB(performanceDataAccess: test.performanceDataAccess, exerciseId: freeSquatId, weight: 80.0, reps: 5)
-        try saveExistingPB(performanceDataAccess: test.performanceDataAccess, exerciseId: conditioningExercise.id, time: 90.0)
+        try seedSetForDerivation(test: test, exerciseId: freeSquatId, weight: 80.0, reps: 5)
+        try seedSetForDerivation(test: test, exerciseId: conditioningExercise.id, time: 90.0)
         let currentPBs = try test.memberPerformance.currentPBs(memberId: testMemberId)
         XCTAssertEqual(currentPBs.count, 1)
     }
@@ -1795,8 +1690,20 @@ final class MemberPerformanceTests: XCTestCase {
     func testTC_MP15_CurrentPBsReturnsOneRecordPerExercise() throws {
         let test = try makeMemberPerformance()
         let freeSquatId = seedExerciseId(named: "Free Squat")
-        try saveExistingPB(performanceDataAccess: test.performanceDataAccess, exerciseId: freeSquatId, weight: 70.0, reps: 5, isCurrent: false)
-        try saveExistingPB(performanceDataAccess: test.performanceDataAccess, exerciseId: freeSquatId, weight: 80.0, reps: 5, isCurrent: true)
+        try seedSetForDerivation(
+            test: test,
+            exerciseId: freeSquatId,
+            weight: 70.0,
+            reps: 5,
+            achievedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        try seedSetForDerivation(
+            test: test,
+            exerciseId: freeSquatId,
+            weight: 80.0,
+            reps: 5,
+            achievedAt: Date(timeIntervalSince1970: 1_700_086_400)
+        )
         let currentPBs = try test.memberPerformance.currentPBs(memberId: testMemberId)
         XCTAssertEqual(currentPBs.count, 1)
         XCTAssertEqual(currentPBs.first?.weight, 80.0)
@@ -1815,9 +1722,9 @@ final class MemberPerformanceTests: XCTestCase {
         let freeSquatId = seedExerciseId(named: "Free Squat")
         let calendar = Calendar.current
         let now = Date()
-        try saveExistingPB(performanceDataAccess: test.performanceDataAccess, exerciseId: freeSquatId, weight: 70.0, reps: 5, achievedAt: calendar.date(byAdding: .month, value: -8, to: now)!, isCurrent: false)
-        try saveExistingPB(performanceDataAccess: test.performanceDataAccess, exerciseId: freeSquatId, weight: 75.0, reps: 5, achievedAt: calendar.date(byAdding: .month, value: -5, to: now)!, isCurrent: false)
-        try saveExistingPB(performanceDataAccess: test.performanceDataAccess, exerciseId: freeSquatId, weight: 80.0, reps: 5, achievedAt: calendar.date(byAdding: .month, value: -1, to: now)!, isCurrent: true)
+        try saveExistingPB(performanceDataAccess: test.performanceDataAccess, exerciseId: freeSquatId, weight: 70.0, reps: 5, achievedAt: calendar.date(byAdding: .month, value: -8, to: now)!)
+        try saveExistingPB(performanceDataAccess: test.performanceDataAccess, exerciseId: freeSquatId, weight: 75.0, reps: 5, achievedAt: calendar.date(byAdding: .month, value: -5, to: now)!)
+        try saveExistingPB(performanceDataAccess: test.performanceDataAccess, exerciseId: freeSquatId, weight: 80.0, reps: 5, achievedAt: calendar.date(byAdding: .month, value: -1, to: now)!)
         let progression = try test.memberPerformance.pbProgression(
             memberId: testMemberId,
             exerciseId: freeSquatId,
@@ -2054,58 +1961,19 @@ final class MemberPerformanceTests: XCTestCase {
         try test.memberPerformance.deleteSession(id: session.id, memberId: testMemberId)
 
         XCTAssertNil(try test.performanceDataAccess.fetchSession(id: session.id))
-        XCTAssertNil(try test.performanceDataAccess.fetchCurrentPB(memberId: testMemberId, exerciseId: freeSquatId))
+        XCTAssertNil(try derivedCurrentPB(memberPerformance: test.memberPerformance, exerciseId: freeSquatId))
         XCTAssertTrue(try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId).isEmpty)
     }
 
-    func testTC_MP28_DeleteSessionContainingPBRestoresPreviousPB() throws {
+    func testTC_MP29_ResetCurrentPBCreatesExerciseResetAndClearsDerivedCurrent() throws {
         let test = try makeMemberPerformance()
         let freeSquatId = seedExerciseId(named: "Free Squat")
-
-        let oldPB = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 80.0,
-            reps: 5,
-            isCurrent: false
-        )
-
-        let session = makeSession()
-        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
-        _ = try test.memberPerformance.saveSession(
-            session,
-            entries: [entry],
-            sets: [entry.id: [makeSet(exerciseEntryId: entry.id, weight: 85.0, reps: 5)]]
-        )
-
-        try test.memberPerformance.deleteSession(id: session.id, memberId: testMemberId)
-
-        XCTAssertNil(try test.performanceDataAccess.fetchSession(id: session.id))
-        let currentPB = try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
-            exerciseId: freeSquatId
-        )
-        XCTAssertEqual(currentPB?.id, oldPB.id)
-        XCTAssertTrue(currentPB?.isCurrent == true)
-        XCTAssertEqual(currentPB?.weight, 80.0)
-    }
-
-    func testTC_MP29_ResetCurrentPBSetsIsCurrentToFalse() throws {
-        let test = try makeMemberPerformance()
-        let freeSquatId = seedExerciseId(named: "Free Squat")
-        let pb = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 85.0,
-            reps: 5
-        )
+        try seedSetForDerivation(test: test, exerciseId: freeSquatId, weight: 85.0, reps: 5)
 
         try test.memberPerformance.resetCurrentPB(memberId: testMemberId, exerciseId: freeSquatId)
 
-        XCTAssertNil(try test.performanceDataAccess.fetchCurrentPB(memberId: testMemberId, exerciseId: freeSquatId))
-        let history = try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId)
-        XCTAssertTrue(history.contains { $0.id == pb.id })
-        XCTAssertFalse(history.first { $0.id == pb.id }?.isCurrent == true)
+        XCTAssertNotNil(try test.performanceDataAccess.fetchExerciseReset(memberId: testMemberId, exerciseId: freeSquatId))
+        XCTAssertNil(try derivedCurrentPB(memberPerformance: test.memberPerformance, exerciseId: freeSquatId))
     }
 
     func testTC_MP30_ResetCurrentPBHasNoEffectWhenNoCurrentPBExists() throws {
@@ -2115,6 +1983,7 @@ final class MemberPerformanceTests: XCTestCase {
         try test.memberPerformance.resetCurrentPB(memberId: testMemberId, exerciseId: freeSquatId)
 
         XCTAssertTrue(try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId).isEmpty)
+        XCTAssertNil(try derivedCurrentPB(memberPerformance: test.memberPerformance, exerciseId: freeSquatId))
     }
 
     func testTC_MP31_DeletePersonalBestRemovesTheRecord() throws {
@@ -2124,8 +1993,7 @@ final class MemberPerformanceTests: XCTestCase {
             performanceDataAccess: test.performanceDataAccess,
             exerciseId: freeSquatId,
             weight: 85.0,
-            reps: 5,
-            isCurrent: false
+            reps: 5
         )
 
         try test.memberPerformance.deletePersonalBest(
@@ -2135,38 +2003,6 @@ final class MemberPerformanceTests: XCTestCase {
         )
 
         XCTAssertTrue(try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId).isEmpty)
-    }
-
-    func testTC_MP32_DeletePersonalBestRestoresPreviousPBWhenDeletingCurrent() throws {
-        let test = try makeMemberPerformance()
-        let freeSquatId = seedExerciseId(named: "Free Squat")
-        let historical = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 80.0,
-            reps: 5,
-            achievedAt: Date().addingTimeInterval(-86_400),
-            isCurrent: false
-        )
-        let current = try saveExistingPB(
-            performanceDataAccess: test.performanceDataAccess,
-            exerciseId: freeSquatId,
-            weight: 85.0,
-            reps: 5
-        )
-
-        try test.memberPerformance.deletePersonalBest(
-            id: current.id,
-            memberId: testMemberId,
-            exerciseId: freeSquatId
-        )
-
-        let restored = try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
-            exerciseId: freeSquatId
-        )
-        XCTAssertEqual(restored?.id, historical.id)
-        XCTAssertTrue(restored?.isCurrent == true)
     }
 
     func testTC_MP33_DeletePersonalBestLeavesNoCurrentPBWhenDeletingOnlyRecord() throws {
@@ -2185,7 +2021,7 @@ final class MemberPerformanceTests: XCTestCase {
             exerciseId: freeSquatId
         )
 
-        XCTAssertNil(try test.performanceDataAccess.fetchCurrentPB(memberId: testMemberId, exerciseId: freeSquatId))
+        XCTAssertNil(try derivedCurrentPB(memberPerformance: test.memberPerformance, exerciseId: freeSquatId))
         XCTAssertTrue(try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId).isEmpty)
     }
 }

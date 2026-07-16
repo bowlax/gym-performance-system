@@ -3,8 +3,8 @@
 **Project:** Gym Performance System  
 **Phase:** 2 -- Central Data Store  
 **Database:** PostgreSQL (Supabase)  
-**Status:** Design -- not yet implemented  
-**Last updated:** June 2026
+**Status:** Live (migrations are the applied source)  
+**Last updated:** July 2026
 
 > This is the central store schema. It is based on the phase 1 SwiftData schema 
 > (docs/data-schema.md) with phase 2 additions: real member identity, gym_id, 
@@ -12,6 +12,24 @@
 > 
 > The device remains the source of truth in the local-first model. This store is 
 > a sync target for members who have opted in.
+
+### Migration history provenance
+
+The hosted project was initially set up by running SQL in the Supabase dashboard
+SQL editor. Files in `supabase/migrations/` were a parallel record of that
+state — not the applied source of truth — so `supabase_migrations.schema_migrations`
+on live was empty even though the tables existed.
+
+On **2026-07-16** (issue #28 step 4 deploy), migration history was repaired:
+versions through `20260706170000` were marked applied (already present on live),
+then `20260715180000` (staleness + `exercise_resets`) and
+`20260716180000` (drop `is_current` / `was_reset`) were pushed for real.
+During that repair, step 2’s `exercise_resets` table and member staleness
+columns were found **missing** on live — they had never been dashboard-applied —
+and landed for the first time in that push.
+
+From that date forward, `supabase/migrations/` is the applied source. Use
+`npx supabase db push` for new migrations; do not re-apply early versions by hand.
 
 ---
 
@@ -68,8 +86,8 @@ create table gyms (
 ### members
 
 The identity anchor. One row per connected member. Holds the canonical member UUID, 
-gym association, TeamUp auth mapping, and sync preference. Does NOT duplicate TeamUp-owned 
-data (membership status, billing, bookings) -- those are read live from TeamUp.
+gym association, TeamUp auth mapping, sync preference, and staleness settings (#28).
+Does NOT duplicate TeamUp-owned data (membership status, billing, bookings).
 
 ```sql
 create table members (
@@ -78,9 +96,14 @@ create table members (
     teamup_customer_id  text,                    -- populated when member connects. Null if not yet mapped
     display_name        text not null default 'Member',
     sync_enabled        boolean not null default true,
+    staleness_enabled   boolean not null default false,
+    staleness_periods   integer not null default 2,
+    staleness_unit      text not null default 'quarter',  -- quarter | month
     created_at          timestamptz not null default now(),
     updated_at          timestamptz not null default now(),
     deleted_at          timestamptz,
+    synced_at           timestamptz,
+    source_device_id    uuid,
     unique (gym_id, teamup_customer_id)          -- one member per TeamUp customer per gym
 );
 ```
@@ -181,7 +204,9 @@ create table sets (
 
 ### personal_bests
 
-A PB record. Member-owned. Full history retained via is_current flag.
+**Manual PB entries only** (no set behind them). Session PBs are derived from `sets` +
+manuals at read time (#28). There is no `is_current` / `was_reset` — those columns were
+dropped in `20260716180000`.
 
 ```sql
 create table personal_bests (
@@ -189,15 +214,13 @@ create table personal_bests (
     gym_id              uuid not null references gyms(id),
     member_id           uuid not null references members(id),
     exercise_id         uuid not null references exercises(id),
-    set_id              uuid references sets(id),  -- null for manual entries
+    set_id              uuid references sets(id),  -- null for manuals; unused for new writes
     weight              double precision,
     reps                integer,
     time_seconds        double precision,
     distance            double precision,
-    achieved_at         date not null,
-    is_current          boolean not null default true,
-    entry_type          text not null default 'sessionDerived',  -- sessionDerived | manualEntry
-    was_reset           boolean not null default false,
+    achieved_at         date,
+    entry_type          text not null default 'manualEntry',  -- manualEntry (sessionDerived = legacy)
     created_at          timestamptz not null default now(),
     updated_at          timestamptz not null default now(),
     deleted_at          timestamptz,
@@ -205,6 +228,46 @@ create table personal_bests (
     source_device_id    uuid
 );
 ```
+
+---
+
+### exercise_resets
+
+One `reset_at` date per member-exercise. Sparse. Affects **current** derivation only
+(lifetime unchanged). Repeat resets overwrite `reset_at` (later wins). Undo = soft-delete.
+
+```sql
+create table exercise_resets (
+    id                  uuid primary key,
+    gym_id              uuid not null references gyms(id),
+    member_id           uuid not null references members(id),
+    exercise_id         uuid not null references exercises(id),
+    reset_at            date not null,
+    created_at          timestamptz not null default now(),
+    updated_at          timestamptz not null default now(),
+    deleted_at          timestamptz,
+    synced_at           timestamptz,
+    source_device_id    uuid,
+    unique (member_id, exercise_id)
+);
+```
+
+---
+
+## Personal-best derivation (as built, #28)
+
+Same semantics as local (`docs/data-schema.md`):
+
+- **Current** = best where `achieved_at` > `reset_at` (if any) and fresh under staleness.
+  Tie → most recent `achieved_at`.
+- **Lifetime** = best overall (no reset / freshness filter).
+- **Fresh** = before expiry of N complete calendar periods since `achieved_at`; OFF = no expiry.
+- **Badges** = running max over dated records; equal not badged.
+- Shared vectors: `tests/vectors/pb-{expiry,derivation,badge,evaluation}-vectors.json`.
+
+**Not migrated:** legacy `was_reset` flags were not translated into `exercise_resets`
+(deliberate — see issue #28). **Derivation reads sets + manuals**, not session PB rows;
+real-device check confirmed set completeness (19/19).
 
 ---
 
@@ -224,10 +287,11 @@ create index idx_sessions_date on sessions(member_id, date) where deleted_at is 
 create index idx_entries_session on exercise_entries(session_id) where deleted_at is null;
 create index idx_sets_entry on sets(exercise_entry_id) where deleted_at is null;
 
--- PB queries
-create index idx_pb_current on personal_bests(member_id, exercise_id) where is_current = true and deleted_at is null;
+-- PB / reset queries (current PB is derived — no idx_pb_current)
 create index idx_pb_member on personal_bests(member_id) where deleted_at is null;
 create index idx_pb_gym on personal_bests(gym_id) where deleted_at is null;
+create index idx_exercise_resets_member on exercise_resets(member_id) where deleted_at is null;
+create index idx_exercise_resets_gym on exercise_resets(gym_id) where deleted_at is null;
 
 -- Exercise lookups
 create index idx_exercises_gym on exercises(gym_id) where deleted_at is null;
@@ -239,7 +303,7 @@ create index idx_exercises_gym on exercises(gym_id) where deleted_at is null;
 
 RLS enforces the privacy model at the database level. These are the rules in plain terms; 
 exact policy SQL depends on how TeamUp identity maps to Supabase auth (to be finalised 
-during the auth integration).
+during the auth integration). See also `docs/supabase-schema-rls.md`.
 
 ### Principles
 
@@ -267,24 +331,27 @@ during the auth integration).
 
 | Aspect | Phase 1 (SwiftData) | Phase 2 (Postgres) |
 |---|---|---|
-| Member identity | Single per device (was hardcoded, now per-install UUID) | Real distinct members in members table |
+| Member identity | Per-install UUID in UserDefaults + UserIdentityModel state | Real distinct members in members table |
 | gym_id | Not present | On every entity |
-| Soft delete | Hard delete only (no delete for most) | deleted_at timestamp |
-| Sync metadata | None | synced_at, source_device_id |
+| Soft delete | Soft delete on syncable entities | deleted_at timestamp |
+| Sync metadata | synced_at, source_device_id on syncable entities | Same |
 | Security | None (single user per device) | Row-level security |
 | Exercise definitions | Bundled with app | Per-gym in exercises table |
 | TeamUp mapping | None | teamup_customer_id on members |
 | Set table name | ModelSet (Swift collision) | sets (no collision in SQL) |
 | time field | time (Double, seconds) | time_seconds (explicit) |
+| PB status | Derived (#28) | Derived (#28) — same vectors |
+| Manual PBs | PersonalBestModel | personal_bests |
+| Resets | ExerciseResetModel | exercise_resets |
 
 ---
 
 ## What Stays Identical
 
-The core data model is unchanged -- same entities, same relationships, same business 
-meaning. A session still contains exercise entries, which contain sets. PBs still 
-reference the achieving set and carry full history via is_current. The UUIDs are the 
-same values as the local store, which is what makes the merge-on-connection clean.
+The core workout record is unchanged: sessions contain exercise entries, which contain
+sets. Manual PBs live in `personal_bests`. Current / lifetime / badges are **derived**
+over sets + manuals (plus `exercise_resets` and member staleness), not stored as
+`is_current` flags. The UUIDs match the local store so merge-on-connection stays clean.
 
-This is the phase 1 schema with identity, tenancy, sync, and security layered on -- 
-not a redesign.
+This is the phase 1 workout schema with identity, tenancy, sync, security, and derived
+PB status layered on — not a redesign of what a set or session means.

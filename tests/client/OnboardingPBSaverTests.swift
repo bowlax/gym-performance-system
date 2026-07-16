@@ -23,7 +23,8 @@ struct OnboardingPBSaverTests {
         let performanceDataAccess = SwiftDataPerformanceDataAccess(context: context)
         let memberPerformance = DefaultMemberPerformance(
             exerciseRegistry: exerciseRegistry,
-            performanceDataAccess: performanceDataAccess
+            performanceDataAccess: performanceDataAccess,
+            modelContext: context
         )
         return TestContext(
             memberPerformance: memberPerformance,
@@ -37,6 +38,16 @@ struct OnboardingPBSaverTests {
             fatalError("Missing seed exercise: \(name)")
         }
         return exercise
+    }
+
+    private func derivedCurrentPB(
+        memberPerformance: DefaultMemberPerformance,
+        exerciseId: UUID
+    ) throws -> PersonalBestModel? {
+        try memberPerformance.deriveExerciseReadState(
+            memberId: testMemberId,
+            exerciseId: exerciseId
+        ).currentPB
     }
 
     // MARK: -- Draft completeness
@@ -102,8 +113,8 @@ struct OnboardingPBSaverTests {
         )
 
         #expect(result.isNewPB)
-        let pb = try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        let pb = try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: flatPress.id
         )
         #expect(pb?.weight == 30)
@@ -125,7 +136,7 @@ struct OnboardingPBSaverTests {
         )
 
         #expect(savedCount == 0)
-        #expect(try test.performanceDataAccess.fetchCurrentPBs(memberId: testMemberId).isEmpty)
+        #expect(try test.memberPerformance.currentPBs(memberId: testMemberId).isEmpty)
     }
 
     @Test
@@ -145,12 +156,12 @@ struct OnboardingPBSaverTests {
         )
 
         #expect(savedCount == 1)
-        #expect(try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: freeSquat.id
         ) != nil)
-        #expect(try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: dumbbellPress.id
         ) == nil)
     }
@@ -170,8 +181,8 @@ struct OnboardingPBSaverTests {
         )
 
         #expect(savedCount == 1)
-        let pb = try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        let pb = try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: dumbbellPress.id
         )
         #expect(pb?.weight == 32)
@@ -193,8 +204,8 @@ struct OnboardingPBSaverTests {
         )
 
         #expect(savedCount == 1)
-        let pb = try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        let pb = try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: plank.id
         )
         #expect(pb?.weight == 25)
@@ -218,12 +229,12 @@ struct OnboardingPBSaverTests {
         )
 
         #expect(savedCount == 1)
-        #expect(try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: plank.id
         ) == nil)
-        #expect(try test.performanceDataAccess.fetchCurrentPB(
-            memberId: testMemberId,
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
             exerciseId: chinUps.id
         )?.reps == 12)
     }

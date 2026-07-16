@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import SwiftData
 
+@MainActor
 @Observable
 final class AppDependencies {
     let exerciseRegistry: DefaultExerciseRegistry
@@ -9,6 +10,7 @@ final class AppDependencies {
     let performanceDataAccess: SwiftDataPerformanceDataAccess
     let configurationDataAccess: SwiftDataConfigurationDataAccess
     let modelContext: ModelContext
+    let syncCoordinator: SyncCoordinator
 
     private(set) var refreshID = UUID()
 
@@ -23,8 +25,10 @@ final class AppDependencies {
         self.performanceDataAccess = SwiftDataPerformanceDataAccess(context: modelContext)
         self.memberPerformance = DefaultMemberPerformance(
             exerciseRegistry: exerciseRegistry,
-            performanceDataAccess: performanceDataAccess
+            performanceDataAccess: performanceDataAccess,
+            modelContext: modelContext
         )
+        self.syncCoordinator = SyncCoordinator(modelContext: modelContext)
         try exerciseRegistry.seedIfNeeded()
     }
 

@@ -6,21 +6,29 @@ protocol SyncLocalDataAccess: AnyObject {
     func fetchDirtyExerciseEntries(memberId: UUID) throws -> [ExerciseEntryModel]
     func fetchDirtySets(memberId: UUID) throws -> [ModelSet]
     func fetchDirtyPersonalBests(memberId: UUID) throws -> [PersonalBestModel]
+    func fetchDirtyMembers(memberId: UUID) throws -> [UserIdentityModel]
+    func fetchDirtyExerciseResets(memberId: UUID) throws -> [ExerciseResetModel]
 
     func session(id: UUID) throws -> SessionModel?
     func exerciseEntry(id: UUID) throws -> ExerciseEntryModel?
     func set(id: UUID) throws -> ModelSet?
     func personalBest(id: UUID) throws -> PersonalBestModel?
+    func member(id: UUID) throws -> UserIdentityModel?
+    func exerciseReset(id: UUID) throws -> ExerciseResetModel?
 
     func insertSession(_ session: SessionModel) throws
     func insertExerciseEntry(_ entry: ExerciseEntryModel) throws
     func insertSet(_ set: ModelSet) throws
     func insertPersonalBest(_ personalBest: PersonalBestModel) throws
+    func insertMember(_ member: UserIdentityModel) throws
+    func insertExerciseReset(_ reset: ExerciseResetModel) throws
 
     func markSessionsSynced(_ sessions: [SessionModel], at date: Date) throws
     func markExerciseEntriesSynced(_ entries: [ExerciseEntryModel], at date: Date) throws
     func markSetsSynced(_ sets: [ModelSet], at date: Date) throws
     func markPersonalBestsSynced(_ personalBests: [PersonalBestModel], at date: Date) throws
+    func markMembersSynced(_ members: [UserIdentityModel], at date: Date) throws
+    func markExerciseResetsSynced(_ resets: [ExerciseResetModel], at date: Date) throws
 
     func save() throws
 }

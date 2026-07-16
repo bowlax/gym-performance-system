@@ -100,12 +100,13 @@ struct SessionDetailView: View {
                 }
 
                 let sets = try dependencies.performanceDataAccess.fetchSets(exerciseEntryId: entry.id)
-                let setIds = Set(sets.map(\.id))
-                let pbs = try dependencies.performanceDataAccess.fetchAllPBs(
+                let derived = try dependencies.memberPerformance.deriveExerciseReadState(
                     memberId: dependencies.memberId,
                     exerciseId: entry.exerciseId
                 )
-                let pbSetIds = Set(pbs.compactMap(\.setId).filter { setIds.contains($0) })
+                let pbSetIds = Set(
+                    sets.map(\.id).filter { derived.badgeIds.contains($0.uuidString) }
+                )
 
                 details.append(
                     SessionEntryDetail(

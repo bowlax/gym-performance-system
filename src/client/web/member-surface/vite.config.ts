@@ -4,8 +4,17 @@
 //     componentTagger (dev-only), VITE_* env injection, @ path alias, React/TanStack dedupe,
 //     error logger plugins, and sandbox detection (port/host/strictPort).
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 import { loadEnv, type Plugin } from "vite";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+/** Pure PB modules shared with Deno Edge Functions — single TS source. */
+const gpSharedDir = path.resolve(
+  __dirname,
+  "../../../../supabase/functions/_shared",
+);
 
 /**
  * Injects GYMPERF_* values from .env / .env.local into the client bundle.
@@ -44,4 +53,16 @@ export default defineConfig({
     server: { entry: "server" },
   },
   plugins: [gymPerfEnvDefinePlugin()],
+  vite: {
+    resolve: {
+      alias: {
+        "@gp-shared": gpSharedDir,
+      },
+    },
+    server: {
+      fs: {
+        allow: [gpSharedDir],
+      },
+    },
+  },
 });

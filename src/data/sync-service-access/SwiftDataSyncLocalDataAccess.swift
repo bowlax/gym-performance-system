@@ -54,6 +54,25 @@ final class SwiftDataSyncLocalDataAccess: SyncLocalDataAccess {
         }
     }
 
+    func fetchDirtyMembers(memberId: UUID) throws -> [UserIdentityModel] {
+        let descriptor = FetchDescriptor<UserIdentityModel>(
+            predicate: #Predicate { $0.id == memberId }
+        )
+        return try context.fetch(descriptor).filter {
+            SyncDirtiness.isDirty(updatedAt: $0.updatedAt, syncedAt: $0.syncedAt)
+        }
+    }
+
+    func fetchDirtyExerciseResets(memberId: UUID) throws -> [ExerciseResetModel] {
+        let descriptor = FetchDescriptor<ExerciseResetModel>(
+            predicate: #Predicate { $0.memberId == memberId },
+            sortBy: [SortDescriptor(\.resetAt, order: .forward)]
+        )
+        return try context.fetch(descriptor).filter {
+            SyncDirtiness.isDirty(updatedAt: $0.updatedAt, syncedAt: $0.syncedAt)
+        }
+    }
+
     func session(id: UUID) throws -> SessionModel? {
         let descriptor = FetchDescriptor<SessionModel>(
             predicate: #Predicate { $0.id == id }
@@ -82,6 +101,20 @@ final class SwiftDataSyncLocalDataAccess: SyncLocalDataAccess {
         return try context.fetch(descriptor).first
     }
 
+    func member(id: UUID) throws -> UserIdentityModel? {
+        let descriptor = FetchDescriptor<UserIdentityModel>(
+            predicate: #Predicate { $0.id == id }
+        )
+        return try context.fetch(descriptor).first
+    }
+
+    func exerciseReset(id: UUID) throws -> ExerciseResetModel? {
+        let descriptor = FetchDescriptor<ExerciseResetModel>(
+            predicate: #Predicate { $0.id == id }
+        )
+        return try context.fetch(descriptor).first
+    }
+
     func insertSession(_ session: SessionModel) throws {
         context.insert(session)
     }
@@ -96,6 +129,14 @@ final class SwiftDataSyncLocalDataAccess: SyncLocalDataAccess {
 
     func insertPersonalBest(_ personalBest: PersonalBestModel) throws {
         context.insert(personalBest)
+    }
+
+    func insertMember(_ member: UserIdentityModel) throws {
+        context.insert(member)
+    }
+
+    func insertExerciseReset(_ reset: ExerciseResetModel) throws {
+        context.insert(reset)
     }
 
     func markSessionsSynced(_ sessions: [SessionModel], at date: Date) throws {
@@ -122,6 +163,20 @@ final class SwiftDataSyncLocalDataAccess: SyncLocalDataAccess {
     func markPersonalBestsSynced(_ personalBests: [PersonalBestModel], at date: Date) throws {
         for pb in personalBests {
             pb.syncedAt = date
+        }
+        try context.save()
+    }
+
+    func markMembersSynced(_ members: [UserIdentityModel], at date: Date) throws {
+        for member in members {
+            member.syncedAt = date
+        }
+        try context.save()
+    }
+
+    func markExerciseResetsSynced(_ resets: [ExerciseResetModel], at date: Date) throws {
+        for reset in resets {
+            reset.syncedAt = date
         }
         try context.save()
     }

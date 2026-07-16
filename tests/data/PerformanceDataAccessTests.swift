@@ -214,107 +214,130 @@ struct PerformanceDataAccessTests {
     // MARK: -- Personal Bests
 
     @Test
-    func testTC_P14_SaveAndFetchCurrentPB() throws {
+    func testTC_P14_SaveAndFetchAllPBs() throws {
         let context = try TestHelpers.makeInMemoryContext()
         let sut = SwiftDataPerformanceDataAccess(context: context)
 
         let memberId = UUID()
         let exerciseId = UUID()
-        let pb = PersonalBestModel(memberId: memberId, exerciseId: exerciseId, setId: UUID(), achievedAt: Date(), isCurrent: true)
+        let pb = PersonalBestModel(
+            memberId: memberId,
+            exerciseId: exerciseId,
+            weight: 80,
+            reps: 5,
+            achievedAt: Date()
+        )
         try sut.savePersonalBest(pb)
 
-        let fetched = try sut.fetchCurrentPB(memberId: memberId, exerciseId: exerciseId)
-        #expect(fetched?.id == pb.id)
+        let fetched = try sut.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
+        #expect(fetched.count == 1)
+        #expect(fetched.first?.id == pb.id)
     }
 
     @Test
-    func testTC_P15_OnlyOneCurrentPBPerMemberPerExercise() throws {
+    func testTC_P15_FetchAllPBsReturnsOnlyMatchingMemberAndExercise() throws {
         let context = try TestHelpers.makeInMemoryContext()
         let sut = SwiftDataPerformanceDataAccess(context: context)
 
         let memberId = UUID()
         let exerciseId = UUID()
 
-        let old = PersonalBestModel(memberId: memberId, exerciseId: exerciseId, setId: UUID(), achievedAt: Date().addingTimeInterval(-10), isCurrent: true)
-        try sut.savePersonalBest(old)
+        try sut.savePersonalBest(
+            PersonalBestModel(
+                memberId: memberId,
+                exerciseId: exerciseId,
+                weight: 80,
+                reps: 5,
+                achievedAt: Date().addingTimeInterval(-10)
+            )
+        )
+        try sut.savePersonalBest(
+            PersonalBestModel(
+                memberId: memberId,
+                exerciseId: exerciseId,
+                weight: 85,
+                reps: 5,
+                achievedAt: Date()
+            )
+        )
+        try sut.savePersonalBest(
+            PersonalBestModel(
+                memberId: UUID(),
+                exerciseId: exerciseId,
+                weight: 90,
+                reps: 5,
+                achievedAt: Date()
+            )
+        )
 
-        try sut.markPBAsSuperseded(id: old.id)
-        let new = PersonalBestModel(memberId: memberId, exerciseId: exerciseId, setId: UUID(), achievedAt: Date(), isCurrent: true)
-        try sut.savePersonalBest(new)
-
-        let current = try sut.fetchCurrentPB(memberId: memberId, exerciseId: exerciseId)
-        #expect(current?.id == new.id)
-
-        let history = try sut.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
-        #expect(history.count == 2)
+        let fetched = try sut.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
+        #expect(fetched.count == 2)
+        #expect(fetched.allSatisfy { $0.memberId == memberId && $0.exerciseId == exerciseId })
     }
 
     @Test
-    func testTC_P16_FetchAllPBsReturnsFullHistory() throws {
+    func testTC_P16_FetchAllPBsReturnsFullHistorySortedByAchievedAtDescending() throws {
         let context = try TestHelpers.makeInMemoryContext()
         let sut = SwiftDataPerformanceDataAccess(context: context)
 
         let memberId = UUID()
         let exerciseId = UUID()
 
-        try sut.savePersonalBest(PersonalBestModel(memberId: memberId, exerciseId: exerciseId, setId: UUID(), achievedAt: Date().addingTimeInterval(-30), isCurrent: false))
-        try sut.savePersonalBest(PersonalBestModel(memberId: memberId, exerciseId: exerciseId, setId: UUID(), achievedAt: Date().addingTimeInterval(-20), isCurrent: false))
-        try sut.savePersonalBest(PersonalBestModel(memberId: memberId, exerciseId: exerciseId, setId: UUID(), achievedAt: Date().addingTimeInterval(-10), isCurrent: true))
+        try sut.savePersonalBest(
+            PersonalBestModel(
+                memberId: memberId,
+                exerciseId: exerciseId,
+                weight: 70,
+                reps: 5,
+                achievedAt: Date().addingTimeInterval(-30)
+            )
+        )
+        try sut.savePersonalBest(
+            PersonalBestModel(
+                memberId: memberId,
+                exerciseId: exerciseId,
+                weight: 75,
+                reps: 5,
+                achievedAt: Date().addingTimeInterval(-20)
+            )
+        )
+        try sut.savePersonalBest(
+            PersonalBestModel(
+                memberId: memberId,
+                exerciseId: exerciseId,
+                weight: 80,
+                reps: 5,
+                achievedAt: Date().addingTimeInterval(-10)
+            )
+        )
 
         let fetched = try sut.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
         #expect(fetched.count == 3)
+        #expect(fetched.map(\.weight) == [80.0, 75.0, 70.0])
     }
 
     @Test
-    func testTC_P17_FetchCurrentPBsReturnsAllCurrentPBsForAMember() throws {
-        let context = try TestHelpers.makeInMemoryContext()
-        let sut = SwiftDataPerformanceDataAccess(context: context)
-
-        let memberId = UUID()
-
-        // Current PBs across three exercises
-        try sut.savePersonalBest(PersonalBestModel(memberId: memberId, exerciseId: UUID(), setId: UUID(), achievedAt: Date(), isCurrent: true))
-        try sut.savePersonalBest(PersonalBestModel(memberId: memberId, exerciseId: UUID(), setId: UUID(), achievedAt: Date(), isCurrent: true))
-        try sut.savePersonalBest(PersonalBestModel(memberId: memberId, exerciseId: UUID(), setId: UUID(), achievedAt: Date(), isCurrent: true))
-
-        // Historical PB that must not be returned
-        try sut.savePersonalBest(PersonalBestModel(memberId: memberId, exerciseId: UUID(), setId: UUID(), achievedAt: Date(), isCurrent: false))
-
-        let fetched = try sut.fetchCurrentPBs(memberId: memberId)
-        #expect(fetched.count == 3)
-        #expect(fetched.allSatisfy { $0.isCurrent == true })
-    }
-
-    @Test
-    func testTC_P18_FetchCurrentPBReturnsNilWhenNoPBExists() throws {
-        let context = try TestHelpers.makeInMemoryContext()
-        let sut = SwiftDataPerformanceDataAccess(context: context)
-
-        let fetched = try sut.fetchCurrentPB(memberId: UUID(), exerciseId: UUID())
-        #expect(fetched == nil)
-    }
-
-    @Test
-    func testTC_P19_MarkPBAsSupersededSetsIsCurrentToFalse() throws {
+    func testTC_P17_UpsertExerciseResetPersistsResetDate() throws {
         let context = try TestHelpers.makeInMemoryContext()
         let sut = SwiftDataPerformanceDataAccess(context: context)
 
         let memberId = UUID()
         let exerciseId = UUID()
-        let pb = PersonalBestModel(memberId: memberId, exerciseId: exerciseId, setId: UUID(), achievedAt: Date(), isCurrent: true)
-        try sut.savePersonalBest(pb)
+        let resetAt = Calendar(identifier: .gregorian).startOfDay(for: Date())
 
-        try sut.markPBAsSuperseded(id: pb.id)
+        let reset = try sut.upsertExerciseReset(
+            memberId: memberId,
+            exerciseId: exerciseId,
+            resetAt: resetAt
+        )
 
-        let current = try sut.fetchCurrentPB(memberId: memberId, exerciseId: exerciseId)
-        #expect(current == nil)
-
-        let all = try sut.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
-        #expect(all.first(where: { $0.id == pb.id })?.isCurrent == false)
+        let fetched = try sut.fetchExerciseReset(memberId: memberId, exerciseId: exerciseId)
+        #expect(fetched?.id == reset.id)
+        #expect(fetched?.resetAt == resetAt)
     }
 
     @Test
-    func testTC_P20_PersonalBestsCannotBeDeleted() throws {
+    func testTC_P18_PersonalBestsCannotBeDeleted() throws {
         let root = TestHelpers.repositoryRootURL()
         let path = root.appendingPathComponent("src/data/performance-data-access/PerformanceDataAccess.swift")
         let contents = try String(contentsOf: path)
@@ -508,93 +531,126 @@ final class PerformanceDataAccessTests: XCTestCase {
         XCTAssertFalse(contents.contains("deleteModelSet"))
     }
 
-    func testTC_P14_SaveAndFetchCurrentPB() throws {
+    func testTC_P14_SaveAndFetchAllPBs() throws {
         let context = try TestHelpers.makeInMemoryContext()
         let sut = SwiftDataPerformanceDataAccess(context: context)
 
         let memberId = UUID()
         let exerciseId = UUID()
-        let pb = PersonalBestModel(memberId: memberId, exerciseId: exerciseId, setId: UUID(), achievedAt: Date(), isCurrent: true)
+        let pb = PersonalBestModel(
+            memberId: memberId,
+            exerciseId: exerciseId,
+            weight: 80,
+            reps: 5,
+            achievedAt: Date()
+        )
         try sut.savePersonalBest(pb)
 
-        let fetched = try sut.fetchCurrentPB(memberId: memberId, exerciseId: exerciseId)
-        XCTAssertEqual(fetched?.id, pb.id)
+        let fetched = try sut.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
+        XCTAssertEqual(fetched.count, 1)
+        XCTAssertEqual(fetched.first?.id, pb.id)
     }
 
-    func testTC_P15_OnlyOneCurrentPBPerMemberPerExercise() throws {
+    func testTC_P15_FetchAllPBsReturnsOnlyMatchingMemberAndExercise() throws {
         let context = try TestHelpers.makeInMemoryContext()
         let sut = SwiftDataPerformanceDataAccess(context: context)
 
         let memberId = UUID()
         let exerciseId = UUID()
 
-        let old = PersonalBestModel(memberId: memberId, exerciseId: exerciseId, setId: UUID(), achievedAt: Date().addingTimeInterval(-10), isCurrent: true)
-        try sut.savePersonalBest(old)
-        try sut.markPBAsSuperseded(id: old.id)
+        try sut.savePersonalBest(
+            PersonalBestModel(
+                memberId: memberId,
+                exerciseId: exerciseId,
+                weight: 80,
+                reps: 5,
+                achievedAt: Date().addingTimeInterval(-10)
+            )
+        )
+        try sut.savePersonalBest(
+            PersonalBestModel(
+                memberId: memberId,
+                exerciseId: exerciseId,
+                weight: 85,
+                reps: 5,
+                achievedAt: Date()
+            )
+        )
+        try sut.savePersonalBest(
+            PersonalBestModel(
+                memberId: UUID(),
+                exerciseId: exerciseId,
+                weight: 90,
+                reps: 5,
+                achievedAt: Date()
+            )
+        )
 
-        let new = PersonalBestModel(memberId: memberId, exerciseId: exerciseId, setId: UUID(), achievedAt: Date(), isCurrent: true)
-        try sut.savePersonalBest(new)
-
-        let current = try sut.fetchCurrentPB(memberId: memberId, exerciseId: exerciseId)
-        XCTAssertEqual(current?.id, new.id)
-
-        let history = try sut.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
-        XCTAssertEqual(history.count, 2)
+        let fetched = try sut.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
+        XCTAssertEqual(fetched.count, 2)
+        XCTAssertTrue(fetched.allSatisfy { $0.memberId == memberId && $0.exerciseId == exerciseId })
     }
 
-    func testTC_P16_FetchAllPBsReturnsFullHistory() throws {
+    func testTC_P16_FetchAllPBsReturnsFullHistorySortedByAchievedAtDescending() throws {
         let context = try TestHelpers.makeInMemoryContext()
         let sut = SwiftDataPerformanceDataAccess(context: context)
 
         let memberId = UUID()
         let exerciseId = UUID()
 
-        try sut.savePersonalBest(PersonalBestModel(memberId: memberId, exerciseId: exerciseId, setId: UUID(), achievedAt: Date().addingTimeInterval(-30), isCurrent: false))
-        try sut.savePersonalBest(PersonalBestModel(memberId: memberId, exerciseId: exerciseId, setId: UUID(), achievedAt: Date().addingTimeInterval(-20), isCurrent: false))
-        try sut.savePersonalBest(PersonalBestModel(memberId: memberId, exerciseId: exerciseId, setId: UUID(), achievedAt: Date().addingTimeInterval(-10), isCurrent: true))
+        try sut.savePersonalBest(
+            PersonalBestModel(
+                memberId: memberId,
+                exerciseId: exerciseId,
+                weight: 70,
+                reps: 5,
+                achievedAt: Date().addingTimeInterval(-30)
+            )
+        )
+        try sut.savePersonalBest(
+            PersonalBestModel(
+                memberId: memberId,
+                exerciseId: exerciseId,
+                weight: 75,
+                reps: 5,
+                achievedAt: Date().addingTimeInterval(-20)
+            )
+        )
+        try sut.savePersonalBest(
+            PersonalBestModel(
+                memberId: memberId,
+                exerciseId: exerciseId,
+                weight: 80,
+                reps: 5,
+                achievedAt: Date().addingTimeInterval(-10)
+            )
+        )
 
         let fetched = try sut.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
         XCTAssertEqual(fetched.count, 3)
+        XCTAssertEqual(fetched.map(\.weight), [80.0, 75.0, 70.0])
     }
 
-    func testTC_P17_FetchCurrentPBsReturnsAllCurrentPBsForAMember() throws {
-        let context = try TestHelpers.makeInMemoryContext()
-        let sut = SwiftDataPerformanceDataAccess(context: context)
-
-        let memberId = UUID()
-
-        try sut.savePersonalBest(PersonalBestModel(memberId: memberId, exerciseId: UUID(), setId: UUID(), achievedAt: Date(), isCurrent: true))
-        try sut.savePersonalBest(PersonalBestModel(memberId: memberId, exerciseId: UUID(), setId: UUID(), achievedAt: Date(), isCurrent: true))
-        try sut.savePersonalBest(PersonalBestModel(memberId: memberId, exerciseId: UUID(), setId: UUID(), achievedAt: Date(), isCurrent: true))
-        try sut.savePersonalBest(PersonalBestModel(memberId: memberId, exerciseId: UUID(), setId: UUID(), achievedAt: Date(), isCurrent: false))
-
-        let fetched = try sut.fetchCurrentPBs(memberId: memberId)
-        XCTAssertEqual(fetched.count, 3)
-        XCTAssertTrue(fetched.allSatisfy { $0.isCurrent == true })
-    }
-
-    func testTC_P18_FetchCurrentPBReturnsNilWhenNoPBExists() throws {
-        let context = try TestHelpers.makeInMemoryContext()
-        let sut = SwiftDataPerformanceDataAccess(context: context)
-        XCTAssertNil(try sut.fetchCurrentPB(memberId: UUID(), exerciseId: UUID()))
-    }
-
-    func testTC_P19_MarkPBAsSupersededSetsIsCurrentToFalse() throws {
+    func testTC_P17_UpsertExerciseResetPersistsResetDate() throws {
         let context = try TestHelpers.makeInMemoryContext()
         let sut = SwiftDataPerformanceDataAccess(context: context)
 
         let memberId = UUID()
         let exerciseId = UUID()
-        let pb = PersonalBestModel(memberId: memberId, exerciseId: exerciseId, setId: UUID(), achievedAt: Date(), isCurrent: true)
-        try sut.savePersonalBest(pb)
-        try sut.markPBAsSuperseded(id: pb.id)
+        let resetAt = Calendar(identifier: .gregorian).startOfDay(for: Date())
 
-        XCTAssertNil(try sut.fetchCurrentPB(memberId: memberId, exerciseId: exerciseId))
-        let all = try sut.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
-        XCTAssertEqual(all.first(where: { $0.id == pb.id })?.isCurrent, false)
+        let reset = try sut.upsertExerciseReset(
+            memberId: memberId,
+            exerciseId: exerciseId,
+            resetAt: resetAt
+        )
+
+        let fetched = try sut.fetchExerciseReset(memberId: memberId, exerciseId: exerciseId)
+        XCTAssertEqual(fetched?.id, reset.id)
+        XCTAssertEqual(fetched?.resetAt, resetAt)
     }
 
-    func testTC_P20_PersonalBestsCannotBeDeleted() throws {
+    func testTC_P18_PersonalBestsCannotBeDeleted() throws {
         let root = TestHelpers.repositoryRootURL()
         let path = root.appendingPathComponent("src/data/performance-data-access/PerformanceDataAccess.swift")
         let contents = try String(contentsOf: path)

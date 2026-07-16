@@ -1,10 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { bestSetFromSets } from "./best-set";
+import {
+  deriveExerciseReadState,
+  fetchBoardDerivationBundle,
+  fetchExerciseResetAt,
+  fetchExerciseSetsForDerivation,
+  fetchManualPBsForDerivation,
+  fetchMemberStaleness,
+  type DerivedPBDisplay,
+  type DerivedSetRow,
+} from "./derive-pb-reads";
 import type { MeasurementType } from "./format";
 import {
   mergeProgressionEntries,
   type ExerciseSetSummary,
   type ProgressionEntryRow,
+  type StalenessSetting,
 } from "./progression-entry-merger";
 
 export interface ExerciseRow {
@@ -31,12 +42,12 @@ export interface PersonalBestHistoryRow {
   value: number;
   reps: number | null;
   achieved_at: string | null;
-  is_current: boolean;
-  was_reset: boolean;
   set_id: string | null;
   entry_type: string | null;
   raw: Record<string, unknown>;
 }
+
+export type { DerivedPBDisplay, StalenessSetting };
 
 export interface SessionRow {
   id: string;
@@ -69,14 +80,6 @@ export interface SessionEntryRow {
 export interface SessionDetail {
   session: SessionListRow;
   entries: SessionEntryRow[];
-}
-
-function pickBool(row: Record<string, unknown>, keys: string[]): boolean {
-  for (const k of keys) {
-    const v = row[k];
-    if (typeof v === "boolean") return v;
-  }
-  return false;
 }
 
 async function fetchPbSetIds(
@@ -146,52 +149,83 @@ export async function fetchExercise(
 }
 
 /**
- * Full personal-best history for a single exercise for the signed-in member.
- * Includes current, superseded, and reset records — RLS scopes to the caller.
+ * Manual personal-best rows for progression merge (session-derived rows are
+ * represented via logged sets instead).
  */
-export async function fetchExerciseHistory(
+export async function fetchManualPersonalBests(
   supabase: SupabaseClient,
   exerciseId: string,
-  measurementType: string | undefined,
 ): Promise<PersonalBestHistoryRow[]> {
-  const { data, error } = await supabase
-    .from("personal_bests")
-    .select("*")
-    .eq("exercise_id", exerciseId)
-    .is("deleted_at", null)
-    .order("achieved_at", { ascending: true });
-  if (error) throw new Error(error.message);
-  const raw = (data ?? []) as Array<Record<string, unknown>>;
-  return raw.map((r) => ({
-    id: String(r.id),
-    value: pickPBValue(r, measurementType),
-    reps:
-      typeof r.reps === "number"
-        ? r.reps
-        : typeof r.rep_count === "number"
-          ? (r.rep_count as number)
-          : null,
-    achieved_at:
-      (r.achieved_at as string) ??
-      (r.session_date as string) ??
-      (r.created_at as string) ??
-      null,
-    is_current: pickBool(r, ["is_current"]),
-    was_reset: pickBool(r, ["was_reset", "is_reset", "reset"]),
-    set_id: typeof r.set_id === "string" ? r.set_id : null,
-    entry_type: typeof r.entry_type === "string" ? r.entry_type : null,
-    raw: r,
-  }));
+  const manualRows = await fetchManualPBsForDerivation(supabase, exerciseId);
+  return manualRows.map((row) => {
+    const raw = {
+      weight: row.weight,
+      reps: row.reps,
+      time_seconds: row.time_seconds,
+      distance: row.distance,
+    };
+    return {
+      id: row.id,
+      value: pickPBValue(raw, undefined),
+      reps: row.reps,
+      achieved_at: row.achieved_at,
+      set_id: row.set_id,
+      entry_type: row.entry_type,
+      raw,
+    };
+  });
 }
 
 /**
  * Best set per session for one exercise — mirrors iOS `exerciseHistory`.
  */
+function buildExerciseSessionHistory(
+  sets: DerivedSetRow[],
+  pbRule: string | null | undefined,
+  badgeIdSet: ReadonlySet<string>,
+): ExerciseSetSummary[] {
+  const bySession = new Map<string, { date: string; sets: SessionSetRow[] }>();
+
+  for (const row of sets) {
+    const sessionSet: SessionSetRow = {
+      id: row.id,
+      weight: row.weight,
+      reps: row.reps,
+      time_seconds: row.time_seconds,
+      distance: row.distance,
+    };
+    const existing = bySession.get(row.session_id);
+    if (existing) {
+      existing.sets.push(sessionSet);
+    } else {
+      bySession.set(row.session_id, {
+        date: row.session_date,
+        sets: [sessionSet],
+      });
+    }
+  }
+
+  const summaries: ExerciseSetSummary[] = [];
+  for (const { date, sets: sessionSets } of bySession.values()) {
+    const best = bestSetFromSets(sessionSets, pbRule);
+    if (!best) continue;
+    summaries.push({
+      sessionDate: date,
+      set: best,
+      isPB: badgeIdSet.has(best.id),
+    });
+  }
+
+  return summaries.sort((left, right) =>
+    left.sessionDate.localeCompare(right.sessionDate),
+  );
+}
+
 export async function fetchExerciseSessionHistory(
   supabase: SupabaseClient,
   exerciseId: string,
   pbRule: string | null | undefined,
-  pbSetIds: ReadonlySet<string>,
+  badgeIdSet: ReadonlySet<string>,
 ): Promise<ExerciseSetSummary[]> {
   const { data, error } = await supabase
     .from("exercise_entries")
@@ -241,7 +275,7 @@ export async function fetchExerciseSessionHistory(
     summaries.push({
       sessionDate: date,
       set: best,
-      isPB: pbSetIds.has(best.id),
+      isPB: badgeIdSet.has(best.id),
     });
   }
 
@@ -252,7 +286,10 @@ export async function fetchExerciseSessionHistory(
 
 export interface MergedProgressionData {
   entries: ProgressionEntryRow[];
-  personalBests: PersonalBestHistoryRow[];
+  currentPB: DerivedPBDisplay | null;
+  lifetimePB: DerivedPBDisplay | null;
+  staleness: StalenessSetting;
+  resetAt: string | null;
 }
 
 /** Session sets merged with PB history for the progression chart and list. */
@@ -261,29 +298,42 @@ export async function fetchMergedProgression(
   exerciseId: string,
   exercise: ExerciseRow,
 ): Promise<MergedProgressionData> {
-  const personalBests = await fetchExerciseHistory(
-    supabase,
-    exerciseId,
-    exercise.measurement_type,
-  );
-  const pbSetIds = new Set(
-    personalBests
-      .map((pb) => pb.set_id)
-      .filter((id): id is string => id != null),
-  );
-  const sessionHistory = await fetchExerciseSessionHistory(
-    supabase,
-    exerciseId,
+  const [staleness, sets, manualPBs, resetAt] = await Promise.all([
+    fetchMemberStaleness(supabase),
+    fetchExerciseSetsForDerivation(supabase, exerciseId),
+    fetchManualPBsForDerivation(supabase, exerciseId),
+    fetchExerciseResetAt(supabase, exerciseId),
+  ]);
+
+  const derived = deriveExerciseReadState({
+    pbRule: exercise.pb_rule,
+    measurementType: exercise.measurement_type,
+    sets,
+    manualPBs,
+    staleness,
+    resetAt,
+  });
+
+  const sessionHistory = buildExerciseSessionHistory(
+    sets,
     exercise.pb_rule,
-    pbSetIds,
+    derived.badgeIdSet,
   );
   const entries = mergeProgressionEntries({
     sessionHistory,
-    personalBests,
+    manualPersonalBests: manualPBs,
     exercise,
+    badgeIdSet: derived.badgeIdSet,
+    resetAt: derived.resetAt,
     from: new Date(0),
   });
-  return { entries, personalBests };
+  return {
+    entries,
+    currentPB: derived.currentPB,
+    lifetimePB: derived.lifetimePB,
+    staleness: derived.staleness,
+    resetAt: derived.resetAt,
+  };
 }
 
 /**
@@ -388,43 +438,40 @@ export async function fetchSessionDetail(
 }
 
 /**
- * Current PBs for the signed-in member, ordered by exercise display_order.
- * RLS scopes rows to the caller identified in the broker JWT.
+ * Current PBs for the signed-in member, derived client-side per exercise.
+ * RLS scopes source rows to the caller identified in the broker JWT.
  */
 export async function fetchCurrentPBs(
   supabase: SupabaseClient,
+  exercises: ExerciseRow[],
 ): Promise<PersonalBestRow[]> {
-  const { data, error } = await supabase
-    .from("personal_bests")
-    .select(
-      "*, exercise:exercises!inner(id, name, measurement_type, display_order)",
-    )
-    .eq("is_current", true)
-    .is("deleted_at", null);
+  const bundle = await fetchBoardDerivationBundle(supabase);
+  const rows: PersonalBestRow[] = [];
 
-  if (error) throw new Error(error.message);
+  for (const exercise of exercises) {
+    if (!exercise.pb_rule) continue;
 
-  const raw = (data ?? []) as Array<Record<string, unknown>>;
-  const rows: PersonalBestRow[] = raw.map((r) => {
-    const exercise = r.exercise as ExerciseRow;
-    return {
-      id: String(r.id),
-      value: pickPBValue(r, exercise?.measurement_type),
-      reps:
-        typeof r.reps === "number"
-          ? r.reps
-          : typeof r.rep_count === "number"
-            ? (r.rep_count as number)
-            : null,
-      achieved_at:
-        (r.achieved_at as string) ??
-        (r.session_date as string) ??
-        (r.created_at as string) ??
-        null,
+    const derived = deriveExerciseReadState({
+      pbRule: exercise.pb_rule,
+      measurementType: exercise.measurement_type,
+      sets: bundle.setsByExercise.get(exercise.id) ?? [],
+      manualPBs: bundle.manualPBsByExercise.get(exercise.id) ?? [],
+      staleness: bundle.staleness,
+      resetAt: bundle.resetAtByExercise.get(exercise.id) ?? null,
+    });
+
+    if (!derived.currentPB) continue;
+
+    rows.push({
+      id: derived.currentPB.id,
+      value: derived.currentPB.value,
+      reps: derived.currentPB.reps,
+      achieved_at: derived.currentPB.achieved_at,
       exercise,
-      raw: r,
-    };
-  });
+      raw: derived.currentPB.raw,
+    });
+  }
+
   return rows.sort(
     (a, b) => (a.exercise?.display_order ?? 0) - (b.exercise?.display_order ?? 0),
   );
@@ -463,7 +510,7 @@ export async function fetchExercises(
 ): Promise<ExerciseRow[]> {
   const { data, error } = await supabase
     .from("exercises")
-    .select("id, name, measurement_type, display_order")
+    .select("id, name, measurement_type, display_order, pb_rule")
     .is("deleted_at", null)
     .eq("is_active", true)
     .order("display_order", { ascending: true });
@@ -475,8 +522,11 @@ export interface BoardRow {
   exercise: ExerciseRow;
   pb: PersonalBestRow | null;
   hasHistory: boolean;
+  hasActiveReset: boolean;
+  stalenessEnabled: boolean;
 }
 
+/** Same pool as derive-pb-reads: live sets + non-deleted manuals. */
 async function fetchExerciseIdsWithHistory(
   supabase: SupabaseClient,
   exerciseIds: string[],
@@ -484,10 +534,12 @@ async function fetchExerciseIdsWithHistory(
   const ids = new Set<string>();
   if (exerciseIds.length === 0) return ids;
 
+  // Pre-#28 sessionDerived leftovers must not count as history.
   const { data: pbRows, error: pbError } = await supabase
     .from("personal_bests")
     .select("exercise_id")
     .in("exercise_id", exerciseIds)
+    .eq("entry_type", "manualEntry")
     .is("deleted_at", null);
   if (pbError) throw new Error(pbError.message);
   for (const row of pbRows ?? []) {
@@ -513,6 +565,40 @@ async function fetchExerciseIdsWithHistory(
   return ids;
 }
 
+export async function softDeleteSet(
+  supabase: SupabaseClient,
+  setId: string,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("sets")
+    .update({ deleted_at: now, updated_at: now })
+    .eq("id", setId);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteHistoryEntry(
+  supabase: SupabaseClient,
+  input: {
+    exerciseId: string;
+    personalBestId?: string;
+    setId?: string;
+    token: string;
+  },
+): Promise<void> {
+  if (input.setId) {
+    await softDeleteSet(supabase, input.setId);
+    return;
+  }
+  if (input.personalBestId) {
+    const { deletePersonalBest } = await import("./pb-actions");
+    await deletePersonalBest(input.token, {
+      exerciseId: input.exerciseId,
+      personalBestId: input.personalBestId,
+    });
+  }
+}
+
 /**
  * The full Board: every active exercise for the gym, with its current PB
  * attached if one exists. Exercises without a PB still appear.
@@ -520,22 +606,44 @@ async function fetchExerciseIdsWithHistory(
 export async function fetchBoard(
   supabase: SupabaseClient,
 ): Promise<BoardRow[]> {
-  const [exercises, pbs] = await Promise.all([
-    fetchExercises(supabase),
-    fetchCurrentPBs(supabase),
+  const exercises = await fetchExercises(supabase);
+  const exerciseIds = exercises.map((exercise) => exercise.id);
+  const [pbs, historyIds, staleness, resetAtByExercise] = await Promise.all([
+    fetchCurrentPBs(supabase, exercises),
+    fetchExerciseIdsWithHistory(supabase, exerciseIds),
+    fetchMemberStaleness(supabase),
+    fetchResetsByExercise(supabase, exerciseIds),
   ]);
   const pbByExercise = new Map<string, PersonalBestRow>();
   for (const pb of pbs) {
     const exId = pb.exercise?.id;
     if (exId) pbByExercise.set(exId, pb);
   }
-  const historyIds = await fetchExerciseIdsWithHistory(
-    supabase,
-    exercises.map((exercise) => exercise.id),
-  );
   return exercises.map((exercise) => ({
     exercise,
     pb: pbByExercise.get(exercise.id) ?? null,
     hasHistory: historyIds.has(exercise.id),
+    hasActiveReset: resetAtByExercise.has(exercise.id),
+    stalenessEnabled: staleness.enabled,
   }));
+}
+
+async function fetchResetsByExercise(
+  supabase: SupabaseClient,
+  exerciseIds: string[],
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (exerciseIds.length === 0) return map;
+  const { data, error } = await supabase
+    .from("exercise_resets")
+    .select("exercise_id, reset_at")
+    .in("exercise_id", exerciseIds)
+    .is("deleted_at", null);
+  if (error) throw new Error(error.message);
+  for (const row of data ?? []) {
+    if (typeof row.exercise_id === "string" && typeof row.reset_at === "string") {
+      map.set(row.exercise_id, row.reset_at);
+    }
+  }
+  return map;
 }

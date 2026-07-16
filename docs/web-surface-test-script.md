@@ -115,12 +115,12 @@ Set up: have at least two PB records for an exercise (e.g. log ascending sets).
 - [ ] Cancelling makes no change.
 - [ ] Deleting a **non-current** record: it is removed from history; the current PB is
       unchanged.
-- [ ] Deleting the **current** PB: it is removed; the best remaining non-reset record is
-      promoted to current (NOT simply the most recent); the hero and Board update to the
-      promoted value.
+- [ ] Deleting the **current** PB: it is removed; derivation surfaces the next best
+      eligible fresh record as current (NOT simply the most recent); the hero and Board
+      update to that value.
 - [ ] Deleting the current PB when no eligible record remains: the board shows no PB.
-- [ ] For a session-derived record, deleting also removes the linked set (if that is the
-      intended path).
+- [ ] For a session-derived history row (a set), deleting removes the linked set; current
+      PB re-derives from remaining sets + manuals.
 - [ ] After deletion, the hero, chart, and history all refresh.
 
 ---
@@ -157,6 +157,7 @@ declare
   target_member uuid := 'your-test-member-id-here';
 begin
   delete from personal_bests where member_id = target_member;
+  delete from exercise_resets where member_id = target_member;
   delete from sets where exercise_entry_id in (
     select ee.id from exercise_entries ee
     join sessions s on s.id = ee.session_id

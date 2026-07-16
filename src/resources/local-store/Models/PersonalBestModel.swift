@@ -11,9 +11,8 @@ final class PersonalBestModel {
     var reps: Int?
     var time: Double?
     var distance: Double?
-    var achievedAt: Date
-    var isCurrent: Bool
-    var wasReset: Bool = false
+    /// Nil for undated manual lifetime entries (#28).
+    var achievedAt: Date?
     var entryType: PBEntryType
     var createdAt: Date
     /// Optional for SwiftData migration safety; treat nil as `createdAt` for LWW / dirty.
@@ -37,10 +36,8 @@ final class PersonalBestModel {
         reps: Int? = nil,
         time: Double? = nil,
         distance: Double? = nil,
-        achievedAt: Date,
-        isCurrent: Bool = true,
-        wasReset: Bool = false,
-        entryType: PBEntryType = .sessionDerived,
+        achievedAt: Date? = nil,
+        entryType: PBEntryType = .manualEntry,
         createdAt: Date = Date(),
         updatedAt: Date? = nil,
         syncedAt: Date? = nil,
@@ -55,8 +52,6 @@ final class PersonalBestModel {
         self.time = time
         self.distance = distance
         self.achievedAt = achievedAt
-        self.isCurrent = isCurrent
-        self.wasReset = wasReset
         self.entryType = entryType
         self.createdAt = createdAt
         self.updatedAt = updatedAt ?? createdAt

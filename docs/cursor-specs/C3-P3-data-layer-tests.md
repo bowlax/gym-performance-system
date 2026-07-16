@@ -1,5 +1,10 @@
 # Test Specifications -- Data Layer
 
+> **Historical (phase 1 build spec).** PB cases (`fetchCurrentPB`,
+> `markPBAsSuperseded`, `isCurrent`) describe the **stored-status** model
+> superseded by issue **#28**. Authoritative schema: `docs/data-schema.md`. Live
+> tests: `tests/data/`.
+
 **Activities:** C3, P3  
 **Phase:** 1  
 **Framework:** Swift Testing (iOS 17+) or XCTest  

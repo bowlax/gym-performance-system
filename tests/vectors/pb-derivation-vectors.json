@@ -1,0 +1,341 @@
+{
+  "schemaVersion": 1,
+  "issue": 28,
+  "purpose": "Current PB and lifetime PB selection over sets + manual entries. Current = best record with achievedAt strictly after resetAt (when set) AND fresh. Lifetime = best record overall — no reset filter, no freshness filter. Undated manuals (achievedAt null) are never fresh, so lifetime-only; reset does not affect them for lifetime.",
+  "openQuestions": [
+    {
+      "id": "OQ-D2",
+      "topic": "achievedAt equal to resetAt (current only)",
+      "question": "For current PB, achievedAt == resetAt is NOT after the line (strictly after). Confirmed decision.",
+      "proposedDefault": "strictly after; equal is excluded from current"
+    }
+  ],
+  "vectors": [
+    {
+      "id": "TC-D1",
+      "description": "Core staleness divergence BEFORE boundary: Feb 105 and Aug 95, evaluated 30 Sep — both fresh; current and lifetime are 105",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "resetAt": null,
+      "evaluatedAt": "2026-09-30",
+      "records": [
+        { "id": "rec-feb", "achievedAt": "2026-02-14", "weight": 105, "reps": 5, "entryKind": "session" },
+        { "id": "rec-aug", "achievedAt": "2026-08-10", "weight": 95, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedCurrentId": "rec-feb",
+      "expectedLifetimeId": "rec-feb"
+    },
+    {
+      "id": "TC-D2",
+      "description": "Core staleness divergence AFTER boundary: same records evaluated 1 Oct — Feb stale, Aug fresh; current drops to 95, lifetime holds 105",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "resetAt": null,
+      "evaluatedAt": "2026-10-01",
+      "records": [
+        { "id": "rec-feb", "achievedAt": "2026-02-14", "weight": 105, "reps": 5, "entryKind": "session" },
+        { "id": "rec-aug", "achievedAt": "2026-08-10", "weight": 95, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedCurrentId": "rec-aug",
+      "expectedLifetimeId": "rec-feb"
+    },
+    {
+      "id": "TC-D3",
+      "description": "No fresh records: only a stale peak remains — current null, lifetime still set",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "resetAt": null,
+      "evaluatedAt": "2026-10-01",
+      "records": [
+        { "id": "rec-feb", "achievedAt": "2026-02-14", "weight": 105, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedCurrentId": null,
+      "expectedLifetimeId": "rec-feb"
+    },
+    {
+      "id": "TC-D4",
+      "description": "No records at all — both null",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "resetAt": null,
+      "evaluatedAt": "2026-10-01",
+      "records": [],
+      "expectedCurrentId": null,
+      "expectedLifetimeId": null
+    },
+    {
+      "id": "TC-D5",
+      "description": "Staleness off — current equals lifetime equals all-time best (even with mixed dates)",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": false, "periods": 2, "unit": "quarters" },
+      "resetAt": null,
+      "evaluatedAt": "2026-10-01",
+      "records": [
+        { "id": "rec-feb", "achievedAt": "2026-02-14", "weight": 105, "reps": 5, "entryKind": "session" },
+        { "id": "rec-aug", "achievedAt": "2026-08-10", "weight": 95, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedCurrentId": "rec-feb",
+      "expectedLifetimeId": "rec-feb"
+    },
+    {
+      "id": "TC-D6",
+      "description": "Reset divergence: current derives only from post-reset fresh records; lifetime derives from everything (pre-reset peak)",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "resetAt": "2026-06-01",
+      "evaluatedAt": "2026-09-15",
+      "records": [
+        { "id": "rec-feb", "achievedAt": "2026-02-14", "weight": 105, "reps": 5, "entryKind": "session" },
+        { "id": "rec-jul", "achievedAt": "2026-07-10", "weight": 90, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedCurrentId": "rec-jul",
+      "expectedLifetimeId": "rec-feb"
+    },
+    {
+      "id": "TC-D7",
+      "description": "Reset with no post-line records: current null; lifetime still the pre-reset all-time best",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "resetAt": "2026-08-01",
+      "evaluatedAt": "2026-09-15",
+      "records": [
+        { "id": "rec-feb", "achievedAt": "2026-02-14", "weight": 105, "reps": 5, "entryKind": "session" },
+        { "id": "rec-jul", "achievedAt": "2026-07-10", "weight": 90, "reps": 5, "entryKind": "session" },
+        { "id": "rec-on-line", "achievedAt": "2026-08-01", "weight": 100, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedCurrentId": null,
+      "expectedLifetimeId": "rec-feb",
+      "notes": "achievedAt == resetAt is excluded from current (strictly after). See OQ-D2. Lifetime ignores reset."
+    },
+    {
+      "id": "TC-D8",
+      "description": "Dated manual entry participates alongside session sets for both current and lifetime",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "resetAt": null,
+      "evaluatedAt": "2026-09-15",
+      "records": [
+        { "id": "rec-session", "achievedAt": "2026-05-01", "weight": 100, "reps": 5, "entryKind": "session" },
+        { "id": "rec-manual", "achievedAt": "2026-06-15", "weight": 110, "reps": 5, "entryKind": "manual" }
+      ],
+      "expectedCurrentId": "rec-manual",
+      "expectedLifetimeId": "rec-manual"
+    },
+    {
+      "id": "TC-D9",
+      "description": "Undated manual: counts toward lifetime, never current (not fresh — no achievedAt to expire from)",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "resetAt": null,
+      "evaluatedAt": "2026-09-15",
+      "records": [
+        { "id": "rec-session", "achievedAt": "2026-05-01", "weight": 100, "reps": 5, "entryKind": "session" },
+        { "id": "rec-undated", "achievedAt": null, "weight": 120, "reps": 5, "entryKind": "manualUndated" }
+      ],
+      "expectedCurrentId": "rec-session",
+      "expectedLifetimeId": "rec-undated",
+      "notes": "Design: undated manuals shown only in the lifetime element. Asserted not fresh so they cannot become currentPB."
+    },
+    {
+      "id": "TC-D10",
+      "description": "Undated manual alone: current null, lifetime is the undated entry",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "resetAt": null,
+      "evaluatedAt": "2026-09-15",
+      "records": [
+        { "id": "rec-undated", "achievedAt": null, "weight": 120, "reps": 5, "entryKind": "manualUndated" }
+      ],
+      "expectedCurrentId": null,
+      "expectedLifetimeId": "rec-undated"
+    },
+    {
+      "id": "TC-D11",
+      "description": "bestWeightAndReps over the pool: higher weight beats higher reps at lower weight (moving floor) for both current and lifetime",
+      "rule": "bestWeightAndReps",
+      "exerciseName": "45-Degree Dumbbell Press",
+      "targetReps": null,
+      "minimumReps": null,
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "resetAt": null,
+      "evaluatedAt": "2026-09-15",
+      "records": [
+        { "id": "rec-hi-reps", "achievedAt": "2026-03-01", "weight": 20, "reps": 12, "entryKind": "session" },
+        { "id": "rec-hi-weight", "achievedAt": "2026-05-01", "weight": 22, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedCurrentId": "rec-hi-weight",
+      "expectedLifetimeId": "rec-hi-weight"
+    },
+    {
+      "id": "TC-D12",
+      "description": "bestWeightAndReps: after heavier peak goes stale, fresh lower-weight higher-reps set becomes current; lifetime holds the peak",
+      "rule": "bestWeightAndReps",
+      "exerciseName": "45-Degree Dumbbell Press",
+      "targetReps": null,
+      "minimumReps": null,
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "resetAt": null,
+      "evaluatedAt": "2026-10-01",
+      "records": [
+        { "id": "rec-peak", "achievedAt": "2026-02-01", "weight": 24, "reps": 6, "entryKind": "session" },
+        { "id": "rec-fresh", "achievedAt": "2026-08-01", "weight": 22, "reps": 8, "entryKind": "session" }
+      ],
+      "expectedCurrentId": "rec-fresh",
+      "expectedLifetimeId": "rec-peak"
+    },
+    {
+      "id": "TC-D13",
+      "description": "bestWeightAndReps: same weight, higher reps wins among fresh post-reset-or-null pool",
+      "rule": "bestWeightAndReps",
+      "exerciseName": "45-Degree Dumbbell Press",
+      "targetReps": null,
+      "minimumReps": null,
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "resetAt": null,
+      "evaluatedAt": "2026-09-15",
+      "records": [
+        { "id": "rec-eight", "achievedAt": "2026-04-01", "weight": 20, "reps": 8, "entryKind": "session" },
+        { "id": "rec-ten", "achievedAt": "2026-06-01", "weight": 20, "reps": 10, "entryKind": "session" }
+      ],
+      "expectedCurrentId": "rec-ten",
+      "expectedLifetimeId": "rec-ten"
+    },
+    {
+      "id": "TC-D14",
+      "description": "Post-reset bestWeightAndReps: current from post-line only; lifetime still the pre-line heavier peak",
+      "rule": "bestWeightAndReps",
+      "exerciseName": "45-Degree Dumbbell Press",
+      "targetReps": null,
+      "minimumReps": null,
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "resetAt": "2026-05-01",
+      "evaluatedAt": "2026-09-15",
+      "records": [
+        { "id": "rec-pre", "achievedAt": "2026-02-01", "weight": 28, "reps": 5, "entryKind": "session" },
+        { "id": "rec-post-a", "achievedAt": "2026-06-01", "weight": 20, "reps": 10, "entryKind": "session" },
+        { "id": "rec-post-b", "achievedAt": "2026-07-01", "weight": 22, "reps": 6, "entryKind": "manual" }
+      ],
+      "expectedCurrentId": "rec-post-b",
+      "expectedLifetimeId": "rec-pre"
+    },
+    {
+      "id": "TC-D15",
+      "description": "Undated manual with resetAt: still never current; still counts toward lifetime (reset does not filter lifetime)",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": true, "periods": 2, "unit": "quarters" },
+      "resetAt": "2026-06-01",
+      "evaluatedAt": "2026-09-15",
+      "records": [
+        { "id": "rec-pre", "achievedAt": "2026-02-14", "weight": 100, "reps": 5, "entryKind": "session" },
+        { "id": "rec-post", "achievedAt": "2026-07-10", "weight": 90, "reps": 5, "entryKind": "session" },
+        { "id": "rec-undated", "achievedAt": null, "weight": 130, "reps": 5, "entryKind": "manualUndated" }
+      ],
+      "expectedCurrentId": "rec-post",
+      "expectedLifetimeId": "rec-undated",
+      "notes": "OQ-D1 dissolved: lifetime ignores reset; undated remains never-fresh."
+    },
+    {
+      "id": "TC-D16",
+      "description": "Current PB tie: equal records on different dates choose the most recent record; lifetime remains the shared best",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": false, "periods": 2, "unit": "quarters" },
+      "resetAt": null,
+      "evaluatedAt": "2026-09-15",
+      "records": [
+        { "id": "rec-early", "achievedAt": "2026-06-01", "weight": 100, "reps": 5, "entryKind": "session" },
+        { "id": "rec-late", "achievedAt": "2026-07-01", "weight": 100, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedCurrentId": "rec-late",
+      "expectedLifetimeId": "rec-early",
+      "notes": "Current PB answers where you are now, so equal records prefer the later achievedAt."
+    },
+    {
+      "id": "TC-D17",
+      "description": "Current PB tie across entry kinds: equal manual and session-derived records choose the later session set (device-shaped case: manual 45x5 @23 Jun, set 45x5 @5 Jul)",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Overhead Press",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": false, "periods": 2, "unit": "quarters" },
+      "resetAt": null,
+      "evaluatedAt": "2026-07-06",
+      "records": [
+        { "id": "rec-manual", "achievedAt": "2026-06-23", "weight": 45, "reps": 5, "entryKind": "manual" },
+        { "id": "rec-set", "achievedAt": "2026-07-05", "weight": 45, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedCurrentId": "rec-set",
+      "expectedLifetimeId": "rec-manual"
+    },
+    {
+      "id": "TC-D18",
+      "description": "Current PB tie with staleness on: earlier equal record has expired, later equal record is still fresh, so currentPB is the later record",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": true, "periods": 1, "unit": "months" },
+      "resetAt": null,
+      "evaluatedAt": "2026-08-31",
+      "records": [
+        { "id": "rec-expired", "achievedAt": "2026-06-30", "weight": 100, "reps": 5, "entryKind": "session" },
+        { "id": "rec-fresh", "achievedAt": "2026-07-01", "weight": 100, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedCurrentId": "rec-fresh",
+      "expectedLifetimeId": "rec-expired"
+    },
+    {
+      "id": "TC-D19",
+      "description": "Three-way current PB tie: when all equal by the PB rule, the latest achievedAt wins",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": false, "periods": 2, "unit": "quarters" },
+      "resetAt": null,
+      "evaluatedAt": "2026-09-15",
+      "records": [
+        { "id": "rec-a", "achievedAt": "2026-05-01", "weight": 110, "reps": 5, "entryKind": "session" },
+        { "id": "rec-b", "achievedAt": "2026-06-01", "weight": 110, "reps": 5, "entryKind": "manual" },
+        { "id": "rec-c", "achievedAt": "2026-07-01", "weight": 110, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedCurrentId": "rec-c",
+      "expectedLifetimeId": "rec-a"
+    }
+  ]
+}

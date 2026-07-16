@@ -160,8 +160,6 @@ enum SyncRecordMerger {
             time: remote.timeSeconds,
             distance: remote.distance,
             achievedAt: remote.achievedAt,
-            isCurrent: remote.isCurrent,
-            wasReset: remote.wasReset,
             entryType: entryType,
             createdAt: remote.createdAt,
             updatedAt: remote.updatedAt,
@@ -172,6 +170,73 @@ enum SyncRecordMerger {
             deletedAt: remote.deletedAt
         )
         try localDataAccess.insertPersonalBest(inserted)
+        try localDataAccess.save()
+        return .inserted
+    }
+
+    @discardableResult
+    static func mergeMember(
+        _ remote: CloudMemberRow,
+        localDataAccess: SyncLocalDataAccess
+    ) throws -> SyncMergeOutcome {
+        let unit = StalenessPeriodUnit(rawValue: remote.stalenessUnit) ?? .quarter
+
+        if let local = try localDataAccess.member(id: remote.id) {
+            if cloudWins(localUpdatedAt: local.updatedAt, cloudUpdatedAt: remote.updatedAt) {
+                apply(remote, to: local, unit: unit)
+                try localDataAccess.save()
+                return .cloudWon
+            }
+            return .localWon
+        }
+
+        let inserted = UserIdentityModel(
+            id: remote.id,
+            role: .member,
+            displayName: remote.displayName,
+            createdAt: remote.createdAt,
+            stalenessEnabled: remote.stalenessEnabled,
+            stalenessPeriods: remote.stalenessPeriods,
+            stalenessUnit: unit,
+            updatedAt: remote.updatedAt,
+            syncedAt: syncedAtForCloudApplied(
+                cloudSyncedAt: remote.syncedAt,
+                cloudUpdatedAt: remote.updatedAt
+            )
+        )
+        try localDataAccess.insertMember(inserted)
+        try localDataAccess.save()
+        return .inserted
+    }
+
+    @discardableResult
+    static func mergeExerciseReset(
+        _ remote: CloudExerciseResetRow,
+        localDataAccess: SyncLocalDataAccess
+    ) throws -> SyncMergeOutcome {
+        if let local = try localDataAccess.exerciseReset(id: remote.id) {
+            if cloudWins(localUpdatedAt: local.updatedAt, cloudUpdatedAt: remote.updatedAt) {
+                apply(remote, to: local)
+                try localDataAccess.save()
+                return .cloudWon
+            }
+            return .localWon
+        }
+
+        let inserted = ExerciseResetModel(
+            id: remote.id,
+            memberId: remote.memberId,
+            exerciseId: remote.exerciseId,
+            resetAt: remote.resetAt,
+            createdAt: remote.createdAt,
+            updatedAt: remote.updatedAt,
+            syncedAt: syncedAtForCloudApplied(
+                cloudSyncedAt: remote.syncedAt,
+                cloudUpdatedAt: remote.updatedAt
+            ),
+            deletedAt: remote.deletedAt
+        )
+        try localDataAccess.insertExerciseReset(inserted)
         try localDataAccess.save()
         return .inserted
     }
@@ -230,9 +295,37 @@ enum SyncRecordMerger {
         local.time = remote.timeSeconds
         local.distance = remote.distance
         local.achievedAt = remote.achievedAt
-        local.isCurrent = remote.isCurrent
-        local.wasReset = remote.wasReset
         local.entryType = entryType
+        local.createdAt = remote.createdAt
+        local.updatedAt = remote.updatedAt
+        local.deletedAt = remote.deletedAt
+        local.syncedAt = syncedAtForCloudApplied(
+            cloudSyncedAt: remote.syncedAt,
+            cloudUpdatedAt: remote.updatedAt
+        )
+    }
+
+    private static func apply(
+        _ remote: CloudMemberRow,
+        to local: UserIdentityModel,
+        unit: StalenessPeriodUnit
+    ) {
+        local.displayName = remote.displayName
+        local.stalenessEnabled = remote.stalenessEnabled
+        local.stalenessPeriods = remote.stalenessPeriods
+        local.stalenessUnit = unit
+        local.createdAt = remote.createdAt
+        local.updatedAt = remote.updatedAt
+        local.syncedAt = syncedAtForCloudApplied(
+            cloudSyncedAt: remote.syncedAt,
+            cloudUpdatedAt: remote.updatedAt
+        )
+    }
+
+    private static func apply(_ remote: CloudExerciseResetRow, to local: ExerciseResetModel) {
+        local.memberId = remote.memberId
+        local.exerciseId = remote.exerciseId
+        local.resetAt = remote.resetAt
         local.createdAt = remote.createdAt
         local.updatedAt = remote.updatedAt
         local.deletedAt = remote.deletedAt

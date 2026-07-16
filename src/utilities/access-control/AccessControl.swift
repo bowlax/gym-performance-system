@@ -25,6 +25,12 @@ enum AccessControl {
         return newId
     }
 
+    /// Switch this install to the broker's canonical member UUID (adopt path).
+    /// Does not retag training rows — callers clear or retag explicitly (#33 discard clears).
+    static func adoptCanonicalMemberId(_ memberId: UUID) {
+        userDefaults.set(memberId.uuidString, forKey: memberUUIDKey)
+    }
+
     static func currentUser() -> UserIdentityModel {
         UserIdentityModel(
             id: persistedMemberId(),

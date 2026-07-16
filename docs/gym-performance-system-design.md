@@ -263,17 +263,34 @@ When a second gym is onboarded, `gymId` will be added to all entities. The local
 - White wolf head on black app icon
 - Distributed via TestFlight -- App Store release deferred to phase 2 completion
 
-**Phase 1 schema decisions:**
+**Phase 1 schema decisions (as built after #28):**
 - `PersonalBest.setId` is optional -- supports manual entry path
-- `PersonalBest.entryType` enum: `sessionDerived` / `manualEntry`
-- `PersonalBest.isCurrent` -- moving flag, only one true per member per exercise
-- `PersonalBest.wasReset` -- tracks whether a record was explicitly reset
+- `PersonalBest.entryType` enum: `manualEntry` for writes; `sessionDerived` is legacy only (no longer written)
+- **No** `isCurrent` / `wasReset` — current and lifetime are **derived** over sets + manuals
+- `ExerciseReset` — one `resetAt` date per member-exercise; undoable; filters current only
+- Member staleness settings on `UserIdentityModel` (via `MemberState`); default OFF
 - `Exercise.pbRule` is optional -- conditioning exercises have no PB rule
 - `bestWeightAndReps` PB rule uses moving weight floor -- going below current best weight is never a PB
-- PB cascade after deletion restores the best non-reset remaining record per exercise PBRule
-- Session deletion cascades to sets and associated PB records
+- Deleting a set or manual entry does not promote stored rows — derivation surfaces the next best
+- Session deletion removes entries and sets; PB status re-derives
 - `ModelSet` naming used instead of Swift's `Set` to avoid type collision
 - `#Predicate` does not support captured enum values -- filter in memory after fetch
+
+#### Personal bests — derived model (#28, built)
+
+Settled and shipped. Authoritative detail: `docs/data-schema.md`, `docs/supabase-schema.md`, vectors under `tests/vectors/pb-*.json`.
+
+| Concept | Definition |
+|---|---|
+| Storage | `sets` + manual `personal_bests` + optional `exercise_resets.reset_at` |
+| Current PB | Best where `achievedAt` > `resetAt` (if any) **and** fresh |
+| Lifetime PB | Best overall (no reset / freshness filter) |
+| Fresh | Before expiry of N complete calendar periods since `achievedAt`; staleness OFF = no expiry |
+| Current tie-break | Equal under rule → **latest** `achievedAt` |
+| Badges | Running maximum over dated records; equal **not** badged (earliest wins) |
+| Reset | Date line, current only, undoable; not a flag on records |
+
+**Deliberate decisions:** (1) existing `was_reset` rows were **not** migrated into `exercise_resets` — members redo resets. (2) Real-device data confirmed sets are a complete record (19/19 `setId`s resolved); derivation reads sets, not session PB rows. Orphan PB rows without sets would lose history and need revisiting.
 
 #### Training consistency visualisation (Board)
 
@@ -702,6 +719,16 @@ The broker is the single place that understands TeamUp. It owns:
 
 The member UUID is the identity *within* the data model. The TeamUp customer ID is the identity *across devices*. The broker reconciles them at connection time.
 
+### On-device identity vs member state (known divergence)
+
+The original local schema treated `UserIdentity` as a SwiftData entity behind the Access Control interface. That store was never wired: phase 1 Access Control returned an ephemeral identity, and issue #16 made **UserDefaults** (`memberUUID` / display name via AccessControl) the live identity store on member devices. Access Control's identity surface is kept as shipped.
+
+`UserIdentityModel` remains in the SwiftData schema. As of the #28 storage step it holds **member state** that must sync (staleness settings, with `updatedAt` / `syncedAt` for dirty push and LWW pull) — machinery UserDefaults does not have. Product code resolves that state only through `MemberState` (`src/utilities/member-state/`), which keys the SwiftData row on the UserDefaults member UUID and returns design defaults (staleness OFF) when no row exists. Sync may still read/write the model for push/pull; derivation and UI must not fetch it ad hoc or go through AccessControl for settings.
+
+This is a deliberate bound on drift, not a full reconciliation of the original design. Re-unifying identity onto SwiftData behind Access Control remains possible later but is out of scope while #16 remediations are in the field.
+
+PB derivation completeness (real device): see **Personal bests — derived model (#28, built)** in the phase 1 schema section above. The comparison against a populated device container confirmed sets + manuals as the complete workout record for derivation.
+
 ### Backend-driven TeamUp OAuth (broker owns the handshake)
 
 OAuth is driven by the token broker Edge Function, not by the client holding TeamUp tokens long-term:
@@ -898,7 +925,7 @@ Identity reconciliation is broker create-or-adopt (section 18). Data reconciliat
 
 - **Interrupted sync:** a failed pull does not advance the last-pull marker; a failed push leaves unmarked (or still-dirty) local rows unmarked. The next cycle retries. Merge by UUID + LWW is safe to repeat. Nothing is lost for the normal path
 - **First sync after connecting (new cloud member):** first-connect push uploads the device's existing local history under the JWT member (heaviest one-time upload). Then the full cycle applies
-- **Anonymous-local-then-adopt (deferred):** a device with pre-existing **anonymous** local data connects and the broker **adopts** an existing cloud member that **already has cloud data**. Implementation is not built yet. Decided resolution: **discard-cloud-wins** — after a clear informed warning framed as a choice at connect, the local anonymous data is discarded and the device is populated from the cloud (clear local + pull). No re-parenting or de-duplication of two histories. Triggers only when the adopted member already has cloud data
+- **Anonymous-local-then-adopt:** a device with pre-existing **anonymous** local data connects and the broker **adopts** an existing cloud member that **already has cloud data**. Resolution: **discard-cloud-wins** — after a clear informed warning framed as a choice at connect, the local anonymous data is discarded and the device is populated from the cloud (clear local + pull). No re-parenting or de-duplication of two histories. Triggers only when the adopted member already has cloud data. Implemented as #33.
 
 ### Offline behaviour
 

@@ -8,6 +8,7 @@ private final class MockSyncServiceAccess: SyncServiceAccess, @unchecked Sendabl
     private(set) var entryBatches: [[[String: Any]]] = []
     private(set) var setBatches: [[[String: Any]]] = []
     private(set) var pbBatches: [[[String: Any]]] = []
+    private(set) var exerciseResetBatches: [[[String: Any]]] = []
     var failOnTable: String?
 
     func upsertSessions(_ rows: [[String: Any]]) async throws {
@@ -38,10 +39,31 @@ private final class MockSyncServiceAccess: SyncServiceAccess, @unchecked Sendabl
         pbBatches.append(rows)
     }
 
+    func upsertExerciseResets(_ rows: [[String: Any]]) async throws {
+        if failOnTable == "exercise_resets" {
+            throw SyncError.uploadFailed(table: "exercise_resets", statusCode: 500, detail: "injected")
+        }
+        exerciseResetBatches.append(rows)
+    }
+
+    var patchMemberUpdated = true
+    private(set) var memberPatches: [[String: Any]] = []
+
+    func patchMemberSettings(memberId: UUID, fields: [String: Any]) async throws -> Bool {
+        if failOnTable == "members" {
+            throw SyncError.uploadFailed(table: "members", statusCode: 500, detail: "injected")
+        }
+        memberPatches.append(fields)
+        _ = memberId
+        return patchMemberUpdated
+    }
+
     func pullSessions(since: Date?) async throws -> [CloudSessionRow] { [] }
     func pullExerciseEntries(since: Date?) async throws -> [CloudExerciseEntryRow] { [] }
     func pullSets(since: Date?) async throws -> [CloudSetRow] { [] }
     func pullPersonalBests(since: Date?) async throws -> [CloudPersonalBestRow] { [] }
+    func pullMembers(since: Date?) async throws -> [CloudMemberRow] { [] }
+    func pullExerciseResets(since: Date?) async throws -> [CloudExerciseResetRow] { [] }
 }
 
 struct FirstConnectUploaderTests {
@@ -151,5 +173,49 @@ struct FirstConnectUploaderTests {
         #expect(orphanSet.syncedAt == nil)
         #expect(cloud.entryBatches.flatMap { $0 }.count == 1)
         #expect(cloud.setBatches.flatMap { $0 }.count == 1)
+    }
+
+    @Test
+    @MainActor
+    func uploadMemberSettingsSkipsWhenCloudMemberMissing() async throws {
+        let context = try TestHelpers.makeInMemoryContext()
+        let local = SwiftDataSyncLocalDataAccess(context: context)
+        let cloud = MockSyncServiceAccess()
+        cloud.patchMemberUpdated = false
+
+        let memberId = UUID(uuidString: "AAAAAAAA-0000-0000-0000-000000000002")!
+        let credentials = SyncCredentials(
+            supabaseURL: URL(string: "https://example.supabase.co")!,
+            publishableKey: "test-key",
+            accessToken: "token",
+            memberId: memberId,
+            gymId: UUID(uuidString: "0abc9301-b048-40f5-8bdc-9bb389916b59")!,
+            deviceId: UUID()
+        )
+
+        let member = UserIdentityModel(
+            id: memberId,
+            role: .member,
+            displayName: "Lee",
+            stalenessEnabled: true
+        )
+        context.insert(member)
+        try context.save()
+
+        let uploader = FirstConnectUploader(
+            localDataAccess: local,
+            syncServiceAccess: cloud,
+            credentials: credentials,
+            batchSize: 10
+        )
+
+        let result = await uploader.upload(memberId: memberId)
+        #expect(result.completed == false)
+        #expect(result.errorMessage == SyncError.memberIdentityNotEstablished.localizedDescription)
+        #expect(member.syncedAt == nil)
+        #expect(cloud.memberPatches.count == 1)
+        #expect(cloud.memberPatches[0]["id"] == nil)
+        #expect(cloud.memberPatches[0]["gym_id"] == nil)
+        #expect(result.counts.sessions == 0)
     }
 }
