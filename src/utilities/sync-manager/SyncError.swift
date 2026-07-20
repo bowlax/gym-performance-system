@@ -8,6 +8,8 @@ enum SyncError: Error, LocalizedError, Equatable {
     case pullFailed(table: String, statusCode: Int, detail: String)
     /// PATCH matched zero member rows — broker has not created-or-adopted yet.
     case memberIdentityNotEstablished
+    /// GoTrue refresh_token grant failed — caller should mark session expired.
+    case sessionRefreshFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -23,6 +25,8 @@ enum SyncError: Error, LocalizedError, Equatable {
             return "Pull from \(table) failed (\(statusCode)): \(detail)"
         case .memberIdentityNotEstablished:
             return "Cannot sync member settings: no cloud member row yet (broker create-or-adopt has not established identity). Settings were not marked synced."
+        case .sessionRefreshFailed(let detail):
+            return "Session refresh failed: \(detail)"
         }
     }
 }

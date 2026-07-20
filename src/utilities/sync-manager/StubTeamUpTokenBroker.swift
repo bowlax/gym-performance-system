@@ -45,17 +45,28 @@ struct StubTeamUpTokenBroker: TokenBrokerClient {
         }
 
         let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard let token = object?["token"] as? String, !token.isEmpty else {
+        let access =
+            (object?["access_token"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            ?? (object?["token"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        guard let access else {
             throw SyncError.invalidBrokerToken("Broker response did not include token")
         }
+
+        let refresh = (object?["refresh_token"] as? String).flatMap { $0.isEmpty ? nil : $0 }
 
         let expiresAt: Date?
         if let expiresAtSeconds = object?["expires_at"] as? Double {
             expiresAt = Date(timeIntervalSince1970: expiresAtSeconds)
+        } else if let expiresAtSeconds = object?["expires_at"] as? Int {
+            expiresAt = Date(timeIntervalSince1970: TimeInterval(expiresAtSeconds))
         } else {
             expiresAt = nil
         }
 
-        return BrokerSession(token: token, expiresAt: expiresAt)
+        return BrokerSession(
+            token: access,
+            refreshToken: refresh,
+            expiresAt: expiresAt
+        )
     }
 }

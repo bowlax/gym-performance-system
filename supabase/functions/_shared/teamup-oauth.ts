@@ -98,6 +98,59 @@ export function shouldUseStubTeamUpPath(teamupToken: string): boolean {
   return isStubTeamUpToken(teamupToken);
 }
 
+/**
+ * TeamUp appends `?code=&state=` even when redirect_uri already has
+ * `?oauth=callback`, producing `?oauth=callback?code=…&state=…`.
+ * In that form `oauth` parses as `callback?code=…`, not `callback`.
+ */
+export function isOAuthCallbackQueryParam(oauth: string | null): boolean {
+  return oauth === "callback" || (oauth?.startsWith("callback?") ?? false);
+}
+
+export type OAuthGetRoute = "authorize" | "callback" | "none";
+
+/** Same decision `routeOAuthGet` uses for GET dispatch (testable without Deno.serve). */
+export function resolveOAuthGetRoute(url: URL): OAuthGetRoute {
+  const oauth = url.searchParams.get("oauth");
+  if (oauth === "authorize") {
+    return "authorize";
+  }
+  if (isOAuthCallbackQueryParam(oauth)) {
+    return "callback";
+  }
+  return "none";
+}
+
+export interface ParsedOAuthCallbackParams {
+  code: string | null;
+  state: string | null;
+  error: string | null;
+  errorDescription: string | null;
+}
+
+/**
+ * Extract OAuth callback params from both:
+ * - clean: `?oauth=callback&code=X&state=Y`
+ * - TeamUp mangled: `?oauth=callback?code=X&state=Y` (code nested in oauth)
+ */
+export function parseOAuthCallbackParams(url: URL): ParsedOAuthCallbackParams {
+  const oauth = url.searchParams.get("oauth");
+  let code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+
+  if (!code && oauth && oauth.includes("?")) {
+    const nested = new URLSearchParams(oauth.slice(oauth.indexOf("?") + 1));
+    code = nested.get("code");
+  }
+
+  return {
+    code,
+    state,
+    error: url.searchParams.get("error"),
+    errorDescription: url.searchParams.get("error_description"),
+  };
+}
+
 function base64UrlEncode(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) {
@@ -325,5 +378,31 @@ export function appendTokenToReturnUrl(
 ): string {
   const url = new URL(returnUrl);
   url.searchParams.set("token", token);
+  return url.toString();
+}
+
+/**
+ * Auth-path OAuth callback redirect (#17).
+ *
+ * SECURITY — refresh_token in the query string is a deliberate choice for the
+ * iOS ASWebAuthenticationSession callback: the OS delivers the URL to the app
+ * process, not into browser history. When the web OAuth return path is built,
+ * prefer a URL fragment or a one-time-code exchange instead — a normal browser
+ * redirect is where query-string leakage (logs, Referer, history) bites.
+ */
+export function appendSessionToReturnUrl(
+  returnUrl: string,
+  session: {
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: number;
+  },
+): string {
+  const url = new URL(returnUrl);
+  url.searchParams.set("access_token", session.accessToken);
+  url.searchParams.set("refresh_token", session.refreshToken);
+  url.searchParams.set("expires_at", String(session.expiresAt));
+  // Alias so existing OAuthConnectAuthClient (?token=) keeps working.
+  url.searchParams.set("token", session.accessToken);
   return url.toString();
 }

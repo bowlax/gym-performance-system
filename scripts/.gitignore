@@ -1,0 +1,5 @@
+.synthetic-auth-user.json
+node_modules/
+.auth-user-dimension-proof.json
+.ios-refresh-live-proof.json
+.ios-refresh-live-input.json

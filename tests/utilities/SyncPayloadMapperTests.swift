@@ -81,6 +81,8 @@ struct SyncPayloadMapperTests {
         #expect(row["staleness_unit"] as? String == "quarter")
         #expect(row["id"] == nil)
         #expect(row["gym_id"] == nil)
+        #expect(row["teamup_customer_id"] == nil)
+        #expect(row["auth_user_id"] == nil)
         #expect(row["source_device_id"] as? String == deviceId.uuidString)
     }
 

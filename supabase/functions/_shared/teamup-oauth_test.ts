@@ -1,5 +1,6 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import {
+  appendSessionToReturnUrl,
   appendTokenToReturnUrl,
   buildTeamUpAuthorizeUrl,
   decodeTeamUpAccessToken,
@@ -8,14 +9,17 @@ import {
   isAllowedReturnUrl,
   isStubTeamUpToken,
   isTeamUpOAuthConfigured,
+  parseOAuthCallbackParams,
   parseProviderIdFromScope,
   pkceCodeChallengeS256,
   readTeamUpOAuthConfig,
+  resolveOAuthGetRoute,
   resolveOAuthReturnUrl,
   shouldUseStubTeamUpPath,
   signOAuthState,
   stubTeamUpVerification,
   verifyOAuthState,
+  type OAuthGetRoute,
   type TeamUpOAuthConfig,
 } from "./teamup-oauth.ts";
 
@@ -207,4 +211,110 @@ Deno.test("appendTokenToReturnUrl adds token query param", () => {
     appendTokenToReturnUrl("https://app.example/auth/callback", "jwt"),
     "https://app.example/auth/callback?token=jwt",
   );
+});
+
+Deno.test("appendSessionToReturnUrl adds access, refresh, expires, and token alias", () => {
+  assertEquals(
+    appendSessionToReturnUrl("https://app.example/auth/callback", {
+      accessToken: "access",
+      refreshToken: "refresh",
+      expiresAt: 1700000000,
+    }),
+    "https://app.example/auth/callback?access_token=access&refresh_token=refresh&expires_at=1700000000&token=access",
+  );
+});
+
+/**
+ * Mirrors token-broker `Deno.serve` GET → `routeOAuthGet` (same helpers).
+ * Cannot import `token-broker/index.ts` (it calls Deno.serve on load).
+ */
+function dispatchOAuthGetLikeServe(req: Request): {
+  status: number;
+  route: OAuthGetRoute;
+  code?: string | null;
+  state?: string | null;
+  error?: string;
+} {
+  if (req.method !== "GET") {
+    return { status: 405, route: "none", error: "Method not allowed" };
+  }
+  const url = new URL(req.url);
+  const route = resolveOAuthGetRoute(url);
+  if (route === "none") {
+    return { status: 405, route, error: "Method not allowed" };
+  }
+  if (route === "callback") {
+    const parsed = parseOAuthCallbackParams(url);
+    return {
+      status: 200,
+      route,
+      code: parsed.code,
+      state: parsed.state,
+    };
+  }
+  return { status: 200, route };
+}
+
+const BROKER = "https://ivrsxhuktebvypgtfoww.supabase.co/functions/v1/token-broker";
+
+Deno.test("HTTP GET routing: TeamUp mangled callback?code reaches callback with code+state", () => {
+  const req = new Request(
+    `${BROKER}?oauth=callback?code=AUTH_CODE_X&state=STATE_Y`,
+  );
+  const result = dispatchOAuthGetLikeServe(req);
+  assertEquals(result.status, 200);
+  assertEquals(result.route, "callback");
+  assertEquals(result.code, "AUTH_CODE_X");
+  assertEquals(result.state, "STATE_Y");
+  assertEquals(result.error, undefined);
+});
+
+Deno.test("HTTP GET routing: clean oauth=callback&code&state reaches callback", () => {
+  const req = new Request(
+    `${BROKER}?oauth=callback&code=AUTH_CODE_X&state=STATE_Y`,
+  );
+  const result = dispatchOAuthGetLikeServe(req);
+  assertEquals(result.status, 200);
+  assertEquals(result.route, "callback");
+  assertEquals(result.code, "AUTH_CODE_X");
+  assertEquals(result.state, "STATE_Y");
+});
+
+Deno.test("HTTP GET routing: oauth=authorize still routes to authorize", () => {
+  const req = new Request(
+    `${BROKER}?oauth=authorize&deviceMemberId=aaaaaaaa-0000-0000-0000-000000000001&surface=ios`,
+  );
+  const result = dispatchOAuthGetLikeServe(req);
+  assertEquals(result.status, 200);
+  assertEquals(result.route, "authorize");
+});
+
+Deno.test("HTTP GET routing: bare GET with no oauth still 405s", () => {
+  const req = new Request(BROKER);
+  const result = dispatchOAuthGetLikeServe(req);
+  assertEquals(result.status, 405);
+  assertEquals(result.route, "none");
+  assertEquals(result.error, "Method not allowed");
+});
+
+Deno.test("parseOAuthCallbackParams recovers code from nested oauth value", () => {
+  const mangled = new URL(
+    `${BROKER}?oauth=callback?code=NESTED_CODE&state=TOP_STATE`,
+  );
+  assertEquals(parseOAuthCallbackParams(mangled), {
+    code: "NESTED_CODE",
+    state: "TOP_STATE",
+    error: null,
+    errorDescription: null,
+  });
+
+  const clean = new URL(
+    `${BROKER}?oauth=callback&code=CLEAN_CODE&state=CLEAN_STATE`,
+  );
+  assertEquals(parseOAuthCallbackParams(clean), {
+    code: "CLEAN_CODE",
+    state: "CLEAN_STATE",
+    error: null,
+    errorDescription: null,
+  });
 });

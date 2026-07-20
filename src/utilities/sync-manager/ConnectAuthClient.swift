@@ -68,20 +68,39 @@ struct OAuthConnectAuthClient: ConnectAuthClient {
         return try Self.session(fromCallbackURL: callbackURL)
     }
 
-    /// Parses `token` (and optional `expires_at`) from the broker redirect.
+    /// Parses broker redirect query params into a `BrokerSession`.
+    ///
+    /// Auth path (#17): `access_token`, `refresh_token`, `expires_at`, and
+    /// `token` (alias of access). Stub/legacy: `token` only.
     static func session(fromCallbackURL url: URL) throws -> BrokerSession {
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              let token = components.queryItems?.first(where: { $0.name == "token" })?.value,
-              !token.isEmpty else {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
             throw SyncError.invalidBrokerToken("OAuth callback missing token")
         }
+        let items = components.queryItems ?? []
+        func query(_ name: String) -> String? {
+            items.first(where: { $0.name == name })?.value
+        }
+
+        let access =
+            query("access_token").flatMap { $0.isEmpty ? nil : $0 }
+            ?? query("token").flatMap { $0.isEmpty ? nil : $0 }
+        guard let access else {
+            throw SyncError.invalidBrokerToken("OAuth callback missing token")
+        }
+
+        let refresh = query("refresh_token").flatMap { $0.isEmpty ? nil : $0 }
+
         let expiresAt: Date?
-        if let raw = components.queryItems?.first(where: { $0.name == "expires_at" })?.value,
-           let seconds = Double(raw) {
+        if let raw = query("expires_at"), let seconds = Double(raw) {
             expiresAt = Date(timeIntervalSince1970: seconds)
         } else {
             expiresAt = nil
         }
-        return BrokerSession(token: token, expiresAt: expiresAt)
+
+        return BrokerSession(
+            token: access,
+            refreshToken: refresh,
+            expiresAt: expiresAt
+        )
     }
 }

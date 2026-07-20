@@ -14,6 +14,8 @@
 		8354444DA17B4D3887A77302 /* SyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9365B145EABD4AEA9B612F15 /* SyncCoordinator.swift */; };
 		827280C05A1C4454901A4E2C /* SyncStatusStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229CD1C234184A2D883B3262 /* SyncStatusStoreTests.swift */; };
 		60BFD0F8674E4A979640959F /* ConnectFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6848FADF76A4F1FB55F84C6 /* ConnectFlowTests.swift */; };
+		4EB7FBA4B6D04FA1A50BA067 /* GoTrueTokenRefresherLiveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226C6F8336A34EA88A40198F /* GoTrueTokenRefresherLiveTests.swift */; };
+		B6E51D3689384AFC97480F14 /* LiveRefreshProofFixture.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63F36FBE5E684866B6D02195 /* LiveRefreshProofFixture.generated.swift */; };
 		B82C9C531EF24646883CD68D /* ConnectFeatureAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E4E63E4AD4E4C83BFFCBCB5 /* ConnectFeatureAvailability.swift */; };
 		EACB58933F9543BF89AB5347 /* MemberConnectionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 577E98D91B3D4124BF6CFBB5 /* MemberConnectionStore.swift */; };
 		996175E8451F4027A0B9667C /* ConnectAuthClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 158E72E639EA446094666C9C /* ConnectAuthClient.swift */; };
@@ -102,6 +104,8 @@
 		0624B46218A341EE9DDA29A0 /* SyncConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DC74532FDA940D4807F63A4 /* SyncConstants.swift */; };
 		40EC9ED46F7243B0A1CC9391 /* SyncCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B32316D4484541AC12FF22 /* SyncCredentials.swift */; };
 		FCF5B4A6524A4753ACA7EF1B /* BrokerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 727200D9CC73477099179AE2 /* BrokerSession.swift */; };
+		B2C75B43DE244B33B5ABFABD /* GoTrueTokenRefresher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6858DA0E6E8547B68327BE52 /* GoTrueTokenRefresher.swift */; };
+		40728F116D8945E9980D974E /* KeychainTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CDCB70F6A9140C39171931C /* KeychainTokenStore.swift */; };
 		3EB53BA48FAE4EF1A1AAF8E3 /* JWTClaimsDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBC878AC1AB24BE487B92AAA /* JWTClaimsDecoder.swift */; };
 		0BBB01272971401B821D7400 /* GymPerfCloudConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDE19F90733F4CA9A8F17F98 /* GymPerfCloudConfig.swift */; };
 		377F1891030641D683483472 /* SyncDeviceIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BAFC9CDA40D4593A382C18D /* SyncDeviceIdentity.swift */; };
@@ -145,6 +149,8 @@
 		9365B145EABD4AEA9B612F15 /* SyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncCoordinator.swift; sourceTree = "<group>"; };
 		229CD1C234184A2D883B3262 /* SyncStatusStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStatusStoreTests.swift; sourceTree = "<group>"; };
 		C6848FADF76A4F1FB55F84C6 /* ConnectFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectFlowTests.swift; sourceTree = "<group>"; };
+		226C6F8336A34EA88A40198F /* GoTrueTokenRefresherLiveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoTrueTokenRefresherLiveTests.swift; sourceTree = "<group>"; };
+		63F36FBE5E684866B6D02195 /* LiveRefreshProofFixture.generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveRefreshProofFixture.generated.swift; sourceTree = "<group>"; };
 		9E4E63E4AD4E4C83BFFCBCB5 /* ConnectFeatureAvailability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectFeatureAvailability.swift; sourceTree = "<group>"; };
 		577E98D91B3D4124BF6CFBB5 /* MemberConnectionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberConnectionStore.swift; sourceTree = "<group>"; };
 		158E72E639EA446094666C9C /* ConnectAuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectAuthClient.swift; sourceTree = "<group>"; };
@@ -240,6 +246,8 @@
 		4DC74532FDA940D4807F63A4 /* SyncConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncConstants.swift; sourceTree = "<group>"; };
 		B9B32316D4484541AC12FF22 /* SyncCredentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncCredentials.swift; sourceTree = "<group>"; };
 		727200D9CC73477099179AE2 /* BrokerSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrokerSession.swift; sourceTree = "<group>"; };
+		6858DA0E6E8547B68327BE52 /* GoTrueTokenRefresher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoTrueTokenRefresher.swift; sourceTree = "<group>"; };
+		8CDCB70F6A9140C39171931C /* KeychainTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainTokenStore.swift; sourceTree = "<group>"; };
 		EBC878AC1AB24BE487B92AAA /* JWTClaimsDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JWTClaimsDecoder.swift; sourceTree = "<group>"; };
 		CDE19F90733F4CA9A8F17F98 /* GymPerfCloudConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GymPerfCloudConfig.swift; sourceTree = "<group>"; };
 		4BAFC9CDA40D4593A382C18D /* SyncDeviceIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncDeviceIdentity.swift; sourceTree = "<group>"; };
@@ -275,6 +283,8 @@
 				229CD1C234184A2D883B3262 /* SyncStatusStoreTests.swift */,
 				93F8A8E11A2C4AD5BA82821B /* DiscardCloudWinsTests.swift */,
 				C6848FADF76A4F1FB55F84C6 /* ConnectFlowTests.swift */,
+				226C6F8336A34EA88A40198F /* GoTrueTokenRefresherLiveTests.swift */,
+				63F36FBE5E684866B6D02195 /* LiveRefreshProofFixture.generated.swift */,
 			2B5FBF1644AC4F50B122259A /* FirstConnectUploadIntegrationTests.swift */,
 			8326C90196F44D9889EF5A6A /* FirstConnectUploaderTests.swift */,
 			FAC73017A7D64EBEB4D0B26F /* SyncCycleIntegrationTests.swift */,
@@ -542,6 +552,8 @@
 				4DC74532FDA940D4807F63A4 /* SyncConstants.swift */,
 				B9B32316D4484541AC12FF22 /* SyncCredentials.swift */,
 				727200D9CC73477099179AE2 /* BrokerSession.swift */,
+				6858DA0E6E8547B68327BE52 /* GoTrueTokenRefresher.swift */,
+				8CDCB70F6A9140C39171931C /* KeychainTokenStore.swift */,
 				EBC878AC1AB24BE487B92AAA /* JWTClaimsDecoder.swift */,
 				CDE19F90733F4CA9A8F17F98 /* GymPerfCloudConfig.swift */,
 				4BAFC9CDA40D4593A382C18D /* SyncDeviceIdentity.swift */,
@@ -689,6 +701,8 @@
 				827280C05A1C4454901A4E2C /* SyncStatusStoreTests.swift in Sources */,
 				5BCB03A860264243B0D2E744 /* DiscardCloudWinsTests.swift in Sources */,
 				60BFD0F8674E4A979640959F /* ConnectFlowTests.swift in Sources */,
+				4EB7FBA4B6D04FA1A50BA067 /* GoTrueTokenRefresherLiveTests.swift in Sources */,
+				B6E51D3689384AFC97480F14 /* LiveRefreshProofFixture.generated.swift in Sources */,
 				2187E5B4EB726C8B44AEAF11 /* MemberPerformanceTests.swift in Sources */,
 				DD1392EB9AFC3CB660F0FDB3 /* OnboardingPBSaverTests.swift in Sources */,
 				196CA6587C6C16BF53146ABF /* PBEvaluationVectors.swift in Sources */,
@@ -798,6 +812,8 @@
 			0BBB01272971401B821D7400 /* GymPerfCloudConfig.swift in Sources */,
 			3EB53BA48FAE4EF1A1AAF8E3 /* JWTClaimsDecoder.swift in Sources */,
 			FCF5B4A6524A4753ACA7EF1B /* BrokerSession.swift in Sources */,
+				B2C75B43DE244B33B5ABFABD /* GoTrueTokenRefresher.swift in Sources */,
+				40728F116D8945E9980D974E /* KeychainTokenStore.swift in Sources */,
 			40EC9ED46F7243B0A1CC9391 /* SyncCredentials.swift in Sources */,
 			0624B46218A341EE9DDA29A0 /* SyncConstants.swift in Sources */,
 			);

@@ -78,8 +78,8 @@ final class SyncCoordinator {
 
     private func runCycle(trigger: Trigger) async -> SyncCycleResult? {
         guard ConnectFeatureAvailability.isAvailable else { return nil }
-        guard MemberConnectionStore.hasUsableSession,
-              let session = MemberConnectionStore.brokerSessionIfUsable(),
+        // Auth path: refresh if needed (single-flight). Stub: no-op when no refresh_token.
+        guard let session = await MemberConnectionStore.ensureFreshSession(),
               let memberId = MemberConnectionStore.connectedMemberId else {
             return nil
         }
@@ -92,8 +92,12 @@ final class SyncCoordinator {
         if let existing = inFlightTask {
             if trigger == .manual {
                 _ = await existing.value
-                // Fresh cycle so "Sync now" reflects post-ask state.
-                return await startCycle(session: session, memberId: memberId, trigger: trigger)
+                // Re-ensure after the prior cycle — refresh may have rotated tokens.
+                guard let fresh = await MemberConnectionStore.ensureFreshSession(),
+                      let memberId = MemberConnectionStore.connectedMemberId else {
+                    return nil
+                }
+                return await startCycle(session: fresh, memberId: memberId, trigger: trigger)
             }
             if trigger == .sessionSaved {
                 pendingAfterCurrent = true
