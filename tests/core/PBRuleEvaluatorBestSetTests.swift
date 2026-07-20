@@ -37,6 +37,23 @@ struct PBRuleEvaluatorBestSetTests {
     }
 
     @Test
+    func heaviestWeightThenLongestTime_prefersHeavierThenLongerHold() {
+        let shorter = ModelSet(exerciseEntryId: entryId, weight: 20, time: 30)
+        let longer = ModelSet(exerciseEntryId: entryId, weight: 20, time: 40)
+        let heavier = ModelSet(exerciseEntryId: entryId, weight: 25, time: 30)
+        let sets = [shorter, longer, heavier]
+
+        let folded = PBRuleEvaluator.bestSet(
+            among: sets,
+            rule: .heaviestWeightThenLongestTime
+        )
+        let legacy = legacyBestSet(among: sets, rule: .heaviestWeightThenLongestTime)
+
+        #expect(folded?.id == heavier.id)
+        #expect(folded?.id == legacy?.id)
+    }
+
+    @Test
     func fastestTime_prefersMinimumTime() {
         let slow = ModelSet(exerciseEntryId: entryId, time: 60)
         let fast = ModelSet(exerciseEntryId: entryId, time: 45)
@@ -125,6 +142,17 @@ struct PBRuleEvaluatorBestSetTests {
             return sets
                 .filter { $0.weight != nil }
                 .max { ($0.weight ?? 0) < ($1.weight ?? 0) }
+        case .heaviestWeightThenLongestTime:
+            return sets
+                .filter { $0.weight != nil && $0.time != nil }
+                .max {
+                    let leftWeight = $0.weight ?? 0
+                    let rightWeight = $1.weight ?? 0
+                    if leftWeight != rightWeight {
+                        return leftWeight < rightWeight
+                    }
+                    return ($0.time ?? 0) < ($1.time ?? 0)
+                }
         case .fastestTime:
             return sets
                 .filter { $0.time != nil }

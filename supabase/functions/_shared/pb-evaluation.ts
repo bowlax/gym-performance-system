@@ -8,6 +8,7 @@
 
 export type PBRule =
   | "heaviestWeight"
+  | "heaviestWeightThenLongestTime"
   | "heaviestWeightAtReps"
   | "bestWeightAndReps"
   | "fastestTime"
@@ -97,6 +98,41 @@ function isHeaviestWeightPB(
   }
 
   return setWeight > currentWeight;
+}
+
+function isHeaviestWeightThenLongestTimePB(
+  newSet: SetState,
+  currentPB: SetState | null,
+): boolean {
+  const setWeight = newSet.weight;
+  const setTime = newSet.time;
+  if (setWeight == null || setTime == null) {
+    return false;
+  }
+
+  if (currentPB == null) {
+    return true;
+  }
+
+  const currentWeight = currentPB.weight;
+  if (currentWeight == null) {
+    return true;
+  }
+
+  if (setWeight < currentWeight) {
+    return false;
+  }
+
+  if (setWeight > currentWeight) {
+    return true;
+  }
+
+  const currentTime = currentPB.time;
+  if (currentTime == null) {
+    return false;
+  }
+
+  return setTime > currentTime;
 }
 
 function isFastestTimePB(
@@ -190,6 +226,9 @@ export function evaluatePB(input: PBEvaluationInput): PBEvaluationResult {
       break;
     case "heaviestWeight":
       isPB = isHeaviestWeightPB(newSet, currentPB);
+      break;
+    case "heaviestWeightThenLongestTime":
+      isPB = isHeaviestWeightThenLongestTimePB(newSet, currentPB);
       break;
     case "fastestTime":
       isPB = isFastestTimePB(newSet, currentPB);

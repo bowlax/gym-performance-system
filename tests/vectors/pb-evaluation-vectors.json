@@ -180,34 +180,56 @@
     {
       "id": "TC-E21",
       "description": "Heavier weight is a PB",
-      "rule": "heaviestWeight",
+      "rule": "heaviestWeightThenLongestTime",
       "exerciseName": "Plank",
       "targetReps": null,
       "minimumReps": null,
-      "currentPB": { "weight": 20 },
-      "newSet": { "weight": 25 },
+      "currentPB": { "weight": 20, "time": 30 },
+      "newSet": { "weight": 25, "time": 30 },
       "expectedResult": "isPB"
     },
     {
       "id": "TC-E22",
       "description": "Lighter weight is not a PB",
-      "rule": "heaviestWeight",
+      "rule": "heaviestWeightThenLongestTime",
       "exerciseName": "Plank",
       "targetReps": null,
       "minimumReps": null,
-      "currentPB": { "weight": 20 },
-      "newSet": { "weight": 15 },
+      "currentPB": { "weight": 20, "time": 30 },
+      "newSet": { "weight": 15, "time": 60 },
       "expectedResult": "notPB"
     },
     {
       "id": "TC-E23",
-      "description": "Equal weight is not a PB",
-      "rule": "heaviestWeight",
+      "description": "Equal weight and equal time is not a PB",
+      "rule": "heaviestWeightThenLongestTime",
       "exerciseName": "Plank",
       "targetReps": null,
       "minimumReps": null,
-      "currentPB": { "weight": 20 },
-      "newSet": { "weight": 20 },
+      "currentPB": { "weight": 20, "time": 30 },
+      "newSet": { "weight": 20, "time": 30 },
+      "expectedResult": "notPB"
+    },
+    {
+      "id": "TC-E24",
+      "description": "Longer time at same weight is a PB",
+      "rule": "heaviestWeightThenLongestTime",
+      "exerciseName": "Plank",
+      "targetReps": null,
+      "minimumReps": null,
+      "currentPB": { "weight": 20, "time": 30 },
+      "newSet": { "weight": 20, "time": 40 },
+      "expectedResult": "isPB"
+    },
+    {
+      "id": "TC-E25",
+      "description": "Shorter time at same weight is not a PB",
+      "rule": "heaviestWeightThenLongestTime",
+      "exerciseName": "Plank",
+      "targetReps": null,
+      "minimumReps": null,
+      "currentPB": { "weight": 20, "time": 40 },
+      "newSet": { "weight": 20, "time": 30 },
       "expectedResult": "notPB"
     }
   ]

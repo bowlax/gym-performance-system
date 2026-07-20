@@ -196,7 +196,7 @@ extension ExerciseModel {
                 name: "Plank",
                 category: .pbExercise,
                 measurementType: .weightAndTime,
-                pbRule: .heaviestWeight,
+                pbRule: .heaviestWeightThenLongestTime,
                 targetReps: nil,
                 minimumReps: nil,
                 parentExerciseId: nil,

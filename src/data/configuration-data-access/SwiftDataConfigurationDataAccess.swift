@@ -52,6 +52,10 @@ final class SwiftDataConfigurationDataAccess: ConfigurationDataAccess {
                 exercise.minimumReps = seed.minimumReps
                 changed = true
             }
+            if exercise.pbRule != seed.pbRule {
+                exercise.pbRule = seed.pbRule
+                changed = true
+            }
         }
 
         if changed {

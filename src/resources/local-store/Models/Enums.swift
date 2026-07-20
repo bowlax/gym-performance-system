@@ -23,6 +23,7 @@ enum MeasurementType: String, Codable {
 enum PBRule: String, Codable {
     case heaviestWeightAtReps
     case heaviestWeight
+    case heaviestWeightThenLongestTime
     case fastestTime
     case longestDistance
     case mostReps

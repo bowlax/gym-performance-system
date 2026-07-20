@@ -9,6 +9,7 @@ const KNOWN_RULES = new Set<string>([
   "heaviestWeightAtReps",
   "bestWeightAndReps",
   "heaviestWeight",
+  "heaviestWeightThenLongestTime",
   "fastestTime",
   "longestDistance",
   "mostReps",

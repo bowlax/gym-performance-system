@@ -18,6 +18,7 @@ export const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export const PB_RULES: readonly PBRule[] = [
   "heaviestWeight",
+  "heaviestWeightThenLongestTime",
   "heaviestWeightAtReps",
   "bestWeightAndReps",
   "fastestTime",

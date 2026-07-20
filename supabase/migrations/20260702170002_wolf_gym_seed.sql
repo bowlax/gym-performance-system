@@ -40,6 +40,6 @@ insert into exercises (
     ('00000000-0000-0000-0000-000000000012', '0abc9301-b048-40f5-8bdc-9bb389916b59', 'One Arm Dumbbell Row',     'pbExercise', 'weightAndReps', 'bestWeightAndReps',    null, null, null,                                       15, true),
     ('00000000-0000-0000-0000-000000000013', '0abc9301-b048-40f5-8bdc-9bb389916b59', 'Push-ups',                 'pbExercise', 'weightAndReps', 'bestWeightAndReps',    null, null, null,                                       16, true),
     ('00000000-0000-0000-0000-000000000018', '0abc9301-b048-40f5-8bdc-9bb389916b59', 'Ski 500m',                 'pbExercise', 'timeOnly',      'fastestTime',          null, null, null,                                       17, true),
-    ('00000000-0000-0000-0000-000000000017', '0abc9301-b048-40f5-8bdc-9bb389916b59', 'Plank',                    'pbExercise', 'weightAndTime', 'heaviestWeight',       null, null, null,                                       18, true),
+    ('00000000-0000-0000-0000-000000000017', '0abc9301-b048-40f5-8bdc-9bb389916b59', 'Plank',                    'pbExercise', 'weightAndTime', 'heaviestWeightThenLongestTime', null, null, null,                                       18, true),
     ('00000000-0000-0000-0000-000000000014', '0abc9301-b048-40f5-8bdc-9bb389916b59', 'Pulldown',                 'pbExercise', 'weightAndReps', 'bestWeightAndReps',    null, null, null,                                       19, true)
 on conflict (id) do nothing;

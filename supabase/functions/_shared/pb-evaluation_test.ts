@@ -28,7 +28,7 @@ const vectorFile = JSON.parse(
 ) as PBEvaluationVectorFile;
 
 Deno.test("PB evaluation vectors match shared contract", () => {
-  assertEquals(vectorFile.vectors.length, 19);
+  assertEquals(vectorFile.vectors.length, 21);
 });
 
 for (const vector of vectorFile.vectors) {

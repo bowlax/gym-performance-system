@@ -50,6 +50,8 @@ enum PBRuleEvaluator {
             return isBestWeightAndRepsPB(newSet: newSet, current: current)
         case .heaviestWeight:
             return isHeaviestWeightPB(newSet: newSet, current: current)
+        case .heaviestWeightThenLongestTime:
+            return isHeaviestWeightThenLongestTimePB(newSet: newSet, current: current)
         case .fastestTime:
             return isFastestTimePB(newSet: newSet, current: current)
         case .longestDistance:
@@ -97,6 +99,20 @@ enum PBRuleEvaluator {
         guard let current else { return true }
         guard let currentWeight = current.weight else { return true }
         return setWeight > currentWeight
+    }
+
+    private static func isHeaviestWeightThenLongestTimePB(
+        newSet: Measurement,
+        current: Measurement?
+    ) -> Bool {
+        guard let setWeight = newSet.weight else { return false }
+        guard let setTime = newSet.time else { return false }
+        guard let current else { return true }
+        guard let currentWeight = current.weight else { return true }
+        if setWeight < currentWeight { return false }
+        if setWeight > currentWeight { return true }
+        guard let currentTime = current.time else { return false }
+        return setTime > currentTime
     }
 
     private static func isFastestTimePB(
