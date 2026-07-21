@@ -30,7 +30,7 @@ struct PBDerivationTests {
     @Test
     func vectorCountsMatchSpec() throws {
         #expect(Fixtures.expiry.count == 24)
-        #expect(Fixtures.derivation.count == 19)
+        #expect(Fixtures.derivation.count == 20)
         #expect(Fixtures.badges.count == 8)
         #expect(Fixtures.lifetimeVisibility.count == 8)
     }

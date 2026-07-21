@@ -191,6 +191,39 @@ final class DefaultMemberPerformance: MemberPerformance {
         return ManualPBResult(isNewPB: true, personalBest: personalBest)
     }
 
+    func updateManualPB(
+        id: UUID,
+        memberId: UUID,
+        exerciseId: UUID,
+        weight: Double?,
+        reps: Int?,
+        time: Double?,
+        distance: Double?,
+        achievedAt: Date?
+    ) throws {
+        guard let store = performanceDataAccess as? SwiftDataPerformanceDataAccess else {
+            return
+        }
+
+        let allPBs = try performanceDataAccess.fetchAllPBs(memberId: memberId, exerciseId: exerciseId)
+        guard let pb = allPBs.first(where: {
+            $0.id == id
+                && $0.memberId == memberId
+                && $0.entryType == .manualEntry
+                && $0.deletedAt == nil
+        }) else {
+            return
+        }
+
+        pb.weight = weight
+        pb.reps = reps
+        pb.time = time
+        pb.distance = distance
+        pb.achievedAt = achievedAt
+        pb.updatedAt = Date()
+        try store.persistChanges()
+    }
+
     func currentPBs(memberId: UUID) throws -> [PersonalBestModel] {
         let pbExercises = try exerciseRegistry.pbExercises()
             .sorted { $0.displayOrder < $1.displayOrder }

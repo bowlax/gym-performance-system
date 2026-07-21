@@ -56,7 +56,7 @@ struct ProgressionEntryMergerTests {
     }
 
     @Test
-    func skipsUndatedManualPBs() {
+    func includesUndatedManualPBsForEditDelete() {
         let squat = exercise(named: "Free Squat")
         let undated = PersonalBestModel(
             memberId: memberId,
@@ -74,7 +74,10 @@ struct ProgressionEntryMergerTests {
             from: .distantPast
         )
 
-        #expect(entries.isEmpty)
+        #expect(entries.count == 1)
+        #expect(entries.first?.personalBestId == undated.id)
+        #expect(entries.first?.isUndated == true)
+        #expect(entries.first?.formattedValue == "120kg × 5")
     }
 
     @Test

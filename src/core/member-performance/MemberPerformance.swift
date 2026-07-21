@@ -28,6 +28,19 @@ protocol MemberPerformance {
         achievedAt: Date?
     ) throws -> ManualPBResult
 
+    /// Updates an existing manual PB in place (values and optional date).
+    /// Does not require beating the current PB — used to fix lifetime / undated entries.
+    func updateManualPB(
+        id: UUID,
+        memberId: UUID,
+        exerciseId: UUID,
+        weight: Double?,
+        reps: Int?,
+        time: Double?,
+        distance: Double?,
+        achievedAt: Date?
+    ) throws
+
     // MARK: -- Progression Views
 
     func currentPBs(memberId: UUID) throws -> [PersonalBestModel]

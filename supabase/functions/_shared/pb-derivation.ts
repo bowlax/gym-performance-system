@@ -99,8 +99,13 @@ export function expiryDate(
 
 /**
  * Fresh when evaluatedAt is strictly before expiry.
- * Expiry day itself is stale. Undated (null achievedAt) is never fresh
- * (even if staleness is disabled). Otherwise, staleness disabled => always fresh.
+ * Expiry day itself is stale.
+ *
+ * Undated (`achievedAt` null) is **never** fresh — regardless of whether
+ * staleness is enabled. Deliberate decision (2026-07-21 / TC-D20): “current”
+ * is a claim about now, which an undated entry cannot support even when
+ * time-filtering is off. Lifetime remains the only place undated entries appear.
+ * Otherwise, staleness disabled => always fresh (dated records only).
  */
 export function isFresh(
   achievedAt: string | null | undefined,

@@ -37,9 +37,9 @@ Inputs per member-exercise:
 
 Semantics:
 
-- **Fresh** = today is strictly before the record’s expiry. Expiry = start of the period after N complete calendar periods (quarters or months) since `achievedAt`. When staleness is OFF, dated records never expire. Undated manuals have no `achievedAt` and are never fresh.
-- **Current PB** = best record where `achievedAt` is strictly after `resetAt` (if any) **and** the record is fresh. Tie under the PB rule → **most recent `achievedAt` wins**.
-- **Lifetime PB** = best record with **no** reset filter and **no** freshness filter. Reset clears current standing only; lifetime is unaffected.
+- **Fresh** = today is strictly before the record’s expiry. Expiry = start of the period after N complete calendar periods (quarters or months) since `achievedAt`. When staleness is OFF, **dated** records never expire (always fresh). **Undated manuals are never fresh, regardless of the staleness setting** — deliberate decision (2026-07-21), not an incidental code-order effect. Reasoning: “current” is a claim about *now*, which an undated entry cannot support even when time-filtering is off; **lifetime** remains the only place an undated entry can appear (vector TC-D20).
+- **Current PB** = best record where `achievedAt` is strictly after `resetAt` (if any) **and** the record is fresh. Tie under the PB rule → **most recent `achievedAt` wins**. Undated entries are excluded because they are never fresh.
+- **Lifetime PB** = best record with **no** reset filter and **no** freshness filter. Reset clears current standing only; lifetime is unaffected. Undated manuals participate here.
 - **Historic badges** = running maximum over dated records in `achievedAt` order. Equal to the running max is **not** badged (earliest breakthrough only). Reset does not affect badges. Undated manuals are excluded from badge history.
 - **PB rule** (`bestWeightAndReps`, etc.) is unchanged — applied to the eligible pool.
 
@@ -47,12 +47,14 @@ Display:
 
 - Board: current PB only (empty if none).
 - Progression: current + lifetime element when lifetime **strictly beats** current under the PB rule (ties hide). Not gated on staleness or record-id inequality.
+- Progression History lists dated sets/manuals **and undated manuals** (labeled Undated) so lifetime-only entries can be edited or deleted. Undated rows are excluded from the chart.
 - Reset appears as a dated timeline marker, not a flag on a PB row.
 
 ### Decisions that must not be lost
 
 1. **Existing `was_reset` rows were NOT migrated** into `exercise_resets` (deliberate). Tiny population, reset dates unrecoverable for local-only resets, migration would ship untested. Members who had reset may see a PB reappear and redo the reset in the new undoable model. Recorded on issue #28.
-2. **Real-device check:** all 19 then-current PBs matched derivation and every session-derived `setId` resolved to a live set. Derivation therefore reads **sets + manuals**, not legacy PB rows. If orphan PB rows ever appear without sets in the wild, derivation would lose that history and this needs revisiting.
+2. **Undated manuals are never current, even with staleness OFF** (decision 2026-07-21). Current is a claim about now; undated cannot support that claim when time-filtering is disabled. Lifetime-only. Spec vector: `TC-D20` in `pb-derivation-vectors.json`.
+3. **Real-device check:** all 19 then-current PBs matched derivation and every session-derived `setId` resolved to a live set. Derivation therefore reads **sets + manuals**, not legacy PB rows. If orphan PB rows ever appear without sets in the wild, derivation would lose that history and this needs revisiting.
 
 ---
 
@@ -189,7 +191,7 @@ One logged set within an exercise entry. Members log their best one or best few 
 | reps | Int | Yes | |
 | time | Double | Yes | |
 | distance | Double | Yes | |
-| achievedAt | Date | No | Date of the PB (optional undated manuals are a product edge — undated never fresh) |
+| achievedAt | Date | Yes | Optional. Undated manuals are never fresh (even with staleness OFF) — lifetime-only; listed in History as Undated for edit/delete |
 | createdAt | Date | No | |
 | updatedAt | Date | Yes | LWW / dirty |
 | syncedAt | Date | Yes | |

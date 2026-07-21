@@ -7,8 +7,10 @@ struct ProgressionView: View {
     @Environment(AppDependencies.self) private var dependencies
 
     @State private var showManualPB = false
+    @State private var editingManualPB: PersonalBestModel?
     @State private var showResetAlert = false
     @State private var showDeleteAlert = false
+    @State private var showDeleteLifetimeAlert = false
     @State private var entryPendingDelete: ProgressionEntry?
     @State private var deleteAlertMessage = ""
     @State private var currentPB: PersonalBestModel?
@@ -22,17 +24,26 @@ struct ProgressionView: View {
     @State private var magnificationBase: TimeInterval?
 
     private var mostRecentPBPoint: ProgressionEntry? {
-        entries.filter { $0.isPB && !$0.isResetMarker }.max(by: { $0.date < $1.date })
+        entries
+            .filter { $0.isPB && !$0.isResetMarker && !$0.isUndated }
+            .max(by: { $0.date < $1.date })
     }
 
     private var progressionChartConfiguration: ScrollableDateChartConfiguration? {
         ScrollableDateChartConfiguration.make(
-            earliestDataPoint: entries.first(where: { !$0.isResetMarker })?.date
+            earliestDataPoint: entries.first(where: { !$0.isResetMarker && !$0.isUndated })?.date
         )
     }
 
     private var chartPlotEntries: [ProgressionEntry] {
-        entries.filter { !$0.isResetMarker }
+        entries.filter { !$0.isResetMarker && !$0.isUndated }
+    }
+
+    private var lifetimeManualEditable: PersonalBestModel? {
+        guard let lifetimePB,
+              lifetimePB.entryType == .manualEntry,
+              lifetimePB.deletedAt == nil else { return nil }
+        return lifetimePB
     }
 
     var body: some View {
@@ -69,7 +80,19 @@ struct ProgressionView: View {
             }
         }
         .sheet(isPresented: $showManualPB) {
-            ManualPBEntrySheet(exercise: exercise)
+            ManualPBEntrySheet(exercise: exercise, onSaved: { reloadProgression() })
+        }
+        .sheet(isPresented: Binding(
+            get: { editingManualPB != nil },
+            set: { if !$0 { editingManualPB = nil } }
+        )) {
+            if let editingManualPB {
+                ManualPBEntrySheet(
+                    exercise: exercise,
+                    editing: editingManualPB,
+                    onSaved: { reloadProgression() }
+                )
+            }
         }
         .alert("Reset Personal Best?", isPresented: $showResetAlert) {
             Button("Reset", role: .destructive) { resetCurrentPB() }
@@ -82,6 +105,12 @@ struct ProgressionView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(deleteAlertMessage)
+        }
+        .alert("Delete lifetime PB?", isPresented: $showDeleteLifetimeAlert) {
+            Button("Delete", role: .destructive) { deleteLifetimeManual() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the manual entry. Current and lifetime PBs will re-derive from what’s left.")
         }
         .task(id: dependencies.refreshID) {
             loadGeneration += 1
@@ -125,6 +154,22 @@ struct ProgressionView: View {
                 if lifetimePB.achievedAt == nil {
                     Text("Undated")
                         .captionLabelStyle()
+                }
+
+                if lifetimeManualEditable != nil {
+                    HStack(spacing: 16) {
+                        Button("Edit") {
+                            editingManualPB = lifetimeManualEditable
+                        }
+                        .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                        .foregroundStyle(Color.wolfBlue)
+
+                        Button("Delete", role: .destructive) {
+                            showDeleteLifetimeAlert = true
+                        }
+                        .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                    }
+                    .padding(.top, 4)
                 }
             } else {
                 Text("No lifetime PB")
@@ -230,6 +275,10 @@ struct ProgressionView: View {
                             .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                openEditIfManual(entry)
+                            }
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 if !entry.isResetMarker {
                                     Button(role: .destructive) {
@@ -238,6 +287,14 @@ struct ProgressionView: View {
                                         showDeleteAlert = true
                                     } label: {
                                         Text("Delete")
+                                    }
+                                    if entry.personalBestId != nil, entry.setId == nil {
+                                        Button {
+                                            openEditIfManual(entry)
+                                        } label: {
+                                            Text("Edit")
+                                        }
+                                        .tint(Color.wolfBlue)
                                     }
                                 }
                             }
@@ -273,8 +330,13 @@ struct ProgressionView: View {
 
             HStack {
                 HStack(spacing: 6) {
-                    Text(PBFormatter.shortDate.string(from: entry.date))
-                        .captionLabelStyle()
+                    if entry.isUndated {
+                        Text("Undated")
+                            .captionLabelStyle()
+                    } else {
+                        Text(PBFormatter.shortDate.string(from: entry.date))
+                            .captionLabelStyle()
+                    }
                     if entry.isResetMarker {
                         Text("Reset")
                             .font(.system(.caption2, design: .rounded))
@@ -366,6 +428,36 @@ struct ProgressionView: View {
         }
 
         self.entryPendingDelete = nil
+    }
+
+    @MainActor
+    private func deleteLifetimeManual() {
+        guard let lifetimeManualEditable else { return }
+        do {
+            try dependencies.memberPerformance.deletePersonalBest(
+                id: lifetimeManualEditable.id,
+                memberId: dependencies.memberId,
+                exerciseId: exercise.id
+            )
+            dependencies.refresh()
+            reloadProgression()
+        } catch {
+            // No-op: missing manuals are ignored.
+        }
+    }
+
+    @MainActor
+    private func openEditIfManual(_ entry: ProgressionEntry) {
+        guard let personalBestId = entry.personalBestId, entry.setId == nil else { return }
+        guard let pb = try? dependencies.performanceDataAccess.fetchAllPBs(
+            memberId: dependencies.memberId,
+            exerciseId: exercise.id
+        ).first(where: {
+            $0.id == personalBestId
+                && $0.entryType == .manualEntry
+                && $0.deletedAt == nil
+        }) else { return }
+        editingManualPB = pb
     }
 
     @MainActor

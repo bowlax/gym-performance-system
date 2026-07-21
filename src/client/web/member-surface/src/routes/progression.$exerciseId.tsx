@@ -780,7 +780,7 @@ function ProgressionChart({
 }) {
   const measurement = exercise.measurement_type ?? "";
   const points = history
-    .filter((h) => h.date && Number.isFinite(h.chartValue))
+    .filter((h) => !h.isUndated && h.date && Number.isFinite(h.chartValue))
     .map((h) => ({
       t: new Date(h.date).getTime(),
       value: h.chartValue,
@@ -909,13 +909,15 @@ function HistoryList({
                       {row.isResetMarker ? "Current PB reset" : row.formattedValue}
                     </div>
                     <div className="mt-0.5 text-xs text-muted-foreground">
-                      {row.date
-                        ? new Date(row.date).toLocaleDateString(undefined, {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          })
-                        : "—"}
+                      {row.isUndated
+                        ? "Undated"
+                        : row.date
+                          ? new Date(row.date).toLocaleDateString(undefined, {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })
+                          : "—"}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">

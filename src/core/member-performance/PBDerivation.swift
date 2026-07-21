@@ -98,7 +98,11 @@ enum PBDerivation {
         return formatISODate(addPeriods(start, count: periods + 1, unit: unit))
     }
 
-    /// Fresh when `evaluatedAt` is strictly before expiry. Undated is never fresh.
+    /// Fresh when `evaluatedAt` is strictly before expiry.
+    /// Undated (`achievedAt` nil) is **never** fresh — regardless of whether
+    /// staleness is enabled. Deliberate: “current” is a claim about now, which
+    /// an undated entry cannot support even when time-filtering is off.
+    /// Lifetime remains the only place undated entries appear (TC-D20).
     static func isFresh(
         achievedAt: String?,
         staleness: StalenessSetting,

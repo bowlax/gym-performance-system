@@ -150,6 +150,30 @@ struct ProgressionEntry: Identifiable {
     let isPB: Bool
     /// Timeline marker for `exercise_resets.reset_at` (#28) — not a badge on a record row.
     let isResetMarker: Bool
+    /// Manual PB with no `achievedAt` — listed in History for edit/delete, not on the chart.
+    let isUndated: Bool
     let setId: UUID?
     let personalBestId: UUID?
+
+    init(
+        id: UUID,
+        date: Date,
+        formattedValue: String,
+        chartValue: Double,
+        isPB: Bool,
+        isResetMarker: Bool,
+        isUndated: Bool = false,
+        setId: UUID?,
+        personalBestId: UUID?
+    ) {
+        self.id = id
+        self.date = date
+        self.formattedValue = formattedValue
+        self.chartValue = chartValue
+        self.isPB = isPB
+        self.isResetMarker = isResetMarker
+        self.isUndated = isUndated
+        self.setId = setId
+        self.personalBestId = personalBestId
+    }
 }

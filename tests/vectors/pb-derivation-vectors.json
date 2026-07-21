@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "issue": 28,
-  "purpose": "Current PB and lifetime PB selection over sets + manual entries. Current = best record with achievedAt strictly after resetAt (when set) AND fresh. Lifetime = best record overall — no reset filter, no freshness filter. Undated manuals (achievedAt null) are never fresh, so lifetime-only; reset does not affect them for lifetime.",
+  "purpose": "Current PB and lifetime PB selection over sets + manual entries. Current = best record with achievedAt strictly after resetAt (when set) AND fresh. Lifetime = best record overall — no reset filter, no freshness filter. Undated manuals (achievedAt null) are NEVER fresh — regardless of the staleness setting — so they are lifetime-only; current is a claim about now, which an undated entry cannot support even when time-filtering is off. Reset does not affect undated records for lifetime.",
   "openQuestions": [
     {
       "id": "OQ-D2",
@@ -336,6 +336,23 @@
       ],
       "expectedCurrentId": "rec-c",
       "expectedLifetimeId": "rec-a"
+    },
+    {
+      "id": "TC-D20",
+      "description": "Undated manual alone with staleness OFF: still never current; lifetime is the undated entry",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": false, "periods": 2, "unit": "quarters" },
+      "resetAt": null,
+      "evaluatedAt": "2026-09-15",
+      "records": [
+        { "id": "rec-undated", "achievedAt": null, "weight": 120, "reps": 5, "entryKind": "manualUndated" }
+      ],
+      "expectedCurrentId": null,
+      "expectedLifetimeId": "rec-undated",
+      "notes": "Decision 2026-07-21: undated is never fresh regardless of staleness. Current is a claim about now; an undated entry cannot support that claim even when time-filtering is off. Lifetime is the only place it appears. Closes the previously untested staleness-OFF interaction (TC-D10 covered staleness ON only)."
     }
   ]
 }

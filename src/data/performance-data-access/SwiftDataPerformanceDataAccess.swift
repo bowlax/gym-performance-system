@@ -82,6 +82,11 @@ final class SwiftDataPerformanceDataAccess: PerformanceDataAccess {
         try context.save()
     }
 
+    /// Persists in-place mutations on already-inserted models (e.g. editing a manual PB).
+    func persistChanges() throws {
+        try context.save()
+    }
+
     func fetchAllPBs(memberId: UUID, exerciseId: UUID) throws -> [PersonalBestModel] {
         let descriptor = FetchDescriptor<PersonalBestModel>(
             predicate: #Predicate { $0.memberId == memberId && $0.exerciseId == exerciseId },

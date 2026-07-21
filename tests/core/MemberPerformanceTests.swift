@@ -1012,6 +1012,47 @@ struct MemberPerformanceTests {
     }
 
     @Test
+    func testUpdateManualPBChangesValuesAndDateInPlace() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let undated = PersonalBestModel(
+            memberId: testMemberId,
+            exerciseId: freeSquatId,
+            weight: 100,
+            reps: 5,
+            achievedAt: nil,
+            entryType: .manualEntry
+        )
+        try test.performanceDataAccess.savePersonalBest(undated)
+
+        let dated = Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+        try test.memberPerformance.updateManualPB(
+            id: undated.id,
+            memberId: testMemberId,
+            exerciseId: freeSquatId,
+            weight: 110,
+            reps: 5,
+            time: nil,
+            distance: nil,
+            achievedAt: dated
+        )
+
+        let updated = try test.performanceDataAccess.fetchAllPBs(
+            memberId: testMemberId,
+            exerciseId: freeSquatId
+        ).first
+        #expect(updated?.weight == 110)
+        #expect(updated?.reps == 5)
+        #expect(updated?.achievedAt != nil)
+
+        let current = try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
+            exerciseId: freeSquatId
+        )
+        #expect(current?.weight == 110)
+    }
+
+    @Test
     func testTC_MP33_DeletePersonalBestLeavesNoCurrentPBWhenDeletingOnlyRecord() throws {
         let test = try makeMemberPerformance()
         let freeSquatId = seedExerciseId(named: "Free Squat")

@@ -20,6 +20,8 @@ export interface ProgressionEntryRow {
   chartValue: number;
   isPB: boolean;
   isResetMarker: boolean;
+  /** Manual PB with no achieved_at — listed for edit/delete, not charted. */
+  isUndated: boolean;
   setId: string | null;
   personalBestId: string | null;
   reps: number | null;
@@ -79,24 +81,28 @@ export function mergeProgressionEntries(params: {
       }),
       isPB,
       isResetMarker: false,
+      isUndated: false,
       setId: summary.set.id,
       personalBestId,
       reps: summary.set.reps,
     });
   }
 
-  // Undated manuals never appear in history (#28).
+  // Manuals (including undated) appear in history so they can be edited/deleted.
   for (const pb of manualPersonalBests) {
-    if (pb.achieved_at == null) continue;
-    const achievedTime = new Date(pb.achieved_at).getTime();
-    if (achievedTime < fromTime) continue;
+    const isUndated = pb.achieved_at == null;
+    if (!isUndated) {
+      const achievedTime = new Date(pb.achieved_at!).getTime();
+      if (achievedTime < fromTime) continue;
+    }
     if (pb.entry_type === SESSION_DERIVED) continue;
     if (pb.set_id && representedSetIds.has(pb.set_id)) continue;
 
     const chartInput = manualPbChartInput(pb);
     merged.push({
       id: pb.id,
-      date: pb.achieved_at,
+      // Sort undated by a stable sentinel; UI shows "Undated".
+      date: pb.achieved_at ?? "0001-01-01",
       formattedValue: formatSetValues({
         ...chartInput,
         measurementType,
@@ -108,6 +114,7 @@ export function mergeProgressionEntries(params: {
       }),
       isPB: badgeIdSet.has(pb.id),
       isResetMarker: false,
+      isUndated,
       setId: pb.set_id,
       personalBestId: pb.id,
       reps: pb.reps,
@@ -124,6 +131,7 @@ export function mergeProgressionEntries(params: {
         chartValue: NaN,
         isPB: false,
         isResetMarker: true,
+        isUndated: false,
         setId: null,
         personalBestId: null,
         reps: null,

@@ -44,14 +44,25 @@ enum ProgressionEntryMerger {
             )
         }
 
-        // Undated manuals never appear in history (#28).
+        // Manuals (including undated) appear in history so they can be edited/deleted.
+        // Undated rows sort by createdAt and are excluded from the chart.
         for pb in personalBests {
-            guard let achievedAt = pb.achievedAt, achievedAt >= from else { continue }
+            guard pb.deletedAt == nil else { continue }
             if pb.entryType == .sessionDerived {
                 continue
             }
             if let setId = pb.setId, representedSetIds.contains(setId) {
                 continue
+            }
+
+            let isUndated = pb.achievedAt == nil
+            let sortDate: Date
+            if let achievedAt = pb.achievedAt {
+                guard achievedAt >= from else { continue }
+                sortDate = achievedAt
+            } else {
+                guard pb.createdAt >= from else { continue }
+                sortDate = pb.createdAt
             }
 
             let isPB = !badgeIds.isEmpty
@@ -60,11 +71,12 @@ enum ProgressionEntryMerger {
             merged.append(
                 ProgressionEntry(
                     id: pb.id,
-                    date: achievedAt,
+                    date: sortDate,
                     formattedValue: PBFormatter.formatPB(pb, exercise: exercise),
                     chartValue: PBFormatter.chartValue(pb: pb, exercise: exercise),
                     isPB: isPB,
                     isResetMarker: false,
+                    isUndated: isUndated,
                     setId: pb.setId,
                     personalBestId: pb.id
                 )

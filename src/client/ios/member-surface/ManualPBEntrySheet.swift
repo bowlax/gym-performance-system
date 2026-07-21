@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ManualPBEntrySheet: View {
     let exercise: ExerciseModel
+    /// When set, edits this manual PB in place (values + optional date).
+    var editing: PersonalBestModel? = nil
     var onSaved: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
@@ -12,12 +14,15 @@ struct ManualPBEntrySheet: View {
     @State private var selectedDate = Date()
     @State private var feedback: Feedback?
     @State private var currentPB: PersonalBestModel?
+    @State private var didLoadEditing = false
 
     enum Feedback: Equatable {
         case success
         case notPB(current: String)
         case error(String)
     }
+
+    private var isEditing: Bool { editing != nil }
 
     private var canSave: Bool {
         draft.isValidManualPB(for: exercise)
@@ -37,7 +42,10 @@ struct ManualPBEntrySheet: View {
                             Text(exercise.name)
                                 .font(.system(.title3, design: .rounded).weight(.semibold))
 
-                            if let currentPB {
+                            if isEditing {
+                                Text("Edit manual PB")
+                                    .captionLabelStyle()
+                            } else if let currentPB {
                                 Text("Current PB")
                                     .sectionLabelStyle()
                                 Text(PBFormatter.formatPB(currentPB, exercise: exercise))
@@ -60,14 +68,18 @@ struct ManualPBEntrySheet: View {
                                 )
                                 .datePickerStyle(.compact)
                             } else {
-                                Text("Leave the date off if you only remember the value. It counts toward your lifetime best, not your current PB.")
-                                    .font(.system(.caption, design: .rounded))
-                                    .foregroundStyle(.secondary)
+                                Text(
+                                    isEditing
+                                        ? "Without a date this stays a lifetime-only entry and will not appear as your current PB on the board."
+                                        : "Leave the date off if you only remember the value. It counts toward your lifetime best, not your current PB."
+                                )
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(.secondary)
                             }
                         }
 
                         VStack(alignment: .leading, spacing: .cardSpacing) {
-                            Text("New PB")
+                            Text(isEditing ? "Values" : "New PB")
                                 .sectionLabelStyle()
                             SetInputRow(value: $draft, exercise: exercise)
                         }
@@ -77,7 +89,7 @@ struct ManualPBEntrySheet: View {
                             feedbackView(for: feedback)
                         }
 
-                        Button("Save PB") { save() }
+                        Button(isEditing ? "Save Changes" : "Save PB") { save() }
                             .primaryButtonStyle(isEnabled: canSave)
                             .disabled(!canSave)
                     }
@@ -93,7 +105,7 @@ struct ManualPBEntrySheet: View {
                 }
             }
             .onAppear {
-                draft = SetDraftValue.initial(for: exercise)
+                loadDraft()
             }
             .task(id: dependencies.refreshID) {
                 await loadCurrentPB()
@@ -105,11 +117,14 @@ struct ManualPBEntrySheet: View {
     private func feedbackView(for feedback: Feedback) -> some View {
         switch feedback {
         case .success:
-            Label("New PB saved", systemImage: "checkmark.circle.fill")
-                .font(.system(.subheadline, design: .rounded))
-                .foregroundStyle(.green)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .standardCard()
+            Label(
+                isEditing ? "PB updated" : "New PB saved",
+                systemImage: "checkmark.circle.fill"
+            )
+            .font(.system(.subheadline, design: .rounded))
+            .foregroundStyle(.green)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .standardCard()
         case .notPB(let current):
             Label {
                 Text("This doesn't beat your current PB of \(current). Not saved.")
@@ -126,6 +141,27 @@ struct ManualPBEntrySheet: View {
                 .foregroundStyle(.red)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .standardCard()
+        }
+    }
+
+    private func loadDraft() {
+        guard !didLoadEditing else { return }
+        if let editing {
+            draft = SetDraftValue(
+                weight: editing.weight,
+                reps: editing.reps,
+                timeSeconds: editing.time.map { Int($0.rounded()) },
+                distance: editing.distance.map { Int($0.rounded()) }
+            )
+            if let achievedAt = editing.achievedAt {
+                includeDate = true
+                selectedDate = achievedAt
+            } else {
+                includeDate = false
+            }
+            didLoadEditing = true
+        } else {
+            draft = SetDraftValue.initial(for: exercise)
         }
     }
 
@@ -149,6 +185,26 @@ struct ManualPBEntrySheet: View {
         }
 
         do {
+            if let editing {
+                try dependencies.memberPerformance.updateManualPB(
+                    id: editing.id,
+                    memberId: dependencies.memberId,
+                    exerciseId: exercise.id,
+                    weight: values.weight,
+                    reps: values.reps,
+                    time: values.time,
+                    distance: values.distance,
+                    achievedAt: includeDate ? selectedDate : nil
+                )
+                feedback = .success
+                dependencies.refresh()
+                onSaved?()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    dismiss()
+                }
+                return
+            }
+
             let result = try dependencies.memberPerformance.recordManualPB(
                 exerciseId: exercise.id,
                 memberId: dependencies.memberId,
