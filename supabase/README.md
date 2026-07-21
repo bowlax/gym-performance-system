@@ -92,9 +92,11 @@ npx supabase db push        # remote: apply pending migrations
 
 | Configuration | POST `teamupToken: "stub-token"` | GET `?oauth=authorize` |
 |---------------|----------------------------------|-------------------------|
-| No TeamUp OAuth env vars | **Stub path** (unchanged): returns `TEST-CUSTOMER-001` / configured provider | `404` — OAuth not configured |
-| All four required OAuth vars set | Still accepts `stub-token` for local testing | Real TeamUp authorize redirect (PKCE) |
-| OAuth vars set + POST with real TeamUp JWT | Decodes JWT `sub` + `provider:` from scope | N/A |
+| No TeamUp OAuth env vars (local/dev) | **Stub path**: HS256 session mint | `404` — OAuth not configured |
+| All four required OAuth vars set (prod) | **Rejected (403)** — no HS256 mint | Real TeamUp authorize redirect (PKCE) |
+| OAuth vars set + POST with real TeamUp JWT | Auth-session ES256 path | N/A |
+
+**Boundary:** HS256 session mint exists only when OAuth is **unconfigured**. Deployed prod (OAuth configured) refuses `stub-token`.
 
 Required OAuth secrets (set together via `supabase secrets set`):
 
@@ -102,6 +104,7 @@ Required OAuth secrets (set together via `supabase secrets set`):
 - `TEAMUP_OAUTH_CLIENT_SECRET`
 - `TEAMUP_OAUTH_REDIRECT_URI` — must include `?oauth=callback` (TeamUp redirects here with `code` and `state`)
 - `TEAMUP_OAUTH_PROVIDER_ID` — Wolf gym provider id once registered
+- `OAUTH_STATE_SECRET` — dedicated HMAC for OAuth `state` (not the project JWT secret)
 
 Optional: `TEAMUP_OAUTH_SUCCESS_REDIRECT_URI`, `TEAMUP_OAUTH_SCOPE`, `TEAMUP_OAUTH_AUTHORIZE_URL`, `TEAMUP_OAUTH_TOKEN_URL`.
 
@@ -111,7 +114,7 @@ Optional: `TEAMUP_OAUTH_SUCCESS_REDIRECT_URI`, `TEAMUP_OAUTH_SCOPE`, `TEAMUP_OAU
 open 'http://127.0.0.1:54321/functions/v1/token-broker?oauth=authorize&deviceMemberId=aaaaaaaa-0000-0000-0000-000000000001&surface=memberWeb&returnUrl=http://localhost:5173/auth/callback'
 ```
 
-After TeamUp login, the broker exchanges the code, mints the Supabase JWT, and redirects to `returnUrl?token=...` (or returns JSON if no redirect URI is configured).
+After TeamUp login, the broker exchanges the code, establishes an Auth session (ES256), and redirects to `returnUrl` with `access_token` / `refresh_token` (or returns JSON if no redirect URI is configured).
 
 ## Token broker — deploy
 
@@ -120,7 +123,10 @@ Set secrets on the remote project, then deploy:
 ```bash
 npx supabase secrets set \
   SERVICE_ROLE_KEY=<service-role-key> \
-  JWT_SIGNING_SECRET=<jwt-secret>
+  OAUTH_STATE_SECRET=<random-dedicated-secret>
+
+# JWT_SIGNING_SECRET is only needed for local/dev stub (OAuth unconfigured).
+# On prod with OAuth configured it is unused for the real path; omit once stub is gone.
 
 npx supabase functions deploy token-broker --no-verify-jwt
 ```

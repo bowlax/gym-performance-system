@@ -3,11 +3,12 @@
   "private": true,
   "scripts": {
     "supabase": "supabase",
-    "functions:check": "cd supabase/functions && deno check token-broker/index.ts log-set/index.ts add-manual-pb/index.ts reset-current-pb/index.ts delete-personal-best/index.ts _shared/pb-evaluation.ts _shared/pb-derivation.ts _shared/edge-pb-reads.ts _shared/member-edge.ts _shared/teamup-oauth.ts",
+    "functions:check": "cd supabase/functions && deno check token-broker/index.ts token-broker/handler.ts log-set/index.ts add-manual-pb/index.ts reset-current-pb/index.ts delete-personal-best/index.ts _shared/pb-evaluation.ts _shared/pb-derivation.ts _shared/edge-pb-reads.ts _shared/member-edge.ts _shared/teamup-oauth.ts",
     "functions:serve": "supabase functions serve token-broker --no-verify-jwt",
     "pb-evaluation:test": "cd supabase/functions && deno test --allow-read=../../tests/vectors _shared/pb-evaluation_test.ts",
     "pb-derivation:test": "cd supabase/functions && deno test --allow-read=../../tests/vectors _shared/pb-derivation_test.ts",
-    "teamup-oauth:test": "cd supabase/functions && deno test _shared/teamup-oauth_test.ts"
+    "teamup-oauth:test": "cd supabase/functions && deno test _shared/teamup-oauth_test.ts",
+    "token-broker:http-test": "cd supabase/functions && deno test token-broker/handler_http_test.ts"
   },
   "devDependencies": {
     "supabase": "^2.75.0"

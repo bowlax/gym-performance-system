@@ -19,6 +19,7 @@ import {
   signOAuthState,
   stubTeamUpVerification,
   verifyOAuthState,
+  isStubTokenRejectedWhenOAuthConfigured,
   type OAuthGetRoute,
   type TeamUpOAuthConfig,
 } from "./teamup-oauth.ts";
@@ -94,11 +95,38 @@ Deno.test("readTeamUpOAuthConfig builds scope from provider id", () => {
     const config = readTeamUpOAuthConfig();
     assertEquals(config?.scope, "read_write provider:5404319");
     assertEquals(isTeamUpOAuthConfigured(), true);
-    assertEquals(shouldUseStubTeamUpPath("stub-token"), true);
+    assertEquals(shouldUseStubTeamUpPath("stub-token"), false);
     assertEquals(shouldUseStubTeamUpPath("real-token"), false);
+    assertEquals(isStubTokenRejectedWhenOAuthConfigured("stub-token"), true);
+    assertEquals(isStubTokenRejectedWhenOAuthConfigured("real-token"), false);
   } finally {
     Deno.env.get = originalGet;
   }
+});
+
+Deno.test("stub-token is refused when OAuth is configured, allowed when unconfigured", () => {
+  const originalGet = Deno.env.get.bind(Deno.env);
+  Deno.env.get = (_name: string) => undefined;
+  try {
+    assertEquals(isTeamUpOAuthConfigured(), false);
+    assertEquals(shouldUseStubTeamUpPath("stub-token"), true);
+    assertEquals(isStubTokenRejectedWhenOAuthConfigured("stub-token"), false);
+  } finally {
+    Deno.env.get = originalGet;
+  }
+});
+
+Deno.test("OAuth state round-trips with dedicated OAUTH_STATE_SECRET-style secret", async () => {
+  const secret = "dedicated-oauth-state-secret-not-jwt";
+  const payload = {
+    deviceMemberId: "aaaaaaaa-0000-0000-0000-000000000001",
+    surface: "ios",
+    codeVerifier: generatePkceCodeVerifier(),
+    returnUrl: "gymperformance://connect",
+  };
+  const state = await signOAuthState(payload, secret);
+  assertEquals(await verifyOAuthState(state, secret), payload);
+  await assertRejects(() => verifyOAuthState(state, "wrong-secret"));
 });
 
 Deno.test("PKCE verifier and S256 challenge are stable for a known verifier", async () => {

@@ -91,11 +91,28 @@ export function isTeamUpOAuthConfigured(): boolean {
   return readTeamUpOAuthConfig() !== null;
 }
 
+/**
+ * Whether the broker should take the stub TeamUp + HS256 session path.
+ *
+ * Boundary (explicit):
+ * - OAuth **unconfigured** (local/dev): always stub — HS256 mint allowed.
+ * - OAuth **configured** (deployed prod): never stub — callers must refuse
+ *   `stub-token` before verification; no production-reachable HS256 mint.
+ */
 export function shouldUseStubTeamUpPath(teamupToken: string): boolean {
-  if (!isTeamUpOAuthConfigured()) {
-    return true;
+  if (isTeamUpOAuthConfigured()) {
+    return false;
   }
-  return isStubTeamUpToken(teamupToken);
+  // Unconfigured: any POST uses stub identity (including stub-token).
+  void teamupToken;
+  return true;
+}
+
+/**
+ * True when a stub-token POST must be rejected (OAuth is live / production).
+ */
+export function isStubTokenRejectedWhenOAuthConfigured(teamupToken: string): boolean {
+  return isTeamUpOAuthConfigured() && isStubTeamUpToken(teamupToken);
 }
 
 /**
