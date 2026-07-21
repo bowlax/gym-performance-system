@@ -218,4 +218,64 @@ struct FirstConnectUploaderTests {
         #expect(cloud.memberPatches[0]["gym_id"] == nil)
         #expect(result.counts.sessions == 0)
     }
+
+    @Test
+    @MainActor
+    func uploadPersonalBestsReUpsertsReferencedSetsEvenWhenClean() async throws {
+        let context = try TestHelpers.makeInMemoryContext()
+        let local = SwiftDataSyncLocalDataAccess(context: context)
+        let cloud = MockSyncServiceAccess()
+
+        let memberId = UUID(uuidString: "AAAAAAAA-0000-0000-0000-000000000002")!
+        let gymId = UUID(uuidString: "0abc9301-b048-40f5-8bdc-9bb389916b59")!
+        let credentials = SyncCredentials(
+            supabaseURL: URL(string: "https://example.supabase.co")!,
+            publishableKey: "test-key",
+            accessToken: "token",
+            memberId: memberId,
+            gymId: gymId,
+            deviceId: UUID()
+        )
+
+        let exerciseId = UUID()
+        let session = SessionModel(memberId: memberId, date: Date())
+        session.syncedAt = Date()
+        let entry = ExerciseEntryModel(sessionId: session.id, exerciseId: exerciseId)
+        entry.syncedAt = Date()
+        let set = ModelSet(exerciseEntryId: entry.id, weight: 100, reps: 5)
+        set.syncedAt = Date()
+        let pb = PersonalBestModel(
+            memberId: memberId,
+            exerciseId: exerciseId,
+            setId: set.id,
+            weight: 100,
+            reps: 5,
+            achievedAt: Date(),
+            entryType: .sessionDerived
+        )
+        context.insert(session)
+        context.insert(entry)
+        context.insert(set)
+        context.insert(pb)
+        try context.save()
+
+        let uploader = FirstConnectUploader(
+            localDataAccess: local,
+            syncServiceAccess: cloud,
+            credentials: credentials,
+            batchSize: 10
+        )
+
+        let result = await uploader.upload(memberId: memberId)
+        #expect(result.completed == true)
+        #expect(result.counts.sessions == 0)
+        #expect(result.counts.exerciseEntries == 0)
+        #expect(result.counts.sets == 0)
+        #expect(result.counts.personalBests == 1)
+        #expect(cloud.sessionBatches.count == 1)
+        #expect(cloud.entryBatches.count == 1)
+        #expect(cloud.setBatches.count == 1)
+        #expect(cloud.pbBatches.count == 1)
+        #expect(cloud.pbBatches.first?.first?["set_id"] as? String == set.id.uuidString)
+    }
 }

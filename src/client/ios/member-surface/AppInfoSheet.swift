@@ -203,7 +203,7 @@ struct AppInfoSheet: View {
         if ConnectFeatureAvailability.isAvailable {
             return "Connecting backs up your history and lets your coach see your progress. You can stay on this device only."
         }
-        return "TeamUp connect is limited to development builds until real sign-in ships."
+        return "TeamUp connect requires cloud configuration in this build."
     }
 
     private func load() {

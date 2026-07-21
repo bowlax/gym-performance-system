@@ -34,9 +34,48 @@ final class SyncManager {
     /// Full sync cycle: PULL → MERGE → PUSH. Pull first so local merges land before push.
     func runFullSyncCycle(brokerSession: BrokerSession) async -> SyncCycleResult {
         do {
-            let (credentials, claims) = try makeCredentials(from: brokerSession)
+            let (credentials, _) = try makeCredentials(from: brokerSession)
+            return await runFullSyncCycle(
+                brokerSession: brokerSession,
+                credentials: credentials,
+                syncServiceAccess: PostgRESTSyncServiceAccess(credentials: credentials)
+            )
+        } catch {
+            return SyncCycleResult(
+                pull: .interrupted(mergeCounts: SyncMergeCounts(), highWaterSyncedAt: nil, error: error),
+                push: .interrupted(counts: FirstConnectUploadCounts(), error: error)
+            )
+        }
+    }
+
+    /// Test / harness entry: inject `SyncServiceAccess` for pull-merge-push.
+    func runFullSyncCycle(
+        brokerSession: BrokerSession,
+        syncServiceAccess: SyncServiceAccess
+    ) async -> SyncCycleResult {
+        do {
+            let (credentials, _) = try makeCredentials(from: brokerSession)
+            return await runFullSyncCycle(
+                brokerSession: brokerSession,
+                credentials: credentials,
+                syncServiceAccess: syncServiceAccess
+            )
+        } catch {
+            return SyncCycleResult(
+                pull: .interrupted(mergeCounts: SyncMergeCounts(), highWaterSyncedAt: nil, error: error),
+                push: .interrupted(counts: FirstConnectUploadCounts(), error: error)
+            )
+        }
+    }
+
+    private func runFullSyncCycle(
+        brokerSession: BrokerSession,
+        credentials: SyncCredentials,
+        syncServiceAccess: SyncServiceAccess
+    ) async -> SyncCycleResult {
+        do {
+            let claims = try JWTClaimsDecoder.decodeMemberAndGym(from: brokerSession.token)
             let localDataAccess = SwiftDataSyncLocalDataAccess(context: modelContext)
-            let syncServiceAccess = PostgRESTSyncServiceAccess(credentials: credentials)
 
             let puller = SyncPuller(
                 localDataAccess: localDataAccess,
@@ -54,6 +93,14 @@ final class SyncManager {
                     )
                 )
             }
+
+            let performanceDataAccess = SwiftDataPerformanceDataAccess(context: modelContext)
+            try AdoptLocalHistoryRetag.healStrandedLocalHistoryIfNeeded(
+                canonicalMemberId: claims.memberId,
+                skipWhenCloudHasMemberHistory: pull.mergeCounts.total > 0,
+                in: modelContext,
+                performanceDataAccess: performanceDataAccess
+            )
 
             let push = await makeUploader(
                 credentials: credentials,
@@ -99,17 +146,23 @@ final class SyncManager {
     }
 
     static func makeFromCloudConfig(modelContext: ModelContext) throws -> SyncManager {
-        guard let supabaseURL = GymPerfCloudConfig.supabaseURL,
-              let publishableKey = GymPerfCloudConfig.publishableKey,
-              let brokerURL = GymPerfCloudConfig.tokenBrokerURL,
-              let deviceMemberId = GymPerfCloudConfig.testDeviceMemberId else {
+        guard let brokerURL = GymPerfCloudConfig.tokenBrokerURL,
+              let publishableKey = GymPerfCloudConfig.publishableKey else {
             throw SyncError.cloudNotConfigured
         }
 
-        let broker = StubTeamUpTokenBroker(
+        let deviceMemberId = GymPerfCloudConfig.testDeviceMemberId
+            ?? AccessControl.persistedMemberId()
+
+        #if DEBUG
+        let broker: TokenBrokerClient = StubTeamUpTokenBroker(
             brokerURL: brokerURL,
             publishableKey: publishableKey
         )
+        #else
+        let broker: TokenBrokerClient = ReleaseBlockedTokenBroker()
+        #endif
+
         return SyncManager(
             modelContext: modelContext,
             tokenBroker: broker,

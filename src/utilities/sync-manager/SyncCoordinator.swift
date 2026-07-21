@@ -4,8 +4,8 @@ import SwiftData
 
 /// Triggers and UI status for the Sync Manager (#32). Mechanism stays in `SyncManager`.
 ///
-/// **Fence:** inherits `ConnectFeatureAvailability` — Release never connects, so
-/// sync never has a usable session. Anonymous (not connected) also never syncs.
+/// **Fence:** inherits `ConnectFeatureAvailability` — connect requires baked
+/// cloud config. Anonymous (not connected) never syncs.
 @MainActor
 @Observable
 final class SyncCoordinator {
@@ -41,11 +41,6 @@ final class SyncCoordinator {
     func syncNow() async -> SyncCycleResult? {
         lastManualError = nil
         return await runCycle(trigger: .manual)
-    }
-
-    /// First-connect upload succeeded (#31) — treat as a successful sync for display.
-    func recordFirstConnectUploadSuccess(memberId: UUID, at date: Date = Date()) {
-        SyncStatusStore.recordSuccess(memberId: memberId, at: date)
     }
 
     func clearManualError() {

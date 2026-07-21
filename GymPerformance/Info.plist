@@ -37,6 +37,21 @@
 			</array>
 		</dict>
 	</dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>TeamUp Connect Callback</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>gymperformance</string>
+			</array>
+		</dict>
+	</array>
+	<key>GYMPERF_SUPABASE_PUBLISHABLE_KEY</key>
+	<string>$(GYMPERF_SUPABASE_PUBLISHABLE_KEY)</string>
+	<key>GYMPERF_SUPABASE_URL</key>
+	<string>$(GYMPERF_SUPABASE_URL)</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

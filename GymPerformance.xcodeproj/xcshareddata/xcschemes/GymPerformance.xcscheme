@@ -84,23 +84,6 @@
             ReferencedContainer = "container:GymPerformance.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <EnvironmentVariables>
-         <EnvironmentVariable
-            key = "GYMPERF_SUPABASE_URL"
-            value = "https://ivrsxhuktebvypgtfoww.supabase.co"
-            isEnabled = "YES">
-         </EnvironmentVariable>
-         <EnvironmentVariable
-            key = "GYMPERF_SUPABASE_PUBLISHABLE_KEY"
-            value = "sb_publishable_8exI94gG65l7izkBZtaGOw_Xi5Ui1H0"
-            isEnabled = "YES">
-         </EnvironmentVariable>
-         <EnvironmentVariable
-            key = "GYMPERF_TEST_DEVICE_MEMBER_ID"
-            value = "eeeeeeee-0000-0000-0000-000000000001"
-            isEnabled = "YES">
-         </EnvironmentVariable>
-      </EnvironmentVariables>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"

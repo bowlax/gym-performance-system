@@ -21,6 +21,7 @@ struct StubTeamUpTokenBroker: TokenBrokerClient {
     }
 
     func mintStubSession(deviceMemberId: UUID) async throws -> BrokerSession {
+        StubBrokerReleaseGuard.assertStubBrokerAllowed()
         var request = URLRequest(url: brokerURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

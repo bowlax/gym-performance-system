@@ -8,13 +8,12 @@ import Testing
 /// Requires:
 /// - `GYMPERF_SUPABASE_URL`
 /// - `GYMPERF_SUPABASE_PUBLISHABLE_KEY`
-/// - `GYMPERF_TEST_DEVICE_MEMBER_ID`
+/// - `GYMPERF_TEST_DEVICE_MEMBER_ID` (optional DEBUG override for stub broker device id)
 struct SyncCycleIntegrationTests {
     @Test
     @MainActor
     func fullCycleMergesCloudChangeAndSecondCycleIsIdempotent() async throws {
         guard GymPerfCloudConfig.isConfiguredForLiveSync else {
-            Issue.record("GYMPERF_* environment variables are not configured")
             return
         }
 

@@ -8,7 +8,8 @@ enum JWTClaimsDecoder {
 
     /// Decodes `member_id` and `gym_id` from a broker JWT payload (no signature verification).
     static func decodeMemberAndGym(from token: String) throws -> Claims {
-        let parts = token.split(separator: ".")
+        let normalized = normalizeToken(token)
+        let parts = normalized.split(separator: ".")
         guard parts.count == 3 else {
             throw SyncError.invalidBrokerToken("JWT must have three segments")
         }
@@ -30,6 +31,16 @@ enum JWTClaimsDecoder {
         }
 
         return Claims(memberId: memberId, gymId: gymId)
+    }
+
+    /// Trims whitespace; Keychain / URL parsing occasionally introduce stray characters.
+    static func normalizeToken(_ token: String) -> String {
+        token.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Shape check only — does not verify signature or claims.
+    static func isWellFormedJWT(_ token: String) -> Bool {
+        normalizeToken(token).split(separator: ".").count == 3
     }
 
     private static func decodeBase64URL(_ value: String) throws -> Data {

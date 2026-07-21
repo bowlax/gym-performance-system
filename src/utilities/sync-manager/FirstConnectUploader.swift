@@ -102,7 +102,84 @@ struct FirstConnectUploader {
 
     private func uploadSets(memberId: UUID) async throws -> Int {
         let pending = try localDataAccess.fetchDirtySets(memberId: memberId)
+        return try await uploadSetRecords(pending)
+    }
+
+    private func uploadPersonalBests(memberId: UUID) async throws -> Int {
+        let pending = try localDataAccess.fetchDirtyPersonalBests(memberId: memberId)
+        try await uploadSetsReferencedBy(pending)
         return try await uploadInBatches(pending) { batch, syncedAt in
+            let rows = batch.map { personalBestRowForUpload($0, syncedAt: syncedAt) }
+            try await syncServiceAccess.upsertPersonalBests(rows)
+            try localDataAccess.markPersonalBestsSynced(batch, at: syncedAt)
+        }
+    }
+
+    /// PB rows may reference sets that are locally "clean" (syncedAt set) but absent
+    /// from cloud — e.g. after identity heal when only PBs were retagged dirty.
+    private func uploadSetsReferencedBy(_ personalBests: [PersonalBestModel]) async throws {
+        let referencedIds = Set(personalBests.compactMap(\.setId))
+        guard !referencedIds.isEmpty else { return }
+
+        var sets: [ModelSet] = []
+        for id in referencedIds {
+            if let set = try localDataAccess.set(id: id) {
+                sets.append(set)
+            }
+        }
+        try await uploadDependencyChainForSets(sets)
+    }
+
+    /// Upserts sessions, entries, and sets for PB FK targets even when locally clean.
+    private func uploadDependencyChainForSets(_ sets: [ModelSet]) async throws {
+        guard !sets.isEmpty else { return }
+
+        var sessionsById: [UUID: SessionModel] = [:]
+        var entriesById: [UUID: ExerciseEntryModel] = [:]
+        for set in sets {
+            guard let entry = try localDataAccess.exerciseEntry(id: set.exerciseEntryId),
+                  let session = try localDataAccess.session(id: entry.sessionId) else {
+                continue
+            }
+            entriesById[entry.id] = entry
+            sessionsById[session.id] = session
+        }
+
+        if !sessionsById.isEmpty {
+            _ = try await uploadInBatches(Array(sessionsById.values)) { batch, syncedAt in
+                let rows = batch.map {
+                    SyncPayloadMapper.sessionRow(
+                        $0,
+                        gymId: credentials.gymId,
+                        deviceId: credentials.deviceId,
+                        syncedAt: syncedAt
+                    )
+                }
+                try await syncServiceAccess.upsertSessions(rows)
+                try localDataAccess.markSessionsSynced(batch, at: syncedAt)
+            }
+        }
+
+        if !entriesById.isEmpty {
+            _ = try await uploadInBatches(Array(entriesById.values)) { batch, syncedAt in
+                let rows = batch.map {
+                    SyncPayloadMapper.exerciseEntryRow(
+                        $0,
+                        gymId: credentials.gymId,
+                        deviceId: credentials.deviceId,
+                        syncedAt: syncedAt
+                    )
+                }
+                try await syncServiceAccess.upsertExerciseEntries(rows)
+                try localDataAccess.markExerciseEntriesSynced(batch, at: syncedAt)
+            }
+        }
+
+        _ = try await uploadSetRecords(sets)
+    }
+
+    private func uploadSetRecords(_ sets: [ModelSet]) async throws -> Int {
+        try await uploadInBatches(sets) { batch, syncedAt in
             let rows = batch.map {
                 SyncPayloadMapper.setRow(
                     $0,
@@ -116,20 +193,20 @@ struct FirstConnectUploader {
         }
     }
 
-    private func uploadPersonalBests(memberId: UUID) async throws -> Int {
-        let pending = try localDataAccess.fetchDirtyPersonalBests(memberId: memberId)
-        return try await uploadInBatches(pending) { batch, syncedAt in
-            let rows = batch.map {
-                SyncPayloadMapper.personalBestRow(
-                    $0,
-                    gymId: credentials.gymId,
-                    deviceId: credentials.deviceId,
-                    syncedAt: syncedAt
-                )
-            }
-            try await syncServiceAccess.upsertPersonalBests(rows)
-            try localDataAccess.markPersonalBestsSynced(batch, at: syncedAt)
+    private func personalBestRowForUpload(
+        _ pb: PersonalBestModel,
+        syncedAt: Date
+    ) -> [String: Any] {
+        var row = SyncPayloadMapper.personalBestRow(
+            pb,
+            gymId: credentials.gymId,
+            deviceId: credentials.deviceId,
+            syncedAt: syncedAt
+        )
+        if let setId = pb.setId, (try? localDataAccess.set(id: setId)) == nil {
+            row["set_id"] = NSNull()
         }
+        return row
     }
 
     private func uploadExerciseResets(memberId: UUID) async throws -> Int {

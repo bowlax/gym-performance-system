@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Full connect flow: explainer → auth → branch → upload or discard-cloud-wins (#31 / #33).
+/// Full connect flow: explainer → auth → branch → sync or discard-cloud-wins (#31 / #33).
 struct ConnectFlowView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppDependencies.self) private var dependencies
@@ -8,14 +8,14 @@ struct ConnectFlowView: View {
     @State private var step: Step = .explainer
     @State private var session: BrokerSession?
     @State private var claims: JWTClaimsDecoder.Claims?
-    @State private var uploadResult: FirstConnectUploadResult?
+    @State private var syncResult: SyncCycleResult?
     @State private var discardResult: DiscardCloudWinsResult?
     @State private var isWorking = false
 
     private enum Step: Equatable {
         case explainer
         case discardWarning
-        case uploading
+        case syncing
         case discarding
         case failed(String)
     }
@@ -38,15 +38,15 @@ struct ConnectFlowView: View {
                             dismiss()
                         }
                     )
-                case .uploading:
+                case .syncing:
                     ConnectUploadProgressView(
-                        result: uploadResult,
-                        isUploading: isWorking && uploadResult == nil,
+                        result: syncResult,
+                        isSyncing: isWorking && syncResult == nil,
                         onDone: {
                             dependencies.refresh()
                             dismiss()
                         },
-                        onRetry: { Task { await runUpload() } }
+                        onRetry: { Task { await runSync() } }
                     )
                 case .discarding:
                     DiscardCloudWinsProgressView(
@@ -108,12 +108,14 @@ struct ConnectFlowView: View {
             session = brokerSession
             claims = brokerClaims
 
+            flow.persistConnected(session: brokerSession, claims: brokerClaims)
+
             let branch = try await flow.assessBranch(session: brokerSession, claims: brokerClaims)
             switch branch {
             case .discardCloudWinsChoice:
                 step = .discardWarning
             case .proceedToUpload:
-                await runUpload(flow: flow, session: brokerSession, claims: brokerClaims)
+                await runSync(flow: flow, session: brokerSession, claims: brokerClaims)
             }
         } catch {
             step = .failed(error.localizedDescription)
@@ -121,7 +123,7 @@ struct ConnectFlowView: View {
     }
 
     @MainActor
-    private func runUpload(
+    private func runSync(
         flow: ConnectFlowService? = nil,
         session overrideSession: BrokerSession? = nil,
         claims overrideClaims: JWTClaimsDecoder.Claims? = nil
@@ -132,8 +134,8 @@ struct ConnectFlowView: View {
             return
         }
 
-        step = .uploading
-        uploadResult = nil
+        step = .syncing
+        syncResult = nil
         isWorking = true
         defer { isWorking = false }
 
@@ -142,17 +144,29 @@ struct ConnectFlowView: View {
                 modelContext: dependencies.modelContext,
                 performanceDataAccess: dependencies.performanceDataAccess
             )
-            let result = await service.uploadLocalHistory(session: brokerSession)
+            let result = await service.syncAfterConnect(session: brokerSession)
             if result.completed {
-                service.persistConnected(session: brokerSession, claims: brokerClaims)
-                // First-connect upload is the on-connect sync trigger (#31 / #32).
-                dependencies.syncCoordinator.recordFirstConnectUploadSuccess(
-                    memberId: brokerClaims.memberId
+                SyncStatusStore.recordSuccess(memberId: brokerClaims.memberId)
+            } else {
+                SyncStatusStore.recordFailure(
+                    memberId: brokerClaims.memberId,
+                    message: result.errorMessage ?? "Sync failed"
                 )
             }
-            uploadResult = result
+            syncResult = result
         } catch {
-            uploadResult = .interrupted(counts: FirstConnectUploadCounts(), error: error)
+            SyncStatusStore.recordFailure(
+                memberId: brokerClaims.memberId,
+                message: error.localizedDescription
+            )
+            syncResult = SyncCycleResult(
+                pull: .interrupted(
+                    mergeCounts: SyncMergeCounts(),
+                    highWaterSyncedAt: nil,
+                    error: error
+                ),
+                push: .interrupted(counts: FirstConnectUploadCounts(), error: error)
+            )
         }
     }
 

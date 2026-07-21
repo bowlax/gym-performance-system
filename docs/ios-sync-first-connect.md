@@ -82,6 +82,33 @@ xcodebuild test \
   -only-testing:GymPerformanceTests/FirstConnectUploaderTests
 ```
 
+## Configuration (Build 13)
+
+### DEBUG Run (Xcode)
+
+Set **Edit Scheme → Run → Environment Variables** locally (not committed):
+
+| Variable | Purpose |
+|----------|---------|
+| `GYMPERF_SUPABASE_URL` | Supabase project API URL |
+| `GYMPERF_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable (anon) key |
+| `GYMPERF_TEST_DEVICE_MEMBER_ID` | Optional — stub/integration harness device id override |
+| `GYMPERF_USE_REAL_OAUTH` | Set to `1` for real TeamUp OAuth; omit for stub broker |
+
+Resolution order in DEBUG: scheme env → Info.plist → unavailable.
+
+### Release / TestFlight archive
+
+1. `cp Config/Release.xcconfig.example Config/Release.xcconfig` (gitignored)
+2. Fill in values (URL must use xcconfig-safe form — `//` is a comment in xcconfig):
+   ```
+   GYMPERF_SUPABASE_URL = https:/$()/YOUR_PROJECT.supabase.co
+   GYMPERF_SUPABASE_PUBLISHABLE_KEY = sb_publishable_...
+   ```
+3. Archive — values substitute into `GymPerformance/Info.plist` at build time
+
+Empty `Release.xcconfig` → connect hidden, sync inert (safe default).
+
 ## Live cloud test
 
 1. Set scheme environment variables (Xcode → Edit Scheme → Test → Arguments → Environment):

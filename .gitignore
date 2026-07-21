@@ -27,8 +27,8 @@ src/client/web/**/.lovable/
 # Downloaded Lovable export (integrate then remove)
 GymPerformance Web.zip
 
-# Local agent screenshots / scratch images
-.cursor-ios-board.png
+# iOS Release cloud config (copy from Release.xcconfig.example before archiving)
+Config/Release.xcconfig
 
 # Xcode / SwiftPM build artefacts
 DerivedData/

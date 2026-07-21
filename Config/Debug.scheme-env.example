@@ -1,0 +1,7 @@
+# DEBUG Run — set these in Xcode: Edit Scheme → Run → Environment Variables
+# (Not committed; re-add locally after pulling Build 13.)
+#
+# GYMPERF_SUPABASE_URL = https://YOUR_PROJECT.supabase.co
+# GYMPERF_SUPABASE_PUBLISHABLE_KEY = sb_publishable_...
+# GYMPERF_TEST_DEVICE_MEMBER_ID = (optional UUID for stub/integration harness)
+# GYMPERF_USE_REAL_OAUTH = 1

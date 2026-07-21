@@ -366,6 +366,11 @@ export function isAllowedReturnUrl(
     if (candidate.protocol === "http:" || candidate.protocol === "https:") {
       return true;
     }
+    // Native app custom URL schemes (e.g. gymperformance://) are valid
+    // OAuth redirect targets per RFC 8252 §7.1.
+    if (candidate.protocol.length > 1 && candidate.protocol.endsWith(":")) {
+      return true;
+    }
     return false;
   } catch {
     return false;

@@ -2,6 +2,8 @@ import Foundation
 
 enum SyncError: Error, LocalizedError, Equatable {
     case cloudNotConfigured
+    /// Stub broker mint attempted in a Release build (must never happen).
+    case stubBrokerForbiddenInRelease
     case invalidBrokerToken(String)
     case brokerRejected(statusCode: Int, detail: String)
     case uploadFailed(table: String, statusCode: Int, detail: String)
@@ -14,7 +16,9 @@ enum SyncError: Error, LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .cloudNotConfigured:
-            return "Cloud sync is not configured. Set GYMPERF_SUPABASE_URL, GYMPERF_SUPABASE_PUBLISHABLE_KEY, and GYMPERF_TEST_DEVICE_MEMBER_ID."
+            return "Cloud sync is not configured. Set GYMPERF_SUPABASE_URL and GYMPERF_SUPABASE_PUBLISHABLE_KEY."
+        case .stubBrokerForbiddenInRelease:
+            return "Stub broker is not available in Release builds."
         case .invalidBrokerToken(let detail):
             return "Broker token is invalid: \(detail)"
         case .brokerRejected(let statusCode, let detail):

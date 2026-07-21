@@ -10,24 +10,49 @@ enum ConnectPostAuthBranch: Equatable, Sendable {
     case discardCloudWinsChoice
 }
 
-/// Orchestrates authenticate → post-auth branch → first-connect upload (#31).
+/// Orchestrates authenticate → post-auth branch → connect sync (#31).
 @MainActor
 final class ConnectFlowService {
     private let modelContext: ModelContext
     private let performanceDataAccess: PerformanceDataAccess
     private let authClient: ConnectAuthClient
     private let deviceMemberId: UUID
+    private let syncCycleRunner: @MainActor (BrokerSession) async -> SyncCycleResult
 
     init(
         modelContext: ModelContext,
         performanceDataAccess: PerformanceDataAccess,
         authClient: ConnectAuthClient,
-        deviceMemberId: UUID = AccessControl.persistedMemberId()
-    ) {
+        deviceMemberId: UUID = AccessControl.persistedMemberId(),
+        syncCycleRunner: (@MainActor (BrokerSession) async -> SyncCycleResult)? = nil
+    ) throws {
         self.modelContext = modelContext
         self.performanceDataAccess = performanceDataAccess
         self.authClient = authClient
         self.deviceMemberId = deviceMemberId
+        if let syncCycleRunner {
+            self.syncCycleRunner = syncCycleRunner
+        } else {
+            self.syncCycleRunner = { session in
+                do {
+                    let manager = try SyncManager.makeFromCloudConfig(modelContext: modelContext)
+                    return await manager.runFullSyncCycle(brokerSession: session)
+                } catch {
+                    return SyncCycleResult(
+                        pull: .interrupted(
+                            mergeCounts: SyncMergeCounts(),
+                            highWaterSyncedAt: nil,
+                            error: error
+                        ),
+                        push: .interrupted(counts: FirstConnectUploadCounts(), error: error)
+                    )
+                }
+            }
+        }
+        try AdoptLocalHistoryRetag.completePendingAdoptIfNeeded(
+            in: modelContext,
+            performanceDataAccess: performanceDataAccess
+        )
     }
 
     static func makeFromCloudConfig(
@@ -38,13 +63,28 @@ final class ConnectFlowService {
               let publishableKey = GymPerfCloudConfig.publishableKey else {
             throw SyncError.cloudNotConfigured
         }
-        return ConnectFlowService(
-            modelContext: modelContext,
-            performanceDataAccess: performanceDataAccess,
-            authClient: StubConnectAuthClient(
+        #if DEBUG
+        let authClient: ConnectAuthClient = if GymPerfCloudConfig.useRealOAuth {
+            OAuthConnectAuthClient(
+                brokerAuthorizeBaseURL: brokerURL,
+                publishableKey: publishableKey
+            )
+        } else {
+            StubConnectAuthClient(
                 brokerURL: brokerURL,
                 publishableKey: publishableKey
-            ),
+            )
+        }
+        #else
+        let authClient = OAuthConnectAuthClient(
+            brokerAuthorizeBaseURL: brokerURL,
+            publishableKey: publishableKey
+        )
+        #endif
+        return try ConnectFlowService(
+            modelContext: modelContext,
+            performanceDataAccess: performanceDataAccess,
+            authClient: authClient,
             deviceMemberId: AccessControl.persistedMemberId()
         )
     }
@@ -73,23 +113,25 @@ final class ConnectFlowService {
         return hasCloud ? .discardCloudWinsChoice : .proceedToUpload
     }
 
-    func uploadLocalHistory(session: BrokerSession) async -> FirstConnectUploadResult {
-        guard let brokerURL = GymPerfCloudConfig.tokenBrokerURL,
-              let publishableKey = GymPerfCloudConfig.publishableKey else {
-            return .interrupted(
-                counts: FirstConnectUploadCounts(),
-                error: SyncError.cloudNotConfigured
+    /// Retag/adopt BEFORE pull-merge-push, then run a full sync cycle.
+    func syncAfterConnect(session: BrokerSession) async -> SyncCycleResult {
+        do {
+            let claims = try JWTClaimsDecoder.decodeMemberAndGym(from: session.token)
+            if claims.memberId != deviceMemberId {
+                try AdoptLocalHistoryRetag.retagAndAdopt(
+                    anonymousMemberId: deviceMemberId,
+                    canonicalMemberId: claims.memberId,
+                    in: modelContext,
+                    performanceDataAccess: performanceDataAccess
+                )
+            }
+        } catch {
+            return SyncCycleResult(
+                pull: .interrupted(mergeCounts: SyncMergeCounts(), highWaterSyncedAt: nil, error: error),
+                push: .interrupted(counts: FirstConnectUploadCounts(), error: error)
             )
         }
-        let syncManager = SyncManager(
-            modelContext: modelContext,
-            tokenBroker: StubTeamUpTokenBroker(
-                brokerURL: brokerURL,
-                publishableKey: publishableKey
-            ),
-            deviceMemberId: deviceMemberId
-        )
-        return await syncManager.uploadLocalHistoryAfterConnect(brokerSession: session)
+        return await syncCycleRunner(session)
     }
 
     func persistConnected(session: BrokerSession, claims: JWTClaimsDecoder.Claims) {

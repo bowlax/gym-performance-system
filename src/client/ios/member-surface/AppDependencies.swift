@@ -30,6 +30,13 @@ final class AppDependencies {
         )
         self.syncCoordinator = SyncCoordinator(modelContext: modelContext)
         try exerciseRegistry.seedIfNeeded()
+        try AdoptLocalHistoryRetag.completePendingAdoptIfNeeded(
+            in: modelContext,
+            performanceDataAccess: performanceDataAccess
+        )
+        #if DEBUG
+        LocalStoreMemberAudit.logGroupedCounts(in: modelContext)
+        #endif
     }
 
     func refresh() {

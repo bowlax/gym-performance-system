@@ -1,0 +1,11 @@
+// Copy to Release.xcconfig (gitignored) before archiving for TestFlight.
+// cp Config/Release.xcconfig.example Config/Release.xcconfig
+//
+// These build settings substitute into GymPerformance/Info.plist at archive time.
+// Leave empty for a Release build with connect disabled (safe default).
+//
+// NOTE: `//` starts an xcconfig comment. Use `https:/$()/` for URLs:
+//   https:/$()/YOUR_PROJECT.supabase.co
+
+GYMPERF_SUPABASE_URL =
+GYMPERF_SUPABASE_PUBLISHABLE_KEY =

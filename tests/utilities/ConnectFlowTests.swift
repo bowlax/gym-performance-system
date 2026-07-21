@@ -6,6 +6,28 @@ import Testing
 @Suite
 struct ConnectAuthClientTests {
     @Test
+    func authorizeURLIncludesReturnURLForAppCallback() throws {
+        let deviceMemberId = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
+        let url = try OAuthConnectAuthClient.authorizeURL(
+            brokerAuthorizeBaseURL: URL(string: "https://example.supabase.co/functions/v1/token-broker")!,
+            deviceMemberId: deviceMemberId
+        )
+        let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let queryItems = components.queryItems ?? []
+
+        #expect(queryItems.first(where: { $0.name == "oauth" })?.value == "authorize")
+        #expect(
+            queryItems.first(where: { $0.name == "deviceMemberId" })?.value
+                == deviceMemberId.uuidString
+        )
+        #expect(queryItems.first(where: { $0.name == "surface" })?.value == "ios")
+        #expect(
+            queryItems.first(where: { $0.name == "returnUrl" })?.value
+                == OAuthConnectAuthClient.callbackURL
+        )
+    }
+
+    @Test
     func oauthCallbackParsesTokenAndExpiry() throws {
         let url = URL(string: "gymperformance://connect?token=abc.def.ghi&expires_at=1735689600")!
         let session = try OAuthConnectAuthClient.session(fromCallbackURL: url)
@@ -17,12 +39,35 @@ struct ConnectAuthClientTests {
     @Test
     func oauthCallbackParsesAuthSessionPair() throws {
         let url = URL(
-            string: "gymperformance://connect?access_token=access.jwt&refresh_token=refresh.tok&expires_at=1735689600&token=access.jwt"
+            string: "gymperformance://connect?access_token=aaa.bbb.ccc&refresh_token=refresh.tok&expires_at=1735689600&token=aaa.bbb.ccc"
         )!
         let session = try OAuthConnectAuthClient.session(fromCallbackURL: url)
-        #expect(session.token == "access.jwt")
+        #expect(session.token == "aaa.bbb.ccc")
         #expect(session.refreshToken == "refresh.tok")
         #expect(session.expiresAt == Date(timeIntervalSince1970: 1_735_689_600))
+    }
+
+    @Test
+    func oauthCallbackParsesMangledDoubleQuestionMark() throws {
+        // TeamUp can mangle the callback by using "?" instead of "&" for subsequent params.
+        let url = URL(
+            string: "gymperformance://connect?access_token=aaa.bbb.ccc?refresh_token=refresh.tok?expires_at=1735689600?token=aaa.bbb.ccc"
+        )!
+        let session = try OAuthConnectAuthClient.session(fromCallbackURL: url)
+        #expect(session.token == "aaa.bbb.ccc")
+        #expect(session.refreshToken == "refresh.tok")
+        #expect(session.expiresAt == Date(timeIntervalSince1970: 1_735_689_600))
+    }
+
+    @Test
+    func oauthCallbackReassemblesJWTSegmentsSplitByQuestionMark() throws {
+        // Some redirects split JWT header/payload/signature on "?" instead of ".".
+        let url = URL(
+            string: "gymperformance://connect?access_token=aaa?bbb?ccc?refresh_token=refresh.tok?expires_at=1735689600"
+        )!
+        let session = try OAuthConnectAuthClient.session(fromCallbackURL: url)
+        #expect(session.token == "aaa.bbb.ccc")
+        #expect(session.refreshToken == "refresh.tok")
     }
 
     @Test
@@ -39,7 +84,7 @@ struct ConnectAuthClientTests {
     }
 }
 
-@Suite
+@Suite(.serialized)
 struct MemberConnectionStoreTests {
     @Test
     func dontAskAgainAndSessionExpiryAreDistinct() {
@@ -66,7 +111,7 @@ struct MemberConnectionStoreTests {
             gymId: UUID()
         )
         MemberConnectionStore.save(
-            session: BrokerSession(token: "tok", expiresAt: Date().addingTimeInterval(-60)),
+            session: BrokerSession(token: "aaa.bbb.ccc", expiresAt: Date().addingTimeInterval(-60)),
             claims: claims
         )
         #expect(MemberConnectionStore.isConnected == true)
@@ -95,7 +140,7 @@ struct MemberConnectionStoreTests {
         let claims = JWTClaimsDecoder.Claims(memberId: UUID(), gymId: UUID())
         MemberConnectionStore.save(
             session: BrokerSession(
-                token: "access",
+                token: "aaa.bbb.ccc",
                 refreshToken: "refresh",
                 expiresAt: Date().addingTimeInterval(-60)
             ),
@@ -121,7 +166,7 @@ struct MemberConnectionStoreTests {
         let claims = JWTClaimsDecoder.Claims(memberId: UUID(), gymId: UUID())
         MemberConnectionStore.save(
             session: BrokerSession(
-                token: "access-secret",
+                token: "aaa.bbb.ccc",
                 refreshToken: "refresh-secret",
                 expiresAt: Date().addingTimeInterval(3600)
             ),
@@ -129,10 +174,10 @@ struct MemberConnectionStoreTests {
         )
 
         #expect(defaults.string(forKey: MemberConnectionStore.accessTokenKey) == nil)
-        #expect(MemberConnectionStore.accessToken == "access-secret")
+        #expect(MemberConnectionStore.accessToken == "aaa.bbb.ccc")
         #expect(MemberConnectionStore.refreshToken == "refresh-secret")
         #expect(
-            memory.string(forAccount: KeychainTokenStore.accessTokenAccount) == "access-secret"
+            memory.string(forAccount: KeychainTokenStore.accessTokenAccount) == "aaa.bbb.ccc"
         )
         #expect(
             memory.string(forAccount: KeychainTokenStore.refreshTokenAccount) == "refresh-secret"
@@ -140,7 +185,7 @@ struct MemberConnectionStoreTests {
     }
 
     @Test
-    func ensureFreshSessionNoOpWithoutRefreshToken() async {
+    func stubSessionWithoutRefreshIsUsableWhenNotExpired() {
         let defaults = UserDefaults(suiteName: "MemberConnectionStoreTests.stub.\(UUID().uuidString)")!
         let memory = InMemoryTokenStore()
         let previousDefaults = MemberConnectionStore.userDefaults
@@ -158,13 +203,12 @@ struct MemberConnectionStoreTests {
         let claims = JWTClaimsDecoder.Claims(memberId: UUID(), gymId: UUID())
         let expires = Date(timeIntervalSince1970: 1_000_000 + 3_600)
         MemberConnectionStore.save(
-            session: BrokerSession(token: "stub-hs256", refreshToken: nil, expiresAt: expires),
+            session: BrokerSession(token: "aaa.bbb.ccc", refreshToken: nil, expiresAt: expires),
             claims: claims
         )
 
-        let session = await MemberConnectionStore.ensureFreshSession()
-        #expect(session?.token == "stub-hs256")
-        #expect(session?.refreshToken == nil)
+        #expect(MemberConnectionStore.hasUsableSession == true)
+        #expect(MemberConnectionStore.brokerSessionIfUsable()?.token == "aaa.bbb.ccc")
     }
 
     @Test
@@ -186,7 +230,7 @@ struct MemberConnectionStoreTests {
         let claims = JWTClaimsDecoder.Claims(memberId: UUID(), gymId: UUID())
         MemberConnectionStore.save(
             session: BrokerSession(
-                token: "stub-hs256",
+                token: "aaa.bbb.ccc",
                 refreshToken: nil,
                 expiresAt: Date(timeIntervalSince1970: 1_000_000)
             ),
@@ -195,6 +239,60 @@ struct MemberConnectionStoreTests {
 
         let session = await MemberConnectionStore.ensureFreshSession()
         #expect(session == nil)
+    }
+
+    @Test
+    func ensureFreshSessionRefreshesMalformedAccessToken() async {
+        let defaults = UserDefaults(suiteName: "MemberConnectionStoreTests.malformed.\(UUID().uuidString)")!
+        let memory = InMemoryTokenStore()
+        let previousDefaults = MemberConnectionStore.userDefaults
+        let previousKeychain = KeychainTokenStore.testStore
+        let previousSession = GoTrueTokenRefresher.urlSession
+        setenv("GYMPERF_SUPABASE_URL", "https://example.supabase.co", 1)
+        setenv("GYMPERF_SUPABASE_PUBLISHABLE_KEY", "pk_test", 1)
+        MemberConnectionStore.userDefaults = defaults
+        KeychainTokenStore.testStore = memory
+        defer {
+            MemberConnectionStore.userDefaults = previousDefaults
+            KeychainTokenStore.testStore = previousKeychain
+            GoTrueTokenRefresher.urlSession = previousSession
+            unsetenv("GYMPERF_SUPABASE_URL")
+            unsetenv("GYMPERF_SUPABASE_PUBLISHABLE_KEY")
+        }
+
+        let refreshedJWT = "aaa.bbb.ccc"
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockGoTrueRefreshURLProtocol.self]
+        MockGoTrueRefreshURLProtocol.responseHandler = { request in
+            #expect(request.url?.absoluteString.contains("/auth/v1/token") == true)
+            let body = """
+            {"access_token":"\(refreshedJWT)","refresh_token":"rotated-refresh","expires_at":9999999999}
+            """
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (response, Data(body.utf8))
+        }
+        GoTrueTokenRefresher.urlSession = URLSession(configuration: config)
+
+        let claims = JWTClaimsDecoder.Claims(memberId: UUID(), gymId: UUID())
+        MemberConnectionStore.save(
+            session: BrokerSession(
+                token: "aaa.bbb.ccc",
+                refreshToken: "stale-refresh",
+                expiresAt: Date().addingTimeInterval(3600)
+            ),
+            claims: claims
+        )
+        memory.setString("not-a-jwt", forAccount: KeychainTokenStore.accessTokenAccount)
+
+        let session = await MemberConnectionStore.ensureFreshSession()
+        #expect(session?.token == refreshedJWT)
+        #expect(MemberConnectionStore.accessToken == refreshedJWT)
+        #expect(MemberConnectionStore.refreshToken == "rotated-refresh")
     }
 
     @Test
@@ -217,6 +315,26 @@ struct MemberConnectionStoreTests {
             memory.string(forAccount: KeychainTokenStore.accessTokenAccount) == "legacy-access"
         )
     }
+}
+
+private final class MockGoTrueRefreshURLProtocol: URLProtocol {
+    static var responseHandler: ((URLRequest) -> (HTTPURLResponse, Data))?
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard let handler = Self.responseHandler else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        let (response, data) = handler(request)
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }
 
 @Suite

@@ -123,7 +123,7 @@ enum MemberConnectionStore {
     }
 
     static func save(session: BrokerSession, claims: JWTClaimsDecoder.Claims) {
-        accessToken = session.token
+        accessToken = JWTClaimsDecoder.normalizeToken(session.token)
         refreshToken = session.refreshToken
         expiresAt = session.expiresAt
         connectedMemberId = claims.memberId
@@ -172,7 +172,7 @@ private actor SessionRefreshGate {
         if let inFlight {
             return await inFlight.value
         }
-        let task = Task<BrokerSession?, Never> {
+        let task = Task<BrokerSession?, Never> { @MainActor in
             await Self.performEnsureFreshSession()
         }
         inFlight = task
@@ -181,23 +181,28 @@ private actor SessionRefreshGate {
         return result
     }
 
+    @MainActor
     private static func performEnsureFreshSession() async -> BrokerSession? {
         guard MemberConnectionStore.isConnected else { return nil }
 
-        let access = MemberConnectionStore.accessToken
+        let access = MemberConnectionStore.accessToken.map(JWTClaimsDecoder.normalizeToken)
         let refresh = MemberConnectionStore.refreshToken
         let expiresAt = MemberConnectionStore.expiresAt
 
         // Stub / HS256: no refresh token — same as Bearer-until-expiry.
         guard let refresh, !refresh.isEmpty else {
-            guard let access, !access.isEmpty else { return nil }
+            guard let access, !access.isEmpty,
+                  JWTClaimsDecoder.isWellFormedJWT(access) else {
+                return nil
+            }
             if let expiresAt, expiresAt <= GoTrueTokenRefresher.now() {
                 return nil
             }
             return BrokerSession(token: access, refreshToken: nil, expiresAt: expiresAt)
         }
 
-        let needsRefresh = GoTrueTokenRefresher.needsRefresh(
+        let accessMalformed = access.map { !JWTClaimsDecoder.isWellFormedJWT($0) } ?? true
+        let needsRefresh = accessMalformed || GoTrueTokenRefresher.needsRefresh(
             accessToken: access,
             expiresAt: expiresAt,
             hasRefreshToken: true

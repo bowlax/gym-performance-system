@@ -50,9 +50,11 @@ struct DiscardCloudWinsResult: Equatable, Sendable {
 /// ## What survives
 /// - **Device UUID** (`SyncDeviceIdentity`) — install identity for `source_device_id`, not training data.
 /// - **Exercise catalog** — shared seed, not member history.
-/// - **Anonymous `UserIdentityModel` / staleness** — not migrated onto the adopted
-///   member. After adopt, preferences come from the cloud member row (or defaults).
-///   Copying local staleness would be a soft merge of two identities' settings.
+/// - **Anonymous `UserIdentityModel` / staleness** — deliberately **not** migrated onto
+///   the adopted member (see `AdoptLocalHistoryRetag` for the contrasting re-tag path).
+///   After discard, preferences come from the cloud member row (or defaults). Copying
+///   local staleness here would soft-merge two identities' settings — wrong when history
+///   is being thrown away.
 enum DiscardCloudWins {
     /// Hard-delete all training rows owned by `anonymousMemberId`.
     @MainActor
