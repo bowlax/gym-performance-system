@@ -213,25 +213,64 @@ Deno.test("verifyOAuthState rejects tampered state", async () => {
 });
 
 Deno.test("return URL policy prefers validated client returnUrl", () => {
-  assertEquals(
-    isAllowedReturnUrl(
-      sampleConfig,
-      "https://app.example/auth/other",
-    ),
-    true,
-  );
-  assertEquals(
-    isAllowedReturnUrl(sampleConfig, "https://evil.example/steal"),
-    false,
-  );
-  assertEquals(
-    resolveOAuthReturnUrl(
-      sampleConfig,
-      "https://app.example/auth/other",
-    ),
-    "https://app.example/auth/other",
-  );
-  assertEquals(resolveOAuthReturnUrl(sampleConfig, null), sampleConfig.successRedirectUri);
+  const originalGet = Deno.env.get.bind(Deno.env);
+  Deno.env.get = (name: string) => {
+    const values: Record<string, string> = {
+      TEAMUP_OAUTH_ALLOWED_RETURN_URLS_IOS: "gymperformance://connect",
+      TEAMUP_OAUTH_ALLOWED_RETURN_URLS_MEMBER_WEB:
+        "https://app.example/auth/callback,https://preview.example/auth/callback",
+    };
+    return values[name];
+  };
+  try {
+    assertEquals(
+      isAllowedReturnUrl("ios", "gymperformance://connect"),
+      true,
+    );
+    assertEquals(
+      isAllowedReturnUrl("ios", "gymperf://connect"),
+      false,
+    );
+    assertEquals(
+      isAllowedReturnUrl("memberWeb", "https://app.example/auth/callback"),
+      true,
+    );
+    assertEquals(
+      isAllowedReturnUrl("memberWeb", "https://app.example/auth/other"),
+      false,
+    );
+    assertEquals(
+      isAllowedReturnUrl("memberWeb", "https://evil.example/steal"),
+      false,
+    );
+    assertEquals(
+      resolveOAuthReturnUrl(
+        sampleConfig,
+        "ios",
+        "gymperformance://connect",
+      ),
+      "gymperformance://connect",
+    );
+    assertEquals(
+      resolveOAuthReturnUrl(
+        sampleConfig,
+        "memberWeb",
+        "https://app.example/auth/other",
+      ),
+      null,
+    );
+    assertEquals(resolveOAuthReturnUrl(sampleConfig, "memberWeb", null), null);
+    assertEquals(
+      resolveOAuthReturnUrl(
+        sampleConfig,
+        "unknown-surface",
+        "https://app.example/auth/callback",
+      ),
+      null,
+    );
+  } finally {
+    Deno.env.get = originalGet;
+  }
 });
 
 Deno.test("appendTokenToReturnUrl adds token query param", () => {

@@ -21,11 +21,12 @@ function weeksGridWidth(weekCount: number): number {
   return weekCount * WEEK_COL_PX + Math.max(0, weekCount - 1) * CELL_GAP_PX;
 }
 
+/** Intensity steps in light; solid wolf blue in dark (`.gp-heatmap-session-*` in styles.css). */
 const SESSION_LEVEL_CLASS: Record<1 | 2 | 3 | 4, string> = {
-  1: "bg-primary/35",
-  2: "bg-primary/55",
-  3: "bg-primary/75",
-  4: "bg-primary",
+  1: "gp-heatmap-session-1",
+  2: "gp-heatmap-session-2",
+  3: "gp-heatmap-session-3",
+  4: "gp-heatmap-session-4",
 };
 
 export interface CalendarHeatmapProps {

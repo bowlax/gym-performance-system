@@ -3,14 +3,14 @@ import {
   TEST_DEVICE_MEMBER_ID,
   TOKEN_BROKER_URL,
 } from "./env";
+import { assertStubBrokerAllowed } from "./stub-broker-guard";
 
 /**
  * A TokenBroker exchanges an upstream identity (TeamUp today, real OAuth
  * tomorrow) for a Supabase-compatible JWT that RLS understands.
  *
- * The rest of the app depends on this interface, never on TeamUp specifics,
- * so real OAuth can be swapped in later by shipping a new broker
- * implementation.
+ * Production auth uses the sealed-cookie session endpoint. StubTeamUpBroker
+ * remains for local DEV only (see stub-broker-guard).
  */
 export interface BrokerSession {
   token: string;
@@ -26,11 +26,12 @@ export interface TokenBroker {
 
 /**
  * Stub broker: sends a hardcoded TeamUp token + a configured test member id.
- * When real OAuth lands, replace this with a broker that resolves the current
- * TeamUp session and passes the real values to the same edge function.
+ * Forbidden outside local DEV with VITE_GYMPERF_USE_STUB_BROKER=true.
  */
 export class StubTeamUpBroker implements TokenBroker {
   async mint(): Promise<BrokerSession> {
+    assertStubBrokerAllowed();
+
     if (!SUPABASE_PUBLISHABLE_KEY) {
       throw new Error(
         "Supabase publishable key is not configured. Add GYMPERF_SUPABASE_PUBLISHABLE_KEY in Project Settings → Secrets.",
@@ -38,7 +39,7 @@ export class StubTeamUpBroker implements TokenBroker {
     }
     if (!TEST_DEVICE_MEMBER_ID) {
       throw new Error(
-        "Test device member id is not configured. Add TEST_DEVICE_MEMBER_ID in Project Settings → Secrets.",
+        "Test device member id is not configured. Add TEST_DEVICE_MEMBER_ID in .env.local (stub mode only).",
       );
     }
 
@@ -95,5 +96,3 @@ function pickNumber(o: Record<string, unknown>, keys: string[]) {
   }
   return undefined;
 }
-
-export const defaultBroker: TokenBroker = new StubTeamUpBroker();

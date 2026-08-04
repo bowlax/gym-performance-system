@@ -4,6 +4,9 @@
 //     componentTagger (dev-only), VITE_* env injection, @ path alias, React/TanStack dedupe,
 //     error logger plugins, and sandbox detection (port/host/strictPort).
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
+//
+// Cloudflare Workers deploy uses THIS Nitro path (preset cloudflare-module + deployConfig),
+// not @cloudflare/vite-plugin — adding that plugin would fight the Lovable wrapper.
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
@@ -40,6 +43,9 @@ function gymPerfEnvDefinePlugin(): Plugin {
           "import.meta.env.VITE_GYMPERF_TEST_DEVICE_MEMBER_ID": JSON.stringify(
             env.TEST_DEVICE_MEMBER_ID ?? "",
           ),
+          "import.meta.env.VITE_GYMPERF_USE_STUB_BROKER": JSON.stringify(
+            env.GYMPERF_USE_STUB_BROKER ?? env.VITE_GYMPERF_USE_STUB_BROKER ?? "",
+          ),
         },
       };
     },
@@ -52,6 +58,16 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Pin Cloudflare Workers via the Lovable wrapper's Nitro path — do NOT add
+  // @cloudflare/vite-plugin / tanstackStart / nitro plugins manually (duplicate).
+  // Outside Lovable, defaultPreset alone can miss deployConfig; pin both.
+  nitro: {
+    preset: "cloudflare-module",
+    cloudflare: {
+      nodeCompat: true,
+      deployConfig: true,
+    },
+  },
   plugins: [gymPerfEnvDefinePlugin()],
   vite: {
     resolve: {
@@ -61,7 +77,9 @@ export default defineConfig({
     },
     server: {
       fs: {
-        allow: [gpSharedDir],
+        // Explicit allow replaces Vite defaults — include the app root plus
+        // the shared PB modules directory used via the @gp-shared alias.
+        allow: [__dirname, gpSharedDir],
       },
     },
   },

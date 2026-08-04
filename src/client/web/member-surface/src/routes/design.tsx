@@ -127,19 +127,28 @@ function DesignSystem() {
           </div>
         </Section>
 
-        <Section title="PB card" caption="Board row layout matches iOS Personal Bests">
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <Section title="PB card" caption="Single-column board row — name lane + reserved PB column">
+          <div className="mx-auto flex max-w-lg flex-col gap-3">
             <PBCard
               lift="Back squat"
               value="142.5kg × 5"
               achievedAt="2 Jul"
             />
             <PBCard
-              lift="Bench press"
-              value="97.5kg × 3"
+              lift="45-Degree Dumbbell Press"
+              value="30kg × 8"
               achievedAt="18 Jun"
             />
-            <PBCard lift="Deadlift" />
+            <PBCard
+              lift="Romanian Deadlift"
+              value="100kg × 5"
+              achievedAt="8 Jul"
+            />
+            <PBCard lift="Deadlift" emptyCaption="No PB yet" />
+            <PBCard
+              lift="Plank"
+              emptyCaption="Cleared — log a session to set a new one"
+            />
           </div>
         </Section>
 

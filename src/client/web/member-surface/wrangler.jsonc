@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Worker name → workers.dev subdomain: https://gymperf-member-web.<account>.workers.dev
+  // Nitro merges this with build-time deploy config (.output/server/wrangler.json).
+  "name": "gymperf-member-web",
+  "compatibility_date": "2026-08-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  // SESSION_SECRET is a runtime secret (wrangler secret put / .dev.vars) —
+  // seals the gp_auth cookie. Never put it in [vars] (those are plaintext).
+  "observability": {
+    "enabled": true
+  }
+}

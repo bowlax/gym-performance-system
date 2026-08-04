@@ -125,6 +125,27 @@ struct MemberConnectionStoreTests {
     }
 
     @Test
+    func onboardingConnectOfferSkipIsOneShotNotDontAskAgain() {
+        let defaults = UserDefaults(suiteName: "MemberConnectionStoreTests.onboardingSkip.\(UUID().uuidString)")!
+        let previousDefaults = MemberConnectionStore.userDefaults
+        MemberConnectionStore.userDefaults = defaults
+        defer { MemberConnectionStore.userDefaults = previousDefaults }
+
+        #expect(MemberConnectionStore.offeredConnectDuringOnboarding == false)
+        #expect(MemberConnectionStore.consumeOnboardingConnectOfferSkip() == false)
+
+        // Onboarding decline sets the one-shot flag (not dontAskConnectAgain).
+        MemberConnectionStore.offeredConnectDuringOnboarding = true
+        #expect(MemberConnectionStore.dontAskConnectAgain == false)
+
+        #expect(MemberConnectionStore.consumeOnboardingConnectOfferSkip() == true)
+        #expect(MemberConnectionStore.offeredConnectDuringOnboarding == false)
+        // Second evaluation must NOT skip — same as a later “Not now”.
+        #expect(MemberConnectionStore.consumeOnboardingConnectOfferSkip() == false)
+        #expect(MemberConnectionStore.dontAskConnectAgain == false)
+    }
+
+    @Test
     func refreshTokenDefersReauthUntilRefreshFails() {
         let defaults = UserDefaults(suiteName: "MemberConnectionStoreTests.refresh.\(UUID().uuidString)")!
         let memory = InMemoryTokenStore()
@@ -314,6 +335,80 @@ struct MemberConnectionStoreTests {
         #expect(
             memory.string(forAccount: KeychainTokenStore.accessTokenAccount) == "legacy-access"
         )
+    }
+
+    @Test
+    func disconnectClearsSessionKeepsIdentitySignalsAndAllowsReconnectPrompt() {
+        let defaults = UserDefaults(suiteName: "MemberConnectionStoreTests.disconnect.\(UUID().uuidString)")!
+        let memory = InMemoryTokenStore()
+        let previousDefaults = MemberConnectionStore.userDefaults
+        let previousKeychain = KeychainTokenStore.testStore
+        let previousAccessDefaults = AccessControl.userDefaults
+        AccessControl.userDefaults = defaults
+        MemberConnectionStore.userDefaults = defaults
+        KeychainTokenStore.testStore = memory
+        defer {
+            MemberConnectionStore.userDefaults = previousDefaults
+            KeychainTokenStore.testStore = previousKeychain
+            AccessControl.userDefaults = previousAccessDefaults
+        }
+
+        let memberId = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+        let gymId = UUID()
+        AccessControl.adoptCanonicalMemberId(memberId)
+        MemberConnectionStore.save(
+            session: BrokerSession(
+                token: "aaa.bbb.ccc",
+                refreshToken: "refresh-secret",
+                expiresAt: Date().addingTimeInterval(3600)
+            ),
+            claims: JWTClaimsDecoder.Claims(memberId: memberId, gymId: gymId)
+        )
+
+        #expect(MemberConnectionStore.isConnected == true)
+        #expect(MemberConnectionStore.hasEverConnected == true)
+        #expect(MemberConnectionStore.lastConnectedMemberId == memberId)
+        #expect(MemberConnectionStore.dontAskConnectAgain == true)
+
+        MemberConnectionStore.disconnect()
+
+        #expect(MemberConnectionStore.isConnected == false)
+        #expect(MemberConnectionStore.accessToken == nil)
+        #expect(MemberConnectionStore.refreshToken == nil)
+        #expect(MemberConnectionStore.connectedMemberId == nil)
+        #expect(MemberConnectionStore.sessionNeedsReauth == false)
+        #expect(MemberConnectionStore.hasUsableSession == false)
+        #expect(MemberConnectionStore.dontAskConnectAgain == false)
+        #expect(MemberConnectionStore.hasEverConnected == true)
+        #expect(MemberConnectionStore.lastConnectedMemberId == memberId)
+        #expect(AccessControl.persistedMemberId() == memberId)
+    }
+
+    @Test
+    func ensureFreshSessionNilAfterDisconnect() async {
+        let defaults = UserDefaults(suiteName: "MemberConnectionStoreTests.disconnectFresh.\(UUID().uuidString)")!
+        let memory = InMemoryTokenStore()
+        let previousDefaults = MemberConnectionStore.userDefaults
+        let previousKeychain = KeychainTokenStore.testStore
+        MemberConnectionStore.userDefaults = defaults
+        KeychainTokenStore.testStore = memory
+        defer {
+            MemberConnectionStore.userDefaults = previousDefaults
+            KeychainTokenStore.testStore = previousKeychain
+        }
+
+        MemberConnectionStore.save(
+            session: BrokerSession(
+                token: "aaa.bbb.ccc",
+                refreshToken: "refresh",
+                expiresAt: Date().addingTimeInterval(3600)
+            ),
+            claims: JWTClaimsDecoder.Claims(memberId: UUID(), gymId: UUID())
+        )
+        MemberConnectionStore.disconnect()
+
+        let session = await MemberConnectionStore.ensureFreshSession()
+        #expect(session == nil)
     }
 }
 

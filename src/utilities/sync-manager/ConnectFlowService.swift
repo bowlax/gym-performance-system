@@ -8,6 +8,78 @@ enum ConnectPostAuthBranch: Equatable, Sendable {
     /// Adopted member already has cloud data AND this device has anonymous local
     /// history. Show the discard-cloud-wins choice screen — do not auto-clear (#33).
     case discardCloudWinsChoice
+    /// This install previously connected as a different member. Refuse rather than
+    /// discard/retag (device-swap is unsupported for Wolf — see `disconnect()`).
+    case blockedDifferentAccount
+}
+
+/// Full post-auth assessment from `ConnectFlowService.assessBranch`.
+///
+/// Onboarding reuses the same adopted / hasLocal / hasCloud flags that drive
+/// discard-vs-upload — skip manual PB population when cloud history will (or
+/// did) arrive for an adopted member.
+struct ConnectBranchAssessment: Equatable, Sendable {
+    var adopted: Bool
+    var hasLocal: Bool
+    var hasCloud: Bool
+    var postAuthBranch: ConnectPostAuthBranch
+
+    /// Adopted + cloud history → device will receive real PBs via pull / discard.
+    /// Prompting hand-entry would be wrong. Same cloud signal as #33, without
+    /// requiring local history (empty first-launch connect still skips populate).
+    var shouldSkipManualPBPopulation: Bool {
+        ConnectBranchLogic.shouldSkipManualPBPopulation(
+            adopted: adopted,
+            hasCloud: hasCloud
+        )
+    }
+}
+
+/// Pure branch resolution — unit-tested without network / SwiftData.
+enum ConnectBranchLogic {
+    /// Cheap post-disconnect guard: refuse connecting a *different* TeamUp account
+    /// on an install that has already connected before.
+    ///
+    /// Device-swap after disconnect (reconnecting a DIFFERENT TeamUp account on a
+    /// device that previously connected as someone else) is a known unhandled case.
+    /// Accepted because Wolf's member population does not share devices. If that
+    /// assumption ever changes, the identity model needs the fuller fix (stable
+    /// device id separate from adopted member id) before this scenario is safe.
+    static func shouldBlockDifferentAccount(
+        hasEverConnected: Bool,
+        lastConnectedMemberId: UUID?,
+        persistedMemberId: UUID,
+        jwtMemberId: UUID
+    ) -> Bool {
+        guard hasEverConnected else { return false }
+        if jwtMemberId == persistedMemberId { return false }
+        if let lastConnectedMemberId, jwtMemberId == lastConnectedMemberId {
+            return false
+        }
+        // hasEverConnected with no recorded last id (shouldn't happen after migrate):
+        // still block when JWT ≠ persisted — visible refusal over silent retag.
+        return true
+    }
+
+    static func postAuthBranch(
+        adopted: Bool,
+        hasLocal: Bool,
+        hasCloud: Bool
+    ) -> ConnectPostAuthBranch {
+        if adopted && hasLocal && hasCloud {
+            return .discardCloudWinsChoice
+        }
+        return .proceedToUpload
+    }
+
+    static func shouldSkipManualPBPopulation(adopted: Bool, hasCloud: Bool) -> Bool {
+        adopted && hasCloud
+    }
+
+    static let blockedDifferentAccountMessage = """
+        This device was previously connected to a different account. Contact \
+        privacy@lbconsulting.tech before connecting a different account on this device.
+        """
 }
 
 /// Orchestrates authenticate → post-auth branch → connect sync (#31).
@@ -98,19 +170,48 @@ final class ConnectFlowService {
     func assessBranch(
         session: BrokerSession,
         claims: JWTClaimsDecoder.Claims
-    ) async throws -> ConnectPostAuthBranch {
+    ) async throws -> ConnectBranchAssessment {
+        MemberConnectionStore.migrateEverConnectedFlagsIfNeeded()
+
+        if ConnectBranchLogic.shouldBlockDifferentAccount(
+            hasEverConnected: MemberConnectionStore.hasEverConnected,
+            lastConnectedMemberId: MemberConnectionStore.lastConnectedMemberId,
+            persistedMemberId: deviceMemberId,
+            jwtMemberId: claims.memberId
+        ) {
+            return ConnectBranchAssessment(
+                adopted: claims.memberId != deviceMemberId,
+                hasLocal: false,
+                hasCloud: false,
+                postAuthBranch: .blockedDifferentAccount
+            )
+        }
+
         let adopted = claims.memberId != deviceMemberId
         let hasLocal = try LocalMemberHistoryProbe.hasLocalHistory(
             memberId: deviceMemberId,
             in: modelContext,
             performanceDataAccess: performanceDataAccess
         )
-        guard adopted, hasLocal else {
-            return .proceedToUpload
+        // Probe cloud whenever adopted — needed both for #33 discard and for
+        // first-launch skip-populate (adopted + cloud, often with empty local).
+        let hasCloud: Bool
+        if adopted {
+            hasCloud = try await cloudHasHistory(session: session, claims: claims)
+        } else {
+            hasCloud = false
         }
 
-        let hasCloud = try await cloudHasHistory(session: session, claims: claims)
-        return hasCloud ? .discardCloudWinsChoice : .proceedToUpload
+        return ConnectBranchAssessment(
+            adopted: adopted,
+            hasLocal: hasLocal,
+            hasCloud: hasCloud,
+            postAuthBranch: ConnectBranchLogic.postAuthBranch(
+                adopted: adopted,
+                hasLocal: hasLocal,
+                hasCloud: hasCloud
+            )
+        )
     }
 
     /// Retag/adopt BEFORE pull-merge-push, then run a full sync cycle.

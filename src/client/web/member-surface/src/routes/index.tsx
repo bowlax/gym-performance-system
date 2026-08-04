@@ -105,6 +105,7 @@ function BoardScreen() {
         status={auth.status}
         error={auth.error}
         onRetry={() => void auth.refresh()}
+        onSignIn={() => auth.signIn()}
       >
         <BoardContent />
       </AuthGate>
@@ -187,6 +188,11 @@ function SessionSavedDialog({
   );
 }
 
+function clampStalenessPeriods(value: number | ""): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 2;
+  return Math.max(1, Math.min(12, Math.trunc(value)));
+}
+
 function SettingsDialog({
   open,
   onClose,
@@ -197,7 +203,8 @@ function SettingsDialog({
   const { supabase } = useAuth();
   const queryClient = useQueryClient();
   const [enabled, setEnabled] = useState(false);
-  const [periods, setPeriods] = useState(2);
+  /** Empty string allowed while editing so the field can be cleared. */
+  const [periods, setPeriods] = useState<number | "">(2);
   const [unit, setUnit] = useState<"quarters" | "months">("quarters");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -261,10 +268,12 @@ function SettingsDialog({
                 disabled={saving || settingsQuery.isLoading}
                 onChange={(e) => {
                   const nextEnabled = e.target.checked;
+                  const nextPeriods = clampStalenessPeriods(periods);
                   setEnabled(nextEnabled);
+                  setPeriods(nextPeriods);
                   void persist({
                     enabled: nextEnabled,
-                    periods,
+                    periods: nextPeriods,
                     unit,
                   });
                 }}
@@ -279,18 +288,24 @@ function SettingsDialog({
                     type="number"
                     min={1}
                     max={12}
+                    inputMode="numeric"
                     value={periods}
                     disabled={saving}
                     onChange={(e) => {
-                      const next = Math.max(
-                        1,
-                        Math.min(12, Number(e.target.value) || 1),
-                      );
-                      setPeriods(next);
+                      const raw = e.target.value;
+                      if (raw === "") {
+                        setPeriods("");
+                        return;
+                      }
+                      const parsed = Number(raw);
+                      if (!Number.isFinite(parsed)) return;
+                      setPeriods(Math.max(1, Math.min(12, Math.trunc(parsed))));
                     }}
-                    onBlur={() =>
-                      void persist({ enabled, periods, unit })
-                    }
+                    onBlur={() => {
+                      const nextPeriods = clampStalenessPeriods(periods);
+                      setPeriods(nextPeriods);
+                      void persist({ enabled, periods: nextPeriods, unit });
+                    }}
                     className="w-16 rounded-md border border-border bg-background px-2 py-1 text-right tabular-nums"
                   />
                 </label>
@@ -306,8 +321,14 @@ function SettingsDialog({
                       type="button"
                       disabled={saving}
                       onClick={() => {
+                        const nextPeriods = clampStalenessPeriods(periods);
+                        setPeriods(nextPeriods);
                         setUnit(value);
-                        void persist({ enabled, periods, unit: value });
+                        void persist({
+                          enabled,
+                          periods: nextPeriods,
+                          unit: value,
+                        });
                       }}
                       className={
                         unit === value
@@ -384,7 +405,7 @@ function BoardContent() {
           caption={`${rows.length} exercise${rows.length === 1 ? "" : "s"}`}
         />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="flex flex-col gap-3">
         {rows.map((row) => (
           <BoardCard key={row.exercise.id} row={row} />
         ))}

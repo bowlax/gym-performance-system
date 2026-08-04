@@ -95,6 +95,7 @@ function ProgressionScreen() {
         status={auth.status}
         error={auth.error}
         onRetry={() => void auth.refresh()}
+        onSignIn={() => auth.signIn()}
       >
         <ProgressionContent />
       </AuthGate>

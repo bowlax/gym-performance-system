@@ -9,37 +9,54 @@ import {
   type ReactNode,
 } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { defaultBroker, type BrokerSession, type TokenBroker } from "./token-broker";
+import {
+  buildBrokerAuthorizeUrl,
+  type SessionJsonResponse,
+} from "./auth-session";
+import { getOrCreateDeviceMemberId } from "./device-member-id";
+import { oauthCallbackUrl, TOKEN_BROKER_URL } from "./env";
 import { createGymPerfClient } from "./supabase-client";
+import { isStubBrokerAllowed } from "./stub-broker-guard";
+import { StubTeamUpBroker, type BrokerSession, type TokenBroker } from "./token-broker";
+
+export type AuthStatus = "idle" | "loading" | "ready" | "signed_out" | "error";
 
 interface AuthState {
-  status: "idle" | "loading" | "ready" | "error";
+  status: AuthStatus;
   session: BrokerSession | null;
   supabase: SupabaseClient | null;
   error: Error | null;
   refresh: () => Promise<void>;
-  signOut: () => void;
+  signIn: () => void;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
 interface AuthProviderProps {
+  /** Override for tests; production ignores and uses /api/auth/session. */
   broker?: TokenBroker;
   children: ReactNode;
 }
 
 /**
- * AuthProvider mints and holds the broker session on the client. It runs
- * only in the browser — SSR renders children with a loading state.
+ * AuthProvider holds the access token for createGymPerfClient.
  *
- * Later, swap `broker` for a real TeamUp OAuth broker without touching
- * consumers.
+ * Production: GET /api/auth/session (sealed cookie + server-side GoTrue refresh).
+ * Sign-in navigates to the TeamUp OAuth broker authorize URL.
+ * Dev stub: only when VITE_GYMPERF_USE_STUB_BROKER=true in a non-PROD build.
  */
-export function AuthProvider({ broker = defaultBroker, children }: AuthProviderProps) {
-  const [status, setStatus] = useState<AuthState["status"]>("idle");
+export function AuthProvider({ broker, children }: AuthProviderProps) {
+  const [status, setStatus] = useState<AuthStatus>("idle");
   const [session, setSession] = useState<BrokerSession | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const mintingRef = useRef<Promise<void> | null>(null);
+
+  const useStub = broker != null || isStubBrokerAllowed();
+  const stubBroker = useMemo(
+    () => broker ?? (isStubBrokerAllowed() ? new StubTeamUpBroker() : null),
+    [broker],
+  );
 
   const refresh = useCallback(async () => {
     if (mintingRef.current) return mintingRef.current;
@@ -47,8 +64,49 @@ export function AuthProvider({ broker = defaultBroker, children }: AuthProviderP
     setError(null);
     const p = (async () => {
       try {
-        const s = await broker.mint();
-        setSession(s);
+        if (useStub && stubBroker) {
+          const s = await stubBroker.mint();
+          setSession(s);
+          setStatus("ready");
+          return;
+        }
+
+        const response = await fetch("/api/auth/session", {
+          method: "GET",
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        });
+
+        if (response.status === 401) {
+          setSession(null);
+          setStatus("signed_out");
+          return;
+        }
+
+        if (!response.ok) {
+          const detail = await response.text().catch(() => "");
+          throw new Error(
+            `Session endpoint failed (${response.status}). ${detail}`,
+          );
+        }
+
+        const json = (await response.json()) as SessionJsonResponse;
+        if (typeof json.token !== "string" || json.token.length === 0) {
+          throw new Error("Session endpoint returned no token");
+        }
+        // Defense: never treat a refresh_token field as usable client state.
+        if (
+          "refresh_token" in (json as object) ||
+          "refreshToken" in (json as object)
+        ) {
+          throw new Error("Session endpoint leaked refresh_token");
+        }
+
+        setSession({
+          token: json.token,
+          expiresAt: json.expiresAt,
+          raw: { token: json.token, expiresAt: json.expiresAt },
+        });
         setStatus("ready");
       } catch (e) {
         setSession(null);
@@ -60,13 +118,42 @@ export function AuthProvider({ broker = defaultBroker, children }: AuthProviderP
     })();
     mintingRef.current = p;
     return p;
-  }, [broker]);
+  }, [stubBroker, useStub]);
 
-  const signOut = useCallback(() => {
-    setSession(null);
-    setStatus("idle");
-    setError(null);
-  }, []);
+  const signIn = useCallback(() => {
+    if (useStub && stubBroker) {
+      void refresh();
+      return;
+    }
+    if (!TOKEN_BROKER_URL) {
+      setError(new Error("Token broker URL is not configured"));
+      setStatus("error");
+      return;
+    }
+    const deviceMemberId = getOrCreateDeviceMemberId();
+    const url = buildBrokerAuthorizeUrl({
+      brokerBaseUrl: TOKEN_BROKER_URL,
+      deviceMemberId,
+      returnUrl: oauthCallbackUrl(),
+      surface: "memberWeb",
+    });
+    window.location.assign(url);
+  }, [refresh, stubBroker, useStub]);
+
+  const signOut = useCallback(async () => {
+    try {
+      if (!useStub) {
+        await fetch("/api/auth/signout", {
+          method: "POST",
+          credentials: "same-origin",
+        });
+      }
+    } finally {
+      setSession(null);
+      setStatus("signed_out");
+      setError(null);
+    }
+  }, [useStub]);
 
   useEffect(() => {
     if (status === "idle" && typeof window !== "undefined") {
@@ -80,8 +167,8 @@ export function AuthProvider({ broker = defaultBroker, children }: AuthProviderP
   );
 
   const value = useMemo<AuthState>(
-    () => ({ status, session, supabase, error, refresh, signOut }),
-    [status, session, supabase, error, refresh, signOut],
+    () => ({ status, session, supabase, error, refresh, signIn, signOut }),
+    [status, session, supabase, error, refresh, signIn, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

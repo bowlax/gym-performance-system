@@ -15,7 +15,9 @@ protocol ConfigurationDataAccess {
     /// Only called if no exercises exist in the store.
     func seedExercises(_ exercises: [ExerciseModel]) throws
 
-    /// Align stored exercise definitions with the current seed data (e.g. after policy changes).
+    /// Align stored exercise definitions with the current seed data (e.g. after
+    /// policy or board-order changes). Matched by exercise id; does not insert
+    /// missing seed rows or delete extras.
     func syncExerciseDefinitions(with seedData: [ExerciseModel]) throws
 }
 

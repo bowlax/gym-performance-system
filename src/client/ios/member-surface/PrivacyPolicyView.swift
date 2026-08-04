@@ -29,7 +29,7 @@ struct PrivacyPolicyView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("GymPerformance Privacy Policy")
                 .exerciseTitleStyle()
-            Text("Last updated: 21 July 2026")
+            Text("Last updated: 4 August 2026")
                 .captionLabelStyle()
         }
     }
@@ -116,7 +116,7 @@ struct PrivacyPolicyView: View {
 
     If you'd like your data deleted, contact us at privacy@lbconsulting.tech and we will delete your account data. This is currently a manual process handled by request rather than an automatic in-app option — we're working on making this self-service in a future update.
 
-    Disconnecting within the app is not yet available; contact us to disconnect and/or delete your data. When disconnect becomes available, disconnecting will not delete data already stored with us — it is retained until you request deletion, so that reconnecting later can restore your history.
+    Disconnecting in the app stops sync on that device. It does not delete data already stored with us — it is retained until you request deletion, so that reconnecting later can restore your history. Training data that remains on the device is left as-is.
     """
 
     private let rights = """

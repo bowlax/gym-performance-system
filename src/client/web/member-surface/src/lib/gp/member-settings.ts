@@ -8,6 +8,15 @@ export async function updateMemberStaleness(
   setting: StalenessSetting,
 ): Promise<StalenessSetting> {
   const unit = setting.unit === "months" ? "month" : "quarter";
+
+  // PostgREST requires an explicit WHERE on UPDATE (RLS alone is not enough).
+  const { data: identity, error: identityError } = await supabase
+    .from("members")
+    .select("id")
+    .maybeSingle();
+  if (identityError) throw new Error(identityError.message);
+  if (!identity?.id) throw new Error("Could not resolve member identity");
+
   const { data, error } = await supabase
     .from("members")
     .update({
@@ -16,6 +25,7 @@ export async function updateMemberStaleness(
       staleness_unit: unit,
       updated_at: new Date().toISOString(),
     })
+    .eq("id", identity.id)
     .select("staleness_enabled, staleness_periods, staleness_unit")
     .maybeSingle();
 

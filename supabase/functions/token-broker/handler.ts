@@ -786,7 +786,11 @@ async function handleOAuthAuthorize(req: Request): Promise<Response> {
   const codeChallenge = await pkceCodeChallengeS256(codeVerifier);
   // Dedicated secret — must not be the deprecating project JWT secret.
   const stateSecret = requireEnv("OAUTH_STATE_SECRET");
-  const returnUrl = resolveOAuthReturnUrl(config, params.returnUrl);
+  const returnUrl = resolveOAuthReturnUrl(
+    config,
+    params.surface,
+    params.returnUrl,
+  );
 
   const state = await signOAuthState(
     {
@@ -858,7 +862,11 @@ async function handleOAuthCallback(req: Request): Promise<Response> {
     return jsonResponse({ error: result.error }, result.status);
   }
 
-  const returnUrl = resolveOAuthReturnUrl(config, state.returnUrl);
+  const returnUrl = resolveOAuthReturnUrl(
+    config,
+    state.surface,
+    state.returnUrl,
+  );
   if (returnUrl) {
     if (result.kind === "auth") {
       return redirectResponse(

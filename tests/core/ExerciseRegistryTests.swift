@@ -57,6 +57,59 @@ struct ExerciseRegistryTests {
     }
 
     @Test
+    func testTC_E22_SeedIfNeededSyncsDisplayOrderOnExistingStore() throws {
+        let context = try TestHelpers.makeInMemoryContext()
+        let configurationDataAccess = SwiftDataConfigurationDataAccess(context: context)
+
+        // Pre-reorder local catalog: Bike missing from "slot 2", Free Squat and
+        // Flat DB still on old sequential orders — matches installs that never
+        // picked up ExerciseSeedData displayOrder reshuffles.
+        let freeSquat = ExerciseModel(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+            name: "Free Squat",
+            category: .pbExercise,
+            measurementType: .weightAndReps,
+            pbRule: .heaviestWeightAtReps,
+            targetReps: 5,
+            displayOrder: 2
+        )
+        let bike = ExerciseModel(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000019")!,
+            name: "Bike 60s",
+            category: .pbExercise,
+            measurementType: .distanceOnly,
+            pbRule: .longestDistance,
+            displayOrder: 19
+        )
+        let flatDB = ExerciseModel(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000009")!,
+            name: "Flat Dumbbell Press",
+            category: .pbExercise,
+            measurementType: .weightAndReps,
+            pbRule: .bestWeightAndReps,
+            displayOrder: 9
+        )
+        for exercise in [freeSquat, bike, flatDB] {
+            context.insert(exercise)
+        }
+        try context.save()
+
+        let registry = DefaultExerciseRegistry(configurationDataAccess: configurationDataAccess)
+        try registry.seedIfNeeded()
+
+        let freeSquatId = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+        let bikeId = UUID(uuidString: "00000000-0000-0000-0000-000000000019")!
+        let flatId = UUID(uuidString: "00000000-0000-0000-0000-000000000009")!
+
+        #expect(try configurationDataAccess.fetchExercise(id: freeSquatId)?.displayOrder == 3)
+        #expect(try configurationDataAccess.fetchExercise(id: bikeId)?.displayOrder == 2)
+        #expect(try configurationDataAccess.fetchExercise(id: flatId)?.displayOrder == 10)
+
+        let ordered = try registry.pbExercises().sorted { $0.displayOrder < $1.displayOrder }
+        #expect(ordered.map(\.name) == ["Bike 60s", "Free Squat", "Flat Dumbbell Press"])
+    }
+
+    @Test
     func testTC_E2_SeedIfNeededDoesNotDuplicateWhenCalledTwice() throws {
         let registry = try makeRegistry()
 

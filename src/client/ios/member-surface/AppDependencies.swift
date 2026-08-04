@@ -34,6 +34,7 @@ final class AppDependencies {
             in: modelContext,
             performanceDataAccess: performanceDataAccess
         )
+        MemberConnectionStore.migrateEverConnectedFlagsIfNeeded()
         #if DEBUG
         LocalStoreMemberAudit.logGroupedCounts(in: modelContext)
         #endif

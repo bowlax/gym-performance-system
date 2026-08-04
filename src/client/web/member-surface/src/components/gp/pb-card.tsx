@@ -12,7 +12,10 @@ export interface PBCardProps {
 }
 
 /**
- * Board exercise card — mirrors iOS `BoardView.row` layout.
+ * Board exercise card — mirrors iOS `BoardView.row`.
+ *
+ * Name and value share one row with a reserved trailing column so long
+ * exercise names wrap in their own lane instead of colliding with the PB.
  */
 export function PBCard({
   lift,
@@ -28,17 +31,14 @@ export function PBCard({
         className,
       )}
     >
-      <div
-        className="w-[3px] shrink-0 bg-primary"
-        aria-hidden
-      />
-      <div className="flex min-w-0 flex-1 items-start justify-between gap-3 p-4">
-        <h3 className="min-w-0 flex-1 text-[17px] font-semibold leading-snug text-foreground">
+      <div className="w-[3px] shrink-0 bg-primary" aria-hidden />
+      <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1 p-4">
+        <h3 className="min-w-0 text-[17px] font-semibold leading-snug text-foreground [overflow-wrap:anywhere]">
           {lift}
         </h3>
         {value ? (
-          <div className="shrink-0 text-right">
-            <div className="font-numeric text-[34px] font-semibold leading-none tracking-tight text-primary">
+          <div className="max-w-[11rem] justify-self-end text-right sm:max-w-none">
+            <div className="font-numeric text-[28px] font-semibold leading-none tracking-tight text-primary sm:text-[34px]">
               {value}
             </div>
             {achievedAt ? (
@@ -46,7 +46,7 @@ export function PBCard({
             ) : null}
           </div>
         ) : (
-          <span className="shrink-0 text-xs text-muted-foreground">
+          <span className="max-w-[11rem] justify-self-end text-right text-xs leading-snug text-muted-foreground sm:max-w-[14rem]">
             {emptyCaption}
           </span>
         )}

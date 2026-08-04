@@ -1,13 +1,22 @@
 import SwiftUI
 
 /// Full connect flow: explainer → auth → branch → sync or discard-cloud-wins (#31 / #33).
+///
+/// When hosted from onboarding, pass `onDecline` / `onConnected` so the host
+/// can fork to manual PB population (or skip it) using `ConnectBranchAssessment`.
 struct ConnectFlowView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppDependencies.self) private var dependencies
 
+    /// Onboarding / host: member tapped Not now / Close on the explainer.
+    var onDecline: (() -> Void)? = nil
+    /// Onboarding / host: connect + sync/discard finished successfully.
+    var onConnected: ((ConnectBranchAssessment) -> Void)? = nil
+
     @State private var step: Step = .explainer
     @State private var session: BrokerSession?
     @State private var claims: JWTClaimsDecoder.Claims?
+    @State private var branchAssessment: ConnectBranchAssessment?
     @State private var syncResult: SyncCycleResult?
     @State private var discardResult: DiscardCloudWinsResult?
     @State private var isWorking = false
@@ -27,7 +36,7 @@ struct ConnectFlowView: View {
                 case .explainer:
                     ConnectExplainerView(
                         onConnect: { Task { await startAuth() } },
-                        onNotNow: { dismiss() }
+                        onNotNow: { decline() }
                     )
                 case .discardWarning:
                     DiscardCloudWinsView(
@@ -35,27 +44,22 @@ struct ConnectFlowView: View {
                         onCancel: {
                             session = nil
                             claims = nil
-                            dismiss()
+                            branchAssessment = nil
+                            decline()
                         }
                     )
                 case .syncing:
                     ConnectUploadProgressView(
                         result: syncResult,
                         isSyncing: isWorking && syncResult == nil,
-                        onDone: {
-                            dependencies.refresh()
-                            dismiss()
-                        },
+                        onDone: { finishAfterSync() },
                         onRetry: { Task { await runSync() } }
                     )
                 case .discarding:
                     DiscardCloudWinsProgressView(
                         result: discardResult,
                         isWorking: isWorking && discardResult == nil,
-                        onDone: {
-                            dependencies.refresh()
-                            dismiss()
-                        },
+                        onDone: { finishAfterDiscard() },
                         onRetryPull: { Task { await retryDiscardPull() } }
                     )
                 case .failed(let message):
@@ -65,7 +69,7 @@ struct ConnectFlowView: View {
                         Text(message)
                             .font(.system(.body, design: .rounded))
                             .foregroundStyle(.secondary)
-                        Button("Close") { dismiss() }
+                        Button("Close") { decline() }
                             .primaryButtonStyle(isEnabled: true)
                         Spacer()
                     }
@@ -82,13 +86,56 @@ struct ConnectFlowView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if step == .explainer {
-                        Button("Close") { dismiss() }
+                        Button("Close") { decline() }
                             .foregroundStyle(Color.wolfBlue)
                     }
                 }
             }
         }
         .tint(Color.wolfBlue)
+    }
+
+    private func decline() {
+        if let onDecline {
+            onDecline()
+        } else {
+            dismiss()
+        }
+    }
+
+    /// Successful upload/sync path — only advance onboarding when sync completed.
+    private func finishAfterSync() {
+        dependencies.refresh()
+        let succeeded = syncResult?.completed == true
+        finishHostedOrDismiss(connectedSuccessfully: succeeded)
+    }
+
+    /// Discard path — local cleared (or full complete) means cloud history owns the board;
+    /// skip-populate still applies even if pull needs a later retry.
+    private func finishAfterDiscard() {
+        dependencies.refresh()
+        let succeeded = discardResult?.completed == true || discardResult?.cleared == true
+        finishHostedOrDismiss(connectedSuccessfully: succeeded)
+    }
+
+    private func finishHostedOrDismiss(connectedSuccessfully: Bool) {
+        if connectedSuccessfully, let onConnected {
+            onConnected(
+                branchAssessment
+                    ?? ConnectBranchAssessment(
+                        adopted: false,
+                        hasLocal: false,
+                        hasCloud: false,
+                        postAuthBranch: .proceedToUpload
+                    )
+            )
+            return
+        }
+        if !connectedSuccessfully, let onDecline {
+            onDecline()
+            return
+        }
+        dismiss()
     }
 
     @MainActor
@@ -108,13 +155,22 @@ struct ConnectFlowView: View {
             session = brokerSession
             claims = brokerClaims
 
-            flow.persistConnected(session: brokerSession, claims: brokerClaims)
+            // Assess before persist so a blocked different-account connect never
+            // writes tokens / isConnected / lastConnectedMemberId.
+            let assessment = try await flow.assessBranch(
+                session: brokerSession,
+                claims: brokerClaims
+            )
+            branchAssessment = assessment
 
-            let branch = try await flow.assessBranch(session: brokerSession, claims: brokerClaims)
-            switch branch {
+            switch assessment.postAuthBranch {
+            case .blockedDifferentAccount:
+                step = .failed(ConnectBranchLogic.blockedDifferentAccountMessage)
             case .discardCloudWinsChoice:
+                flow.persistConnected(session: brokerSession, claims: brokerClaims)
                 step = .discardWarning
             case .proceedToUpload:
+                flow.persistConnected(session: brokerSession, claims: brokerClaims)
                 await runSync(flow: flow, session: brokerSession, claims: brokerClaims)
             }
         } catch {

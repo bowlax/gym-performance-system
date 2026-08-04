@@ -71,7 +71,14 @@ struct ConnectLaunchPromptsModifier: ViewModifier {
             return
         }
 
-        if !MemberConnectionStore.isConnected && !MemberConnectionStore.dontAskConnectAgain {
+        if !MemberConnectionStore.isConnected
+            && !MemberConnectionStore.dontAskConnectAgain
+        {
+            // Onboarding decline must behave like “Not now”, not “Don’t ask again”:
+            // skip only the immediate post-onboarding evaluation, then clear.
+            if MemberConnectionStore.consumeOnboardingConnectOfferSkip() {
+                return
+            }
             showNeverConnected = true
         }
     }

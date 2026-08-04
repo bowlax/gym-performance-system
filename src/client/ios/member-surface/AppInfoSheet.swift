@@ -11,10 +11,16 @@ struct AppInfoSheet: View {
     @State private var saveError: String?
     @State private var isLoaded = false
     @State private var showConnectFlow = false
+    @State private var showDisconnectConfirm = false
+    /// Forces Account section to re-read `MemberConnectionStore` after disconnect.
+    @State private var connectionRevision = 0
     /// Bumps relative "Last synced" copy while the sheet is open.
     @State private var relativeClock = Date()
 
-    private var isConnected: Bool { MemberConnectionStore.isConnected }
+    private var isConnected: Bool {
+        _ = connectionRevision
+        return MemberConnectionStore.isConnected
+    }
     private var sync: SyncCoordinator { dependencies.syncCoordinator }
 
     private var relativeSyncFormatter: RelativeDateTimeFormatter {
@@ -97,6 +103,24 @@ struct AppInfoSheet: View {
             .sheet(isPresented: $showConnectFlow) {
                 ConnectFlowView()
             }
+            .alert("Disconnect from TeamUp?", isPresented: $showDisconnectConfirm) {
+                Button("Cancel", role: .cancel) {}
+                Button("Disconnect", role: .destructive) {
+                    MemberConnectionStore.disconnect()
+                    connectionRevision += 1
+                    dependencies.refresh()
+                }
+            } message: {
+                Text(
+                    """
+                    This stops backup and coach sync on this device. Training data \
+                    on this phone stays here. Data already saved with your gym is \
+                    kept — disconnecting does not delete it — so connecting again \
+                    with the same TeamUp login can restore your history. To \
+                    permanently delete your account data, email privacy@lbconsulting.tech.
+                    """
+                )
+            }
             .task(id: isConnected) {
                 while !Task.isCancelled {
                     relativeClock = Date()
@@ -137,6 +161,12 @@ struct AppInfoSheet: View {
             }
         } else if ConnectFeatureAvailability.isAvailable {
             syncStatusRows
+        }
+
+        Button(role: .destructive) {
+            showDisconnectConfirm = true
+        } label: {
+            Label("Disconnect", systemImage: "link.badge.minus")
         }
     }
 
@@ -198,7 +228,7 @@ struct AppInfoSheet: View {
 
     private var accountFooter: String {
         if isConnected {
-            return "Disconnect isn’t available yet — it needs a clearer privacy policy first. Sync runs after you save a session, when you open the app (at most every six hours), or when you tap Sync now."
+            return "Sync runs after you save a session, when you open the app (at most every six hours), or when you tap Sync now. Disconnect stops sync on this device; it does not delete cloud history."
         }
         if ConnectFeatureAvailability.isAvailable {
             return "Connecting backs up your history and lets your coach see your progress. You can stay on this device only."

@@ -119,14 +119,35 @@ export function AuthGate({
   status,
   error,
   onRetry,
+  onSignIn,
   children,
 }: {
-  status: "idle" | "loading" | "ready" | "error";
+  status: "idle" | "loading" | "ready" | "signed_out" | "error";
   error: Error | null;
   onRetry: () => void;
+  onSignIn: () => void;
   children: ReactNode;
 }) {
   if (status === "ready") return <>{children}</>;
+  if (status === "signed_out") {
+    return (
+      <div className="rounded-[16px] bg-card p-4">
+        <div className="text-sm font-semibold text-foreground">
+          Connect to view your board
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Sign in with TeamUp to load personal bests and log sessions.
+        </p>
+        <button
+          type="button"
+          onClick={onSignIn}
+          className="mt-3 inline-flex h-10 items-center justify-center rounded-[12px] bg-primary px-4 text-sm font-semibold text-primary-foreground"
+        >
+          Connect with TeamUp
+        </button>
+      </div>
+    );
+  }
   if (status === "error") {
     return (
       <div className="rounded-[16px] bg-card p-4">
@@ -134,21 +155,30 @@ export function AuthGate({
           Couldn't sign you in
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          {error?.message ?? "The token broker did not return a session."}
+          {error?.message ?? "The session endpoint did not return a session."}
         </p>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-3 inline-flex h-10 items-center justify-center rounded-[12px] bg-primary px-4 text-sm font-semibold text-primary-foreground"
-        >
-          Try again
-        </button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex h-10 items-center justify-center rounded-[12px] bg-primary px-4 text-sm font-semibold text-primary-foreground"
+          >
+            Try again
+          </button>
+          <button
+            type="button"
+            onClick={onSignIn}
+            className="inline-flex h-10 items-center justify-center rounded-[12px] border border-border px-4 text-sm font-semibold text-foreground"
+          >
+            Connect with TeamUp
+          </button>
+        </div>
       </div>
     );
   }
   return (
     <div className="rounded-[16px] bg-card p-4 text-sm text-muted-foreground">
-      Signing you in…
+      Checking session…
     </div>
   );
 }

@@ -23,6 +23,13 @@ export interface TeamUpOAuthConfig {
   scope: string;
   authorizeUrl: string;
   tokenUrl: string;
+  /**
+   * Deprecated for OAuth return-url resolution.
+   *
+   * Kept in config for compatibility with any external readers, but the
+   * broker now resolves client return URLs exclusively from per-surface
+   * allowlists.
+   */
   successRedirectUri: string | null;
 }
 
@@ -33,11 +40,19 @@ export interface OAuthStatePayload {
   returnUrl: string | null;
 }
 
+export type OAuthSurface = "ios" | "memberWeb" | "coachWeb" | "ownerWeb";
+
 const DEFAULT_AUTHORIZE_URL =
   "https://goteamup.com/api/v2/auth/oauth/authorize";
 const DEFAULT_TOKEN_URL = "https://goteamup.com/api/v2/auth/oauth/token";
 const OAUTH_STATE_AUDIENCE = "teamup-oauth-state";
 const OAUTH_STATE_TTL_SECONDS = 10 * 60;
+const RETURN_URL_ALLOWLIST_ENV_BY_SURFACE: Record<OAuthSurface, string> = {
+  ios: "TEAMUP_OAUTH_ALLOWED_RETURN_URLS_IOS",
+  memberWeb: "TEAMUP_OAUTH_ALLOWED_RETURN_URLS_MEMBER_WEB",
+  coachWeb: "TEAMUP_OAUTH_ALLOWED_RETURN_URLS_COACH_WEB",
+  ownerWeb: "TEAMUP_OAUTH_ALLOWED_RETURN_URLS_OWNER_WEB",
+};
 
 const STUB_TEAMUP_TOKEN = "stub-token";
 
@@ -58,6 +73,24 @@ export function stubTeamUpVerification(
 function envOptional(name: string): string | undefined {
   const value = Deno.env.get(name)?.trim();
   return value && value.length > 0 ? value : undefined;
+}
+
+function isOAuthSurface(value: string): value is OAuthSurface {
+  return value in RETURN_URL_ALLOWLIST_ENV_BY_SURFACE;
+}
+
+function parseReturnUrlAllowlist(value: string | undefined): readonly string[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function exactAllowedReturnUrlsForSurface(surface: OAuthSurface): readonly string[] {
+  return parseReturnUrlAllowlist(
+    envOptional(RETURN_URL_ALLOWLIST_ENV_BY_SURFACE[surface]),
+  );
 }
 
 export function readTeamUpOAuthConfig(): TeamUpOAuthConfig | null {
@@ -362,36 +395,28 @@ export async function exchangeTeamUpAuthorizationCode(
 
 export function resolveOAuthReturnUrl(
   config: TeamUpOAuthConfig,
+  surface: string,
   requestedReturnUrl: string | null,
 ): string | null {
-  if (requestedReturnUrl && isAllowedReturnUrl(config, requestedReturnUrl)) {
-    return requestedReturnUrl;
+  void config;
+  if (requestedReturnUrl && isAllowedReturnUrl(surface, requestedReturnUrl)) {
+    return requestedReturnUrl.trim();
   }
-  return config.successRedirectUri;
+  return null;
 }
 
 export function isAllowedReturnUrl(
-  config: TeamUpOAuthConfig,
+  surface: string,
   returnUrl: string,
 ): boolean {
-  try {
-    const candidate = new URL(returnUrl);
-    if (config.successRedirectUri) {
-      const allowed = new URL(config.successRedirectUri);
-      return candidate.origin === allowed.origin;
-    }
-    if (candidate.protocol === "http:" || candidate.protocol === "https:") {
-      return true;
-    }
-    // Native app custom URL schemes (e.g. gymperformance://) are valid
-    // OAuth redirect targets per RFC 8252 §7.1.
-    if (candidate.protocol.length > 1 && candidate.protocol.endsWith(":")) {
-      return true;
-    }
-    return false;
-  } catch {
+  if (!isOAuthSurface(surface)) {
     return false;
   }
+  const candidate = returnUrl.trim();
+  if (candidate.length === 0) {
+    return false;
+  }
+  return exactAllowedReturnUrlsForSurface(surface).includes(candidate);
 }
 
 export function appendTokenToReturnUrl(

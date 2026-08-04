@@ -14,6 +14,9 @@ import { Route as LogRouteImport } from './routes/log'
 import { Route as DesignRouteImport } from './routes/design'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProgressionExerciseIdRouteImport } from './routes/progression.$exerciseId'
+import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
+import { Route as ApiAuthSignoutRouteImport } from './routes/api/auth/signout'
+import { Route as ApiAuthSessionRouteImport } from './routes/api/auth/session'
 
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
@@ -40,20 +43,41 @@ const ProgressionExerciseIdRoute = ProgressionExerciseIdRouteImport.update({
   path: '/progression/$exerciseId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSignoutRoute = ApiAuthSignoutRouteImport.update({
+  id: '/api/auth/signout',
+  path: '/api/auth/signout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSessionRoute = ApiAuthSessionRouteImport.update({
+  id: '/api/auth/session',
+  path: '/api/auth/session',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/design': typeof DesignRoute
   '/log': typeof LogRoute
   '/privacy': typeof PrivacyRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/progression/$exerciseId': typeof ProgressionExerciseIdRoute
+  '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/auth/signout': typeof ApiAuthSignoutRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/design': typeof DesignRoute
   '/log': typeof LogRoute
   '/privacy': typeof PrivacyRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/progression/$exerciseId': typeof ProgressionExerciseIdRoute
+  '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/auth/signout': typeof ApiAuthSignoutRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -61,20 +85,42 @@ export interface FileRoutesById {
   '/design': typeof DesignRoute
   '/log': typeof LogRoute
   '/privacy': typeof PrivacyRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/progression/$exerciseId': typeof ProgressionExerciseIdRoute
+  '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/auth/signout': typeof ApiAuthSignoutRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/design' | '/log' | '/privacy' | '/progression/$exerciseId'
+  fullPaths:
+    | '/'
+    | '/design'
+    | '/log'
+    | '/privacy'
+    | '/auth/callback'
+    | '/progression/$exerciseId'
+    | '/api/auth/session'
+    | '/api/auth/signout'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/design' | '/log' | '/privacy' | '/progression/$exerciseId'
+  to:
+    | '/'
+    | '/design'
+    | '/log'
+    | '/privacy'
+    | '/auth/callback'
+    | '/progression/$exerciseId'
+    | '/api/auth/session'
+    | '/api/auth/signout'
   id:
     | '__root__'
     | '/'
     | '/design'
     | '/log'
     | '/privacy'
+    | '/auth/callback'
     | '/progression/$exerciseId'
+    | '/api/auth/session'
+    | '/api/auth/signout'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -82,7 +128,10 @@ export interface RootRouteChildren {
   DesignRoute: typeof DesignRoute
   LogRoute: typeof LogRoute
   PrivacyRoute: typeof PrivacyRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
   ProgressionExerciseIdRoute: typeof ProgressionExerciseIdRoute
+  ApiAuthSessionRoute: typeof ApiAuthSessionRoute
+  ApiAuthSignoutRoute: typeof ApiAuthSignoutRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -122,6 +171,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProgressionExerciseIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/signout': {
+      id: '/api/auth/signout'
+      path: '/api/auth/signout'
+      fullPath: '/api/auth/signout'
+      preLoaderRoute: typeof ApiAuthSignoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/session': {
+      id: '/api/auth/session'
+      path: '/api/auth/session'
+      fullPath: '/api/auth/session'
+      preLoaderRoute: typeof ApiAuthSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -130,7 +200,10 @@ const rootRouteChildren: RootRouteChildren = {
   DesignRoute: DesignRoute,
   LogRoute: LogRoute,
   PrivacyRoute: PrivacyRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
   ProgressionExerciseIdRoute: ProgressionExerciseIdRoute,
+  ApiAuthSessionRoute: ApiAuthSessionRoute,
+  ApiAuthSignoutRoute: ApiAuthSignoutRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

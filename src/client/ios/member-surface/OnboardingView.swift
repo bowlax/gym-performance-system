@@ -10,21 +10,37 @@ struct OnboardingView: View {
     @State private var drafts: [UUID: SetDraftValue] = [:]
     @State private var isSaving = false
 
-    enum Stage { case welcome, setPBs }
+    /// welcome → connect offer → optional manual PB populate.
+    enum Stage { case welcome, connect, setPBs }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                switch stage {
-                case .welcome: welcome
-                case .setPBs: setPBs
+        Group {
+            switch stage {
+            case .welcome:
+                NavigationStack {
+                    welcome
                 }
-            }
-            .task {
-                await loadExercises()
+                .tint(Color.wolfBlue)
+            case .connect:
+                ConnectFlowView(
+                    onDecline: {
+                        // Path A: Not now → still populate the board manually.
+                        stage = .setPBs
+                    },
+                    onConnected: { assessment in
+                        handleConnected(assessment)
+                    }
+                )
+            case .setPBs:
+                NavigationStack {
+                    setPBs
+                }
+                .tint(Color.wolfBlue)
             }
         }
-        .tint(Color.wolfBlue)
+        .task {
+            await loadExercises()
+        }
     }
 
     private var welcome: some View {
@@ -42,7 +58,7 @@ struct OnboardingView: View {
                 .padding(.horizontal, 32)
             Spacer()
             Button {
-                stage = .setPBs
+                advancePastWelcome()
             } label: {
                 Text("Get started")
                     .primaryButtonStyle()
@@ -91,7 +107,7 @@ struct OnboardingView: View {
             Section {
                 Button {
                     KeyboardDismissal.dismiss()
-                    completeOnboarding()
+                    completeOnboarding(savingDrafts: true)
                 } label: {
                     Text(isSaving ? "Saving..." : "Continue")
                         .primaryButtonStyle(isEnabled: !isSaving)
@@ -126,16 +142,42 @@ struct OnboardingView: View {
         }
     }
 
-    private func completeOnboarding() {
+    /// Welcome → connect when cloud is configured; otherwise straight to populate
+    /// (same fence as launch prompts / Settings — never offer a dead Connect button).
+    private func advancePastWelcome() {
+        guard ConnectFeatureAvailability.isAvailable else {
+            stage = .setPBs
+            return
+        }
+        // One-shot skip of the immediate board re-prompt after decline
+        // (consumed on first launch-prompt evaluation — not permanent).
+        MemberConnectionStore.offeredConnectDuringOnboarding = true
+        stage = .connect
+    }
+
+    /// Path B after connect: skip populate when adopted + cloud history
+    /// (`ConnectBranchAssessment.shouldSkipManualPBPopulation`); otherwise
+    /// still show Set Your PBs (new / empty cloud).
+    private func handleConnected(_ assessment: ConnectBranchAssessment) {
+        if assessment.shouldSkipManualPBPopulation {
+            completeOnboarding(savingDrafts: false)
+        } else {
+            stage = .setPBs
+        }
+    }
+
+    private func completeOnboarding(savingDrafts: Bool) {
         guard !isSaving else { return }
         isSaving = true
 
-        OnboardingPBSaver.saveDraftPBs(
-            exercises: exercises,
-            drafts: drafts,
-            memberPerformance: dependencies.memberPerformance,
-            memberId: dependencies.memberId
-        )
+        if savingDrafts {
+            OnboardingPBSaver.saveDraftPBs(
+                exercises: exercises,
+                drafts: drafts,
+                memberPerformance: dependencies.memberPerformance,
+                memberId: dependencies.memberId
+            )
+        }
 
         dependencies.refresh()
         isSaving = false

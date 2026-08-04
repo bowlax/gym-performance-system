@@ -42,18 +42,48 @@ final class SwiftDataConfigurationDataAccess: ConfigurationDataAccess {
 
     func syncExerciseDefinitions(with seedData: [ExerciseModel]) throws {
         let seedById = Dictionary(uniqueKeysWithValues: seedData.map { ($0.id, $0) })
-        let existing = try fetchExercises()
+        // Include inactive rows so catalog fields (order, name, …) heal even if
+        // a prior install flipped isActive.
+        let existing = try context.fetch(FetchDescriptor<ExerciseModel>())
         var changed = false
 
         for exercise in existing {
             guard let seed = seedById[exercise.id] else { continue }
 
-            if exercise.minimumReps != seed.minimumReps {
-                exercise.minimumReps = seed.minimumReps
+            if exercise.name != seed.name {
+                exercise.name = seed.name
+                changed = true
+            }
+            if exercise.category != seed.category {
+                exercise.category = seed.category
+                changed = true
+            }
+            if exercise.measurementType != seed.measurementType {
+                exercise.measurementType = seed.measurementType
                 changed = true
             }
             if exercise.pbRule != seed.pbRule {
                 exercise.pbRule = seed.pbRule
+                changed = true
+            }
+            if exercise.targetReps != seed.targetReps {
+                exercise.targetReps = seed.targetReps
+                changed = true
+            }
+            if exercise.minimumReps != seed.minimumReps {
+                exercise.minimumReps = seed.minimumReps
+                changed = true
+            }
+            if exercise.parentExerciseId != seed.parentExerciseId {
+                exercise.parentExerciseId = seed.parentExerciseId
+                changed = true
+            }
+            if exercise.displayOrder != seed.displayOrder {
+                exercise.displayOrder = seed.displayOrder
+                changed = true
+            }
+            if exercise.isActive != seed.isActive {
+                exercise.isActive = seed.isActive
                 changed = true
             }
         }

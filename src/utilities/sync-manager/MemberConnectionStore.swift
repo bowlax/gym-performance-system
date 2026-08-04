@@ -25,6 +25,17 @@ enum MemberConnectionStore {
     static let connectedGymIdKey = "memberConnection.gymId"
     /// Local opt-out for the launch connect prompt (#31).
     static let dontAskConnectAgainKey = "memberConnection.dontAskConnectAgain"
+    /// One-shot: skip the *next* never-connected launch evaluation after
+    /// onboarding already offered connect. Cleared when consumed — not a
+    /// permanent opt-out (unlike `dontAskConnectAgain`).
+    static let offeredConnectDuringOnboardingKey =
+        "memberConnection.offeredConnectDuringOnboarding"
+    /// Set once on first successful connect; never cleared by disconnect.
+    /// Cheap guard signal for "this install has been through TeamUp before."
+    static let hasEverConnectedKey = "memberConnection.hasEverConnected"
+    /// Last member id that successfully connected on this install.
+    /// Survives disconnect so reconnect can refuse a *different* TeamUp account.
+    static let lastConnectedMemberIdKey = "memberConnection.lastConnectedMemberId"
 
     static var userDefaults: UserDefaults = .standard
 
@@ -39,6 +50,50 @@ enum MemberConnectionStore {
     static var dontAskConnectAgain: Bool {
         get { userDefaults.bool(forKey: dontAskConnectAgainKey) }
         set { userDefaults.set(newValue, forKey: dontAskConnectAgainKey) }
+    }
+
+    /// When true, the next `ConnectLaunchPrompts` evaluation should skip the
+    /// never-connected sheet once (immediate post-onboarding re-ask), then
+    /// clear this flag so later launches behave like a normal “Not now”.
+    static var offeredConnectDuringOnboarding: Bool {
+        get { userDefaults.bool(forKey: offeredConnectDuringOnboardingKey) }
+        set { userDefaults.set(newValue, forKey: offeredConnectDuringOnboardingKey) }
+    }
+
+    /// Consume the one-shot onboarding skip. Returns whether this evaluation
+    /// should suppress the never-connected prompt.
+    @discardableResult
+    static func consumeOnboardingConnectOfferSkip() -> Bool {
+        guard offeredConnectDuringOnboarding else { return false }
+        offeredConnectDuringOnboarding = false
+        return true
+    }
+
+    /// True after at least one successful `save` on this install (or legacy migrate).
+    /// Disconnect does **not** clear this.
+    static var hasEverConnected: Bool {
+        get { userDefaults.bool(forKey: hasEverConnectedKey) }
+        set { userDefaults.set(newValue, forKey: hasEverConnectedKey) }
+    }
+
+    /// Member id from the last successful connect. Survives disconnect.
+    static var lastConnectedMemberId: UUID? {
+        get {
+            guard let raw = userDefaults.string(forKey: lastConnectedMemberIdKey) else {
+                return nil
+            }
+            return UUID(uuidString: raw)
+        }
+        set { userDefaults.set(newValue?.uuidString, forKey: lastConnectedMemberIdKey) }
+    }
+
+    /// Migrate pre-flag installs that are already connected.
+    static func migrateEverConnectedFlagsIfNeeded() {
+        guard !hasEverConnected, isConnected, let id = connectedMemberId else { return }
+        hasEverConnected = true
+        if lastConnectedMemberId == nil {
+            lastConnectedMemberId = id
+        }
     }
 
     static var accessToken: String? {
@@ -130,6 +185,8 @@ enum MemberConnectionStore {
         userDefaults.set(claims.gymId.uuidString, forKey: connectedGymIdKey)
         isConnected = true
         dontAskConnectAgain = true
+        hasEverConnected = true
+        lastConnectedMemberId = claims.memberId
     }
 
     /// Synchronous snapshot for callers that cannot await. Prefer
@@ -160,6 +217,39 @@ enum MemberConnectionStore {
         expiresAt = nil
         KeychainTokenStore.clearSessionTokens()
         userDefaults.removeObject(forKey: accessTokenKey)
+    }
+
+    /// Stop syncing on this device. Does **not** delete cloud or local training data.
+    ///
+    /// Clears the broker session (same secrets as `markSessionExpired`) and sets
+    /// `isConnected = false` so Settings shows Connect again and launch can offer
+    /// reconnect (`dontAskConnectAgain` reset to false). Leaves
+    /// `AccessControl.persistedMemberId`, SwiftData rows, and `MemberState` alone —
+    /// local history stays tagged with the adopted canonical id.
+    ///
+    /// Device-swap after disconnect (reconnecting a DIFFERENT TeamUp account on a
+    /// device that previously connected as someone else) is a known unhandled case.
+    /// Accepted because Wolf's member population does not share devices. If that
+    /// assumption ever changes, the identity model needs the fuller fix (stable
+    /// device id separate from adopted member id) before this scenario is safe.
+    /// Until then, `ConnectBranchLogic.shouldBlockDifferentAccount` refuses that
+    /// path with a visible message instead of discard/retag.
+    static func disconnect() {
+        migrateEverConnectedFlagsIfNeeded()
+        if let id = connectedMemberId {
+            lastConnectedMemberId = id
+            hasEverConnected = true
+        }
+        accessToken = nil
+        refreshToken = nil
+        expiresAt = nil
+        KeychainTokenStore.clearSessionTokens()
+        userDefaults.removeObject(forKey: accessTokenKey)
+        connectedMemberId = nil
+        userDefaults.removeObject(forKey: connectedGymIdKey)
+        isConnected = false
+        dontAskConnectAgain = false
+        // Intentionally keep hasEverConnected + lastConnectedMemberId.
     }
 }
 

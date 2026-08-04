@@ -1,0 +1,3 @@
+# Local Cloudflare / Nitro secrets (gitignored). Copy from this example.
+# SESSION_SECRET seals the gp_auth httpOnly cookie (min 32 chars).
+SESSION_SECRET=local-dev-session-secret-min-32-chars!!

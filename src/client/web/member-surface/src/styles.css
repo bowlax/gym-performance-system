@@ -224,3 +224,37 @@
     0 0 0 1.5px var(--pb),
     0 12px 40px -12px var(--pb-glow);
 }
+
+/*
+ * Calendar heatmap session cells — mirror iOS CalendarHeatmapView.
+ * Light: opacity steps of --primary (wolf blue, same as PB values).
+ * Dark: solid --primary; low-opacity blue reads muddy on dark backgrounds.
+ */
+.gp-heatmap-session-1 {
+  background-color: color-mix(in oklab, var(--primary) 35%, transparent);
+}
+.gp-heatmap-session-2 {
+  background-color: color-mix(in oklab, var(--primary) 55%, transparent);
+}
+.gp-heatmap-session-3 {
+  background-color: color-mix(in oklab, var(--primary) 75%, transparent);
+}
+.gp-heatmap-session-4 {
+  background-color: var(--primary);
+}
+
+@media (prefers-color-scheme: dark) {
+  .gp-heatmap-session-1,
+  .gp-heatmap-session-2,
+  .gp-heatmap-session-3,
+  .gp-heatmap-session-4 {
+    background-color: var(--primary);
+  }
+}
+
+.dark .gp-heatmap-session-1,
+.dark .gp-heatmap-session-2,
+.dark .gp-heatmap-session-3,
+.dark .gp-heatmap-session-4 {
+  background-color: var(--primary);
+}

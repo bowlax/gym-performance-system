@@ -102,6 +102,7 @@ function LogScreen() {
         status={auth.status}
         error={auth.error}
         onRetry={() => void auth.refresh()}
+        onSignIn={() => auth.signIn()}
       >
         {view === "form" ? <LogSessionForm /> : <SessionHistorySection />}
       </AuthGate>

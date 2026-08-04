@@ -111,8 +111,9 @@ struct DiscardCloudWinsTests {
 
     @Test
     func assessBranchTriggerMatchesIssue33() async throws {
-        // Documented contract: discard only when adopted AND local history AND cloud history.
-        // Unit-level: LocalMemberHistoryProbe + adopted flag gate; cloud check is integration.
+        // Documented contract: discard UI only when adopted AND local history AND cloud
+        // history (`ConnectBranchLogic.postAuthBranch`). Skip-populate uses adopted AND
+        // cloud history (same cloud signal, hasLocal not required — empty first launch).
         let (defaults, suite) = makeIsolatedDefaults()
         AccessControl.userDefaults = defaults
         defer {
@@ -131,6 +132,16 @@ struct DiscardCloudWinsTests {
                 performanceDataAccess: dataAccess
             )
         )
+        #expect(
+            ConnectBranchLogic.postAuthBranch(
+                adopted: true,
+                hasLocal: false,
+                hasCloud: true
+            ) == .proceedToUpload
+        )
+        #expect(
+            ConnectBranchLogic.shouldSkipManualPBPopulation(adopted: true, hasCloud: true)
+        )
 
         try dataAccess.saveSession(SessionModel(memberId: deviceId, date: Date()))
         #expect(
@@ -139,6 +150,16 @@ struct DiscardCloudWinsTests {
                 in: context,
                 performanceDataAccess: dataAccess
             )
+        )
+        #expect(
+            ConnectBranchLogic.postAuthBranch(
+                adopted: true,
+                hasLocal: true,
+                hasCloud: true
+            ) == .discardCloudWinsChoice
+        )
+        #expect(
+            ConnectBranchLogic.shouldSkipManualPBPopulation(adopted: true, hasCloud: true)
         )
     }
 }
