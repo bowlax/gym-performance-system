@@ -43,7 +43,7 @@ function PrivacyScreen() {
 
       <article className="prose prose-sm max-w-none text-foreground [&_h2]:mt-8 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-foreground [&_h3]:mt-4 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-foreground [&_p]:mt-2 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:text-muted-foreground [&_li]:text-sm [&_li]:leading-relaxed [&_li]:text-muted-foreground [&_td]:text-sm [&_td]:text-muted-foreground [&_th]:text-sm [&_a]:text-primary">
         <p className="text-muted-foreground">
-          <strong className="text-foreground">Last updated: 21 July 2026</strong>
+          <strong className="text-foreground">Last updated: 4 August 2026</strong>
         </p>
 
         <p>
@@ -114,6 +114,11 @@ function PrivacyScreen() {
             services).
           </li>
         </ul>
+        <p>
+          Once connected, the same training history is available whether you use
+          the iOS app or the web member surface — it is one account, not separate
+          copies of your data.
+        </p>
         <p>
           Separately from the app, Wolf Way of Life Fitness may contact you by{" "}
           <strong>email or WhatsApp</strong> in the ordinary course of gym
@@ -214,9 +219,10 @@ function PrivacyScreen() {
           Your connected data is stored using <strong>Supabase</strong>, a
           database provider, in their <strong>eu-west-2 (London, UK)</strong> data
           centre. Identity verification uses <strong>TeamUp</strong>, your gym&apos;s
-          membership platform. The app is distributed via{" "}
+          membership platform. The iOS app is distributed via{" "}
           <strong>Apple&apos;s App Store / TestFlight</strong>, which is subject to
-          Apple&apos;s own privacy terms for app distribution.
+          Apple&apos;s own privacy terms for app distribution. The same connected
+          account can also be used on the web member surface.
         </p>
         <p>
           We do not sell, rent, or share your data with any other third party, and
@@ -229,18 +235,19 @@ function PrivacyScreen() {
           and app connection are active, so your history remains available to you.
         </p>
         <p>
-          If you&apos;d like your data deleted, contact us at{" "}
+          You can disconnect your account at any time from Settings in the app.
+          Disconnecting stops your training data from syncing to our systems — it
+          does <strong>not</strong> delete the data already stored with us, and it
+          does not delete the training history already on your device. This means
+          you can reconnect later (even on a different device) and pick up exactly
+          where you left off.
+        </p>
+        <p>
+          If you&apos;d like your data permanently deleted, contact us at{" "}
           <a href="mailto:privacy@lbconsulting.tech">privacy@lbconsulting.tech</a>{" "}
           and we will delete your account data. This is currently a manual process
           handled by request rather than an automatic in-app option — we&apos;re
           working on making this self-service in a future update.
-        </p>
-        <p>
-          Disconnecting within the app is not yet available; contact us to
-          disconnect and/or delete your data. When disconnect becomes available,
-          disconnecting will <strong>not</strong> delete data already stored with
-          us — it is retained until you request deletion, so that reconnecting
-          later can restore your history.
         </p>
 
         <h2>7. Your rights</h2>

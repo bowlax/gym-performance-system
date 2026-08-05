@@ -114,9 +114,9 @@ struct PrivacyPolicyView: View {
     private let retention = """
     We keep your connected training data for as long as your gym membership and app connection are active, so your history remains available to you.
 
-    If you'd like your data deleted, contact us at privacy@lbconsulting.tech and we will delete your account data. This is currently a manual process handled by request rather than an automatic in-app option — we're working on making this self-service in a future update.
+    You can disconnect your account at any time from Settings in the app. Disconnecting stops your training data from syncing to our systems — it does not delete the data already stored with us, and it does not delete the training history already on your device. This means you can reconnect later (even on a different device) and pick up exactly where you left off.
 
-    Disconnecting in the app stops sync on that device. It does not delete data already stored with us — it is retained until you request deletion, so that reconnecting later can restore your history. Training data that remains on the device is left as-is.
+    If you'd like your data permanently deleted, contact us at privacy@lbconsulting.tech and we will delete your account data. This is currently a manual process handled by request rather than an automatic in-app option — we're working on making this self-service in a future update.
     """
 
     private let rights = """

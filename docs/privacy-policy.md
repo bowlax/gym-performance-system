@@ -1,6 +1,6 @@
 # GymPerformance Privacy Policy
 
-**Last updated: 21 July 2026**
+**Last updated: 4 August 2026**
 
 This policy explains what information GymPerformance collects, why, and
 what choices you have. It applies to the GymPerformance app and its
@@ -57,6 +57,10 @@ visible to your coach. When you connect, we collect:
   device identifier used only to coordinate your own data across your
   own devices — not used to track you across other apps or services).
 
+Once connected, the same training history is available whether you use
+the iOS app or the web member surface — it is one account, not separate
+copies of your data.
+
 Separately from the app, Wolf Way of Life Fitness may contact you by
 **email or WhatsApp** in the ordinary course of gym membership and
 coaching. Those channels are not used by the app to collect training
@@ -105,9 +109,10 @@ keep using the app locally.
 
 Your connected data is stored using **Supabase**, a database provider,
 in their **eu-west-2 (London, UK)** data centre. Identity verification
-uses **TeamUp**, your gym's membership platform. The app is distributed
-via **Apple's App Store / TestFlight**, which is subject to Apple's own
-privacy terms for app distribution.
+uses **TeamUp**, your gym's membership platform. The iOS app is
+distributed via **Apple's App Store / TestFlight**, which is subject to
+Apple's own privacy terms for app distribution. The same connected
+account can also be used on the web member surface.
 
 We do not sell, rent, or share your data with any other third party,
 and we do not use your data for advertising.
@@ -120,17 +125,18 @@ We keep your connected training data for as long as your gym membership
 and app connection are active, so your history remains available to
 you.
 
-If you'd like your data deleted, contact us at
+You can disconnect your account at any time from Settings in the app.
+Disconnecting stops your training data from syncing to our systems — it
+does **not** delete the data already stored with us, and it does not
+delete the training history already on your device. This means you can
+reconnect later (even on a different device) and pick up exactly where
+you left off.
+
+If you'd like your data permanently deleted, contact us at
 [privacy@lbconsulting.tech](mailto:privacy@lbconsulting.tech) and we
 will delete your account data. This is currently a manual process
 handled by request rather than an automatic in-app option — we're
 working on making this self-service in a future update.
-
-Disconnecting within the app is not yet available; contact us to
-disconnect and/or delete your data. When disconnect becomes available,
-disconnecting will **not** delete data already stored with us — it is
-retained until you request deletion, so that reconnecting later can
-restore your history.
 
 ---
 
