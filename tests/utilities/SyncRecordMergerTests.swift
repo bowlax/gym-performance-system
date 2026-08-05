@@ -154,6 +154,91 @@ struct SyncRecordMergerTests {
         #expect(dirtySessions.map(\.id) == [dirty.id])
     }
 
+    /// Web staleness PATCH stamps `synced_at` so the row crosses iOS pull's
+    /// `synced_at > marker` filter. LWW still keys only on `updated_at`.
+    @Test
+    @MainActor
+    func mergeMemberWebStampedSyncedAtCloudWinsByUpdatedAt() throws {
+        let context = try TestHelpers.makeInMemoryContext()
+        let local = SwiftDataSyncLocalDataAccess(context: context)
+
+        let existing = UserIdentityModel(
+            id: memberId,
+            role: .member,
+            displayName: "Member",
+            createdAt: Date(timeIntervalSince1970: 0),
+            stalenessEnabled: false,
+            stalenessPeriods: 2,
+            stalenessUnit: .quarter,
+            updatedAt: Date(timeIntervalSince1970: 100),
+            syncedAt: Date(timeIntervalSince1970: 100)
+        )
+        context.insert(existing)
+        try context.save()
+
+        // Web write: newer updated_at + synced_at (watermark), same as iOS push shape.
+        let remote = CloudMemberRow(
+            id: memberId,
+            gymId: gymId,
+            displayName: "Member",
+            stalenessEnabled: true,
+            stalenessPeriods: 3,
+            stalenessUnit: "month",
+            createdAt: Date(timeIntervalSince1970: 0),
+            updatedAt: Date(timeIntervalSince1970: 500),
+            syncedAt: Date(timeIntervalSince1970: 500),
+            sourceDeviceId: nil
+        )
+
+        let outcome = try SyncRecordMerger.mergeMember(remote, localDataAccess: local)
+        #expect(outcome == .cloudWon)
+        #expect(existing.stalenessEnabled == true)
+        #expect(existing.stalenessPeriods == 3)
+        #expect(existing.stalenessUnit == .month)
+        #expect(existing.updatedAt == Date(timeIntervalSince1970: 500))
+        #expect(SyncDirtiness.isDirty(updatedAt: existing.updatedAt, syncedAt: existing.syncedAt) == false)
+    }
+
+    @Test
+    @MainActor
+    func mergeMemberLocalNewerUpdatedAtWinsEvenIfCloudSyncedAtIsNewer() throws {
+        let context = try TestHelpers.makeInMemoryContext()
+        let local = SwiftDataSyncLocalDataAccess(context: context)
+
+        let existing = UserIdentityModel(
+            id: memberId,
+            role: .member,
+            displayName: "Member",
+            createdAt: Date(timeIntervalSince1970: 0),
+            stalenessEnabled: true,
+            stalenessPeriods: 1,
+            stalenessUnit: .month,
+            updatedAt: Date(timeIntervalSince1970: 600),
+            syncedAt: nil
+        )
+        context.insert(existing)
+        try context.save()
+
+        let remote = CloudMemberRow(
+            id: memberId,
+            gymId: gymId,
+            displayName: "Member",
+            stalenessEnabled: false,
+            stalenessPeriods: 2,
+            stalenessUnit: "quarter",
+            createdAt: Date(timeIntervalSince1970: 0),
+            updatedAt: Date(timeIntervalSince1970: 400),
+            syncedAt: Date(timeIntervalSince1970: 700),
+            sourceDeviceId: nil
+        )
+
+        let outcome = try SyncRecordMerger.mergeMember(remote, localDataAccess: local)
+        #expect(outcome == .localWon)
+        #expect(existing.stalenessEnabled == true)
+        #expect(existing.stalenessPeriods == 1)
+        #expect(existing.syncedAt == nil)
+    }
+
     private func makeRemoteSession(
         id: UUID,
         updatedAt: Date,
