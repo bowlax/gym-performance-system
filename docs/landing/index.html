@@ -68,15 +68,53 @@
       margin: 0 auto 32px;
     }
 
+    .entry-paths {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      max-width: 560px;
+      margin: 0 auto;
+      text-align: left;
+    }
+
+    @media (max-width: 540px) {
+      .entry-paths { grid-template-columns: 1fr; }
+    }
+
+    .entry-path {
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .entry-path h2 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #fff;
+      margin: 0;
+    }
+
+    .entry-path p {
+      font-size: 0.9rem;
+      color: #777;
+      margin: 0;
+      flex: 1;
+    }
+
     .btn-primary {
       display: inline-block;
       background: #1A5BA6;
       color: #fff;
-      padding: 14px 32px;
+      padding: 12px 20px;
       border-radius: 12px;
-      font-size: 1rem;
+      font-size: 0.95rem;
       font-weight: 600;
       text-decoration: none;
+      text-align: center;
       transition: background 0.2s;
     }
 
@@ -84,8 +122,23 @@
       background: #165090;
     }
 
-    .testflight-note {
-      margin-top: 12px;
+    .entry-note {
+      font-size: 0.8rem;
+      color: #666;
+    }
+
+    .path-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #1A5BA6;
+      margin-bottom: 8px;
+    }
+
+    .steps .path-note {
+      display: block;
+      margin-top: 8px;
       font-size: 0.85rem;
       color: #666;
     }
@@ -268,22 +321,34 @@
       height="100"
     >
     <h1>Gym<span>Performance</span></h1>
-    <p>Track your personal bests, log your training sessions, and see your progression over time.</p>
-    <a href="https://testflight.apple.com/join/75KRTtuw" class="btn-primary">Download on TestFlight</a>
-    <p class="testflight-note">Requires iPhone with iOS 17 or later</p>
-    <p class="testflight-note" style="margin-top:12px;">You can also view your training on the web at <a href="https://gymperf-member-web.7r2t2gzhkq.workers.dev" style="color:#1A5BA6;">gymperf-member-web.7r2t2gzhkq.workers.dev</a> using the same TeamUp login.</p>
+    <p>Track your personal bests, log your training, and see your progression — on iPhone or on the web. Same TeamUp login. Same training history.</p>
+
+    <div class="entry-paths">
+      <div class="entry-path">
+        <h2>Use it on your iPhone</h2>
+        <p>Install via TestFlight for training at the gym, offline access, and full account controls.</p>
+        <a href="https://testflight.apple.com/join/75KRTtuw" class="btn-primary">Get the iPhone app</a>
+        <span class="entry-note">Requires iPhone with iOS 17 or later</span>
+      </div>
+      <div class="entry-path">
+        <h2>Use it on the web</h2>
+        <p>Open in any browser — board, logging, progression, and settings with the same connected account.</p>
+        <a href="https://gymperf-member-web.7r2t2gzhkq.workers.dev" class="btn-primary">Open the web app</a>
+        <span class="entry-note">Works on phone or desktop browser</span>
+      </div>
+    </div>
   </div>
 
   <section>
-    <h2>What the app does</h2>
-    <p>GymPerformance gives every WOLF member a personal record of their training. Your personal bests, your sessions, your progression - on your phone, and on the web when you're connected.</p>
-    <p>The app is built around the exercises you already do at the gym. Every PB exercise on the board is tracked automatically - log a session, and the app tells you if you've set a new personal best.</p>
+    <h2>What it does</h2>
+    <p>GymPerformance gives every WOLF member a personal record of their training. Your personal bests, your sessions, your progression — one account you can open on your phone or in a browser.</p>
+    <p>It's built around the exercises you already do at the gym. Every PB exercise on the board is tracked automatically — log a session, and it tells you if you've set a new personal best.</p>
 
     <div class="features" style="margin-top:32px;">
       <div class="feature-card">
         <div class="icon">🏆</div>
         <h3>Personal Bests</h3>
-        <p>Your current PB for every exercise, always up to date. See your board on your phone.</p>
+        <p>Your current PB for every exercise, always up to date — wherever you open the board.</p>
       </div>
       <div class="feature-card">
         <div class="icon">📋</div>
@@ -304,32 +369,33 @@
   </section>
 
   <section>
-    <h2>How to download</h2>
-    <p>The app is currently available via TestFlight, Apple's platform for beta apps. It takes about two minutes to set up.</p>
+    <h2>How to get started</h2>
+    <p>Pick iPhone or web above, then the flow is the same: connect with TeamUp, and your training history is there.</p>
 
     <ol class="steps">
       <li>
         <div>
-          <strong>Download TestFlight</strong>
-          <span>Install the free <a href="https://apps.apple.com/gb/app/testflight/id899247664" target="_blank">TestFlight app</a> from the App Store on your iPhone.</span>
+          <strong>Open GymPerformance</strong>
+          <span>On iPhone: install via TestFlight (free <a href="https://apps.apple.com/gb/app/testflight/id899247664" target="_blank" rel="noopener">TestFlight app</a>, then this <a href="https://testflight.apple.com/join/75KRTtuw" target="_blank" rel="noopener">invite link</a>). On the web: open the <a href="https://gymperf-member-web.7r2t2gzhkq.workers.dev">web app</a> in your browser.</span>
         </div>
       </li>
       <li>
         <div>
-          <strong>Open the invite link</strong>
-          <span>Tap this <a href="https://testflight.apple.com/join/75KRTtuw" target="_blank">link</a> It will open in TestFlight automatically.</span>
+          <strong>Connect with TeamUp</strong>
+          <span>Sign in with the same TeamUp membership you use at the gym. That links your account so your training data backs up and follows you between iPhone and web.</span>
         </div>
       </li>
       <li>
         <div>
-          <strong>Install GymPerformance</strong>
-          <span>Tap Install in TestFlight. The app will appear on your home screen.</span>
+          <strong>See your board</strong>
+          <span>If you already have history with us, it appears automatically. If you're starting fresh, add your current personal bests so the board has somewhere to begin — you can update them later.</span>
+          <span class="path-note">First-run PB setup is guided on iPhone; on the web you can add manual PBs from an exercise's progression screen.</span>
         </div>
       </li>
       <li>
         <div>
-          <strong>Connect and set up your PBs</strong>
-          <span>When you first open the app, you'll be offered the chance to connect with TeamUp — this backs up your training data and lets it follow you across devices. If you connect and already have training history with us, it'll appear automatically. Otherwise, enter your current personal bests to get started. You can always update these later.</span>
+          <strong>Log sessions and watch progression</strong>
+          <span>After training, log what you did. The board updates, and each exercise has a progression chart so you can see how your PBs move over time.</span>
         </div>
       </li>
     </ol>
@@ -340,18 +406,23 @@
 
     <div class="faq">
       <div class="faq-item">
+        <h3>Is it the same account on iPhone and web?</h3>
+        <p>Yes. Connect with the same TeamUp login on either surface — it's one account, not two copies of your data. Your board, sessions, and progression are the same wherever you open GymPerformance.</p>
+      </div>
+
+      <div class="faq-item">
         <h3>Is my data private?</h3>
-        <p>Until you connect with TeamUp, your training data stays on your phone. If you connect, it backs up so it can follow you across devices and your coaches can support you. Read the full <a href="https://bowlax.github.io/gym-performance-system/privacy-policy.html" style="color:#1A5BA6;">privacy policy</a> for details.</p>
+        <p>On iPhone, until you connect with TeamUp your training data stays on your device. Once you connect (on iPhone or web), it backs up so it can follow you across surfaces and your coaches can support you. Read the full <a href="https://bowlax.github.io/gym-performance-system/privacy-policy.html" style="color:#1A5BA6;">privacy policy</a> for details.</p>
       </div>
 
       <div class="faq-item">
         <h3>Can I disconnect my account?</h3>
-        <p>Yes - go to Settings in the app and tap Disconnect. This stops your data from syncing but keeps everything safe: your history stays in our system and on your device, so reconnecting later picks up right where you left off.</p>
+        <p>Yes — on the iPhone app, go to Settings and tap Disconnect. That stops sync on that device; your history stays in our system and on the phone, so reconnecting later picks up where you left off. Disconnect isn't available on the web; use the iPhone app if you need to disconnect.</p>
       </div>
 
       <div class="faq-item">
         <h3>What iPhone do I need?</h3>
-        <p>Any iPhone running iOS 17 or later. That covers iPhone XS and newer from 2018 onwards.</p>
+        <p>Any iPhone running iOS 17 or later. That covers iPhone XS and newer from 2018 onwards. The web app works in a modern browser on phone or desktop.</p>
       </div>
 
       <div class="faq-item">
@@ -361,12 +432,12 @@
 
       <div class="faq-item">
         <h3>What is TestFlight?</h3>
-        <p>TestFlight is Apple's official platform for distributing apps before they're on the App Store. It's safe, free, and made by Apple. The app will move to the App Store in future.</p>
+        <p>TestFlight is Apple's official platform for distributing apps before they're on the App Store. It's safe, free, and made by Apple. The iPhone app will move to the App Store in future. You don't need TestFlight for the web app.</p>
       </div>
 
       <div class="faq-item">
         <h3>Will I lose my data if the app updates?</h3>
-        <p>No. Your sessions, personal bests, and history are all preserved when the app updates. Updates happen automatically through TestFlight.</p>
+        <p>No. Your sessions, personal bests, and history are preserved when the iPhone app updates through TestFlight, and the same connected history is what you see on the web.</p>
       </div>
 
       <div class="faq-item">
@@ -376,7 +447,7 @@
 
       <div class="faq-item">
         <h3>I have a question or found a problem</h3>
-        <p>Email Lee at <a href="mailto:gymperformance@lbconsulting.tech" style="color:#1A5BA6;">gymperformance@lbconsulting.tech</a>, send a WhatsApp, or send feedback through the TestFlight app by tapping Send Beta Feedback.</p>
+        <p>Email Lee at <a href="mailto:gymperformance@lbconsulting.tech" style="color:#1A5BA6;">gymperformance@lbconsulting.tech</a>, send a WhatsApp, or — on iPhone — send feedback through the TestFlight app by tapping Send Beta Feedback.</p>
       </div>
     </div>
   </section>

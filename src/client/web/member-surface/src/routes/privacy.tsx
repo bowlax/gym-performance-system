@@ -243,6 +243,11 @@ function PrivacyScreen() {
           where you left off.
         </p>
         <p>
+          On the web, signing out simply ends your session on that browser. Your
+          training data stays exactly as it is in your account, and you can sign
+          back in any time.
+        </p>
+        <p>
           If you&apos;d like your data permanently deleted, contact us at{" "}
           <a href="mailto:privacy@lbconsulting.tech">privacy@lbconsulting.tech</a>{" "}
           and we will delete your account data. This is currently a manual process

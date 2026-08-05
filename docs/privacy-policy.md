@@ -132,6 +132,10 @@ delete the training history already on your device. This means you can
 reconnect later (even on a different device) and pick up exactly where
 you left off.
 
+On the web, signing out simply ends your session on that browser. Your
+training data stays exactly as it is in your account, and you can sign
+back in any time.
+
 If you'd like your data permanently deleted, contact us at
 [privacy@lbconsulting.tech](mailto:privacy@lbconsulting.tech) and we
 will delete your account data. This is currently a manual process

@@ -200,7 +200,7 @@ function SettingsDialog({
   open: boolean;
   onClose: () => void;
 }) {
-  const { supabase } = useAuth();
+  const { supabase, signOut } = useAuth();
   const queryClient = useQueryClient();
   const [enabled, setEnabled] = useState(false);
   /** Empty string allowed while editing so the field can be cleared. */
@@ -208,6 +208,7 @@ function SettingsDialog({
   const [unit, setUnit] = useState<"quarters" | "months">("quarters");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   const settingsQuery = useQuery({
     queryKey: ["member-staleness"],
@@ -360,6 +361,28 @@ function SettingsDialog({
               Privacy Policy
               <ChevronRight className="size-4 text-muted-foreground" />
             </Link>
+            <button
+              type="button"
+              disabled={signingOut}
+              onClick={() => {
+                void (async () => {
+                  setSigningOut(true);
+                  setError(null);
+                  try {
+                    await signOut();
+                    queryClient.clear();
+                    onClose();
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : String(e));
+                  } finally {
+                    setSigningOut(false);
+                  }
+                })();
+              }}
+              className="mt-1 flex w-full items-center justify-between rounded-[10px] px-1 py-3 text-sm font-medium text-destructive hover:bg-muted disabled:opacity-60"
+            >
+              {signingOut ? "Signing out…" : "Sign out"}
+            </button>
           </div>
         </div>
       </DialogContent>

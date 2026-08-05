@@ -116,6 +116,8 @@ struct PrivacyPolicyView: View {
 
     You can disconnect your account at any time from Settings in the app. Disconnecting stops your training data from syncing to our systems — it does not delete the data already stored with us, and it does not delete the training history already on your device. This means you can reconnect later (even on a different device) and pick up exactly where you left off.
 
+    On the web, signing out simply ends your session on that browser. Your training data stays exactly as it is in your account, and you can sign back in any time.
+
     If you'd like your data permanently deleted, contact us at privacy@lbconsulting.tech and we will delete your account data. This is currently a manual process handled by request rather than an automatic in-app option — we're working on making this self-service in a future update.
     """
 
