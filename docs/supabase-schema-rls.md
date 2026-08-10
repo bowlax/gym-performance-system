@@ -23,7 +23,9 @@ Throughout, these expressions read the JWT claims:
 - App role:       (auth.jwt() ->> 'app_role')   -- member | coach | owner
 
 The JWT `role` claim is reserved for PostgREST (`authenticated`). Product roles live in
-`app_role`. Most policies were migrated to `app_role` in `20260706170000_jwt_app_role_claim.sql`.
+`app_role`. Policies that gate coach/owner read access use `app_role`
+(`20260706170000_jwt_app_role_claim.sql`; `exercise_resets` aligned in
+`20260810123000_exercise_resets_read_app_role.sql`).
 
 ---
 
@@ -284,22 +286,18 @@ create policy pb_update_own on personal_bests
 ## exercise_resets
 
 Member-owned reset markers (`reset_at` per member + exercise). Same ownership pattern as
-sessions (direct `member_id` + `gym_id`). Source: migration
-`20260715180000_pb_staleness_and_exercise_resets.sql`.
+sessions (direct `member_id` + `gym_id`). Created in
+`20260715180000_pb_staleness_and_exercise_resets.sql`; staff read claim corrected to
+`app_role` in `20260810123000_exercise_resets_read_app_role.sql` (#40).
 
 ```sql
--- Read: member own; coach/owner all in gym
--- KNOWN QUIRK (live): staff branch still checks claim `role`, not `app_role`.
--- Other tables were migrated to `app_role` in 20260706170000; this policy was
--- added later and was not updated. JWT `role` is PostgREST `authenticated`, so
--- the coach/owner OR branch never matches today — staff read of resets relies
--- on fixing this to `app_role` (or members still read their own rows via member_id).
+-- Read: member own; coach/owner all in gym (app_role — same pattern as sessions/PBs)
 create policy exercise_resets_read on exercise_resets
     for select
     using (
         gym_id = (auth.jwt() ->> 'gym_id')::uuid
         and (
-            (auth.jwt() ->> 'role') in ('coach','owner')
+            (auth.jwt() ->> 'app_role') in ('coach','owner')
             or member_id = (auth.jwt() ->> 'member_id')::uuid
         )
     );
