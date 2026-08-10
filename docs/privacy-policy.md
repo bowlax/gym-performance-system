@@ -187,10 +187,12 @@ and sensitivity.
 
 ## 10. Changes to this policy
 
-We may update this policy as the app changes — for example, when new
-features affecting your data (like account disconnection) become
-available. We'll update the "Last updated" date at the top, and for
-significant changes, we'll make reasonable efforts to let connected
+We may update this policy as the app changes. Disconnect (iOS) and sign-out
+(web) are available today: they end the session / stop sync on that surface
+and do **not** delete your central training data. Permanent deletion remains
+a separate request to us (administrator-executed GDPR erasure — see Section
+6). We'll update the "Last updated" date at the top when this policy changes,
+and for significant changes we'll make reasonable efforts to let connected
 members know within the app.
 
 ---

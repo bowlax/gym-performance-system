@@ -419,11 +419,15 @@ export function appendTokenToReturnUrl(
 /**
  * Auth-path OAuth callback redirect (#17).
  *
- * SECURITY — refresh_token in the query string is a deliberate choice for the
+ * SECURITY — putting refresh_token in the query string is deliberate for the
  * iOS ASWebAuthenticationSession callback: the OS delivers the URL to the app
- * process, not into browser history. When the web OAuth return path is built,
- * prefer a URL fragment or a one-time-code exchange instead — a normal browser
- * redirect is where query-string leakage (logs, Referer, history) bites.
+ * process, not into browser history.
+ *
+ * Member web OAuth is live: the Worker `/auth/callback` consumes these query
+ * params and seals the session into an httpOnly cookie (`gp_auth`), so the
+ * browser does not retain the refresh token in JS-accessible storage. A future
+ * hardening (URL fragment or one-time-code exchange) would still shrink
+ * exposure on the redirect hop (logs, Referer, history) if needed.
  */
 export function appendSessionToReturnUrl(
   returnUrl: string,

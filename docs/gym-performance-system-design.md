@@ -226,7 +226,7 @@ Members with existing phase 1 data migrate when phase 2 launches:
 - On first launch of phase 2 app, prompted to connect account
 - If they connect: local data syncs to central store automatically
 - If they skip: nothing changes, data remains local only
-- Export/import remains the path for local-only members who change phones
+- Phone change for connected members: reconnect via TeamUp (sync). Export/import for anonymous/local-only portability is phase 3 (#5 / #6)
 
 ### Multi-gym consideration
 
@@ -333,21 +333,22 @@ Full layout tokens and platform mappings: `docs/design-system.md` (Training cons
 
 **Phase 2 migration path:**
 - Existing phase 1 members prompted to connect account on first phase 2 launch
-- Export/import feature covers local-only members changing phones
+- Connected sync (TeamUp) is the multi-device / phone-change path for opted-in members; export/import for local-only portability is phase 3 (#5 / #6)
 - `gymId` added to all entities to keep multi-gym option open
 
 ---
 
 ### Phase 3 -- Intelligence and Integrations
 
-**Scope:** AI-powered insights, HealthKit integration, TeamUp integration.
+**Scope:** AI-powered insights, HealthKit integration, TeamUp integration, and member data export/import.
 
 | Item | Notes |
 |---|---|
 | LLM Service | Powers Insight Engine pattern detection |
 | AI Model Access | Abstracts LLM capability from Insight Engine |
-| HealthKit integration | Write gym sessions to Apple Health as HKWorkout. Read to follow |
-| TeamUp integration | Review API capabilities during phase 2 scoping. May influence member identity model |
+| HealthKit integration | Write gym sessions to Apple Health as HKWorkout. Read to follow (#4) |
+| TeamUp integration | Broader TeamUp capabilities beyond identity/OAuth (#7) |
+| Export / import | Member data portability — export JSON (#5), import previously exported data (#6) |
 
 ---
 
@@ -369,7 +370,7 @@ Full layout tokens and platform mappings: `docs/design-system.md` (Training cons
 | Conditioning exercises deferred to phase 2 | Not on the PB board, members not motivated to log them. Relevant for coach session planning in phase 2 |
 | PB minimum rep threshold removed | Coach decision. A PB is achieved if a higher weight is lifted regardless of reps. Simplifies bestWeightAndReps rule |
 | gymId deferred but anticipated | Not built yet but will be added to all entities in phase 2 to keep multi-gym option open |
-| Export phase 1, import phase 2 | Export gives members data portability now. Import is the phase 2 migration path for local-only members |
+| Export / import deferred to phase 3 | Data portability (export JSON / import previously exported data) sits with HealthKit and broader TeamUp integration work — issues #5, #6, #7 (all phase-3). Not a phase 1/2 delivery path |
 | Plank PB rule to confirm with coach | Currently heaviestWeight. May change to compound weight+time rule in phase 2 |
 
 ---
@@ -391,13 +392,16 @@ Full layout tokens and platform mappings: `docs/design-system.md` (Training cons
 
 ## 12. GitHub Issues Register
 
-| Issue | Title | Phase | Status |
+**Point-in-time snapshot** (selected deferred / open items that affect design
+phasing). **GitHub Issues is the live source of truth** — do not treat this
+table as complete or current status.
+
+| Issue | Title | Phase | Notes |
 |---|---|---|---|
-| #3 | Reset PBs and delete individual history entries | Phase 1 | In progress |
 | #4 | HealthKit integration | Phase 3 | Deferred |
-| #5 | Export member data as JSON | Phase 1 | Pending |
-| #6 | Import previously exported data | Phase 2 | Deferred |
-| #7 | TeamUp integration | Phase 3 | Deferred -- review during phase 2 scoping |
+| #5 | Export member data as JSON | Phase 3 | Deferred (with #6 / #7) |
+| #6 | Import previously exported data | Phase 3 | Deferred (with #5 / #7) |
+| #7 | TeamUp integration | Phase 3 | Deferred — broader than identity/OAuth already shipped |
 | #27 | Add exercises to previously logged sessions | Phase 2 | Deferred |
 
 ---
@@ -419,7 +423,7 @@ These technology choices slot into the architectural component slots already def
 | Server-side business logic | TypeScript (Supabase Edge Functions) | Same language as web surfaces, strong AI tooling support |
 | Coach Surface (Client) | React | Lovable generates natively |
 | Owner Surface (Client) | React | Lovable generates natively |
-| Member Web Surface (Client) | React | Lovable generates natively. Covers Android and web users |
+| Member Web Surface (Client) | React + TanStack Start on Cloudflare Workers SSR (`gymperf-member-web`) | Lovable-assisted UI; deployed Worker seals Auth session in httpOnly cookie (`SESSION_SECRET`). Covers Android and web users |
 | iOS Member Surface (Client) | Swift / SwiftData (unchanged) | Preserves local-first, offline-capable operation |
 
 ### TeamUp as the identity source
@@ -844,6 +848,8 @@ Keep the policy aligned when behaviour changes. In particular it must continue t
 - The contact route for erasure requests (administrator, since Admin Surface is deferred to phase 3)
 - What data is held centrally versus local-only (anonymous members have no central data)
 
+Engineering entry points: `docs/member-disconnect-signout.md`.
+
 ### Coaches read-only on performance data
 
 A member's training data is theirs. Coaches observe (and later comment via dedicated coach features), but never edit a member's logged sessions or PBs. This keeps the trust model clean and is enforced in RLS by granting coaches select but not insert/update/delete on member performance tables.
@@ -855,7 +861,7 @@ A member's training data is theirs. Coaches observe (and later comment via dedic
 
 **The Sync Manager keeps the local-first promise: the device is always the source of truth, and sync is an additive layer for connected members.**
 
-**Build status:** First-connect push and the full pull-merge-push cycle are **built** and live-validated against the cloud (stub broker + member JWT). See `docs/ios-sync-first-connect.md` and `docs/ios-sync-pull-merge-push.md`.
+**Build status:** First-connect push and the full pull-merge-push cycle are **built** and live-validated against the cloud with **real TeamUp OAuth** and Supabase Auth-session JWTs (ES256). Local/dev may still use the stub broker when OAuth env vars are unset. See `docs/ios-sync-first-connect.md` and `docs/ios-sync-pull-merge-push.md`.
 
 ### Responsibilities
 
@@ -928,7 +934,7 @@ Identity reconciliation is broker create-or-adopt (section 18). Data reconciliat
 ### Edge cases
 
 - **Interrupted sync:** a failed pull does not advance the last-pull marker; a failed push leaves unmarked (or still-dirty) local rows unmarked. The next cycle retries. Merge by UUID + LWW is safe to repeat. Nothing is lost for the normal path
-- **First sync after connecting (new cloud member):** first-connect push uploads the device's existing local history under the JWT member (heaviest one-time upload). Then the full cycle applies
+- **First sync after connecting:** after broker auth, connect retags local rows when the device adopted a canonical member id, then runs the same **PULL → MERGE → PUSH** cycle as ongoing sync (`ConnectFlowService.syncAfterConnect` → `SyncManager.runFullSyncCycle`). On a brand-new cloud member the pull is typically empty and the push uploads the device's existing local history (heaviest one-time upload). Success is reported only when both pull and push complete — not push-only
 - **Anonymous-local-then-adopt:** a device with pre-existing **anonymous** local data connects and the broker **adopts** an existing cloud member that **already has cloud data**. Resolution: **discard-cloud-wins** — after a clear informed warning framed as a choice at connect, the local anonymous data is discarded and the device is populated from the cloud (clear local + pull). No re-parenting or de-duplication of two histories. Triggers only when the adopted member already has cloud data. Implemented as #33.
 
 ### Offline behaviour

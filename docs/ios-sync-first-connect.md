@@ -73,6 +73,8 @@ let result = await service.syncAfterConnect(session: brokerSession)
 
 Push-only (`uploadLocalHistoryAfterConnect`) remains for tests / harnesses. Do not use it as the product connect path — second-device connect must pull before push.
 
+Disconnect (iOS) and sign-out (web) are separate from sync — see [`docs/member-disconnect-signout.md`](member-disconnect-signout.md).
+
 Full cycle (same cycle connect uses after retag):
 
 ```swift
