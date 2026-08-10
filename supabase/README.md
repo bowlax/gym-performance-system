@@ -106,7 +106,18 @@ Required OAuth secrets (set together via `supabase secrets set`):
 - `TEAMUP_OAUTH_PROVIDER_ID` — Wolf gym provider id once registered
 - `OAUTH_STATE_SECRET` — dedicated HMAC for OAuth `state` (not the project JWT secret)
 
-Optional: `TEAMUP_OAUTH_SUCCESS_REDIRECT_URI`, `TEAMUP_OAUTH_SCOPE`, `TEAMUP_OAUTH_AUTHORIZE_URL`, `TEAMUP_OAUTH_TOKEN_URL`.
+**Client return URLs (per-surface exact-match allowlists):** the optional `returnUrl` query param on authorize is accepted only if it appears **exactly** (full string) in that surface’s comma-separated allowlist. Non-allowlisted / empty list → `returnUrl` ignored → callback returns JSON instead of redirecting.
+
+| Surface (shipped clients today) | Env var | Example entries |
+|----------------------------------|---------|-----------------|
+| `ios` | `TEAMUP_OAUTH_ALLOWED_RETURN_URLS_IOS` | `gymperformance://connect` |
+| `memberWeb` | `TEAMUP_OAUTH_ALLOWED_RETURN_URLS_MEMBER_WEB` | `https://gymperf-member-web.<account>.workers.dev/auth/callback`, `http://localhost:5173/auth/callback` |
+
+The broker also accepts surfaces `coachWeb` / `ownerWeb` (role assignment) with allowlists `TEAMUP_OAUTH_ALLOWED_RETURN_URLS_COACH_WEB` / `_OWNER_WEB`. No coach/owner web clients are shipped yet — set those vars only when those surfaces go live.
+
+Deprecated / unused for return-url resolution: `TEAMUP_OAUTH_SUCCESS_REDIRECT_URI` (legacy; do not configure as the allowlist mechanism).
+
+Other optional OAuth overrides: `TEAMUP_OAUTH_SCOPE`, `TEAMUP_OAUTH_AUTHORIZE_URL`, `TEAMUP_OAUTH_TOKEN_URL`.
 
 **Authorize (browser redirect):**
 
@@ -114,7 +125,7 @@ Optional: `TEAMUP_OAUTH_SUCCESS_REDIRECT_URI`, `TEAMUP_OAUTH_SCOPE`, `TEAMUP_OAU
 open 'http://127.0.0.1:54321/functions/v1/token-broker?oauth=authorize&deviceMemberId=aaaaaaaa-0000-0000-0000-000000000001&surface=memberWeb&returnUrl=http://localhost:5173/auth/callback'
 ```
 
-After TeamUp login, the broker exchanges the code, establishes an Auth session (ES256), and redirects to `returnUrl` with `access_token` / `refresh_token` (or returns JSON if no redirect URI is configured).
+After TeamUp login, the broker exchanges the code, establishes an Auth session (ES256), and redirects to the allowlisted `returnUrl` with `access_token` / `refresh_token` (or returns JSON if `returnUrl` was missing or not on that surface’s allowlist).
 
 ## Token broker — deploy
 

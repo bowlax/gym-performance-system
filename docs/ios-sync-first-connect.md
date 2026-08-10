@@ -1,19 +1,21 @@
 # iOS first-connect sync upload
 
-The **first-connect / push path** within the sync system: resumable bulk upload of an existing local member history to Supabase after broker connect.
+The **push half** of sync: resumable bulk upload of dirty local member history to Supabase. Used as the PUSH phase of the full cycle after connect, and as a standalone harness for push-only tests.
 
-Pull, merge, and the ongoing full cycle (**PULL → MERGE → PUSH**) are implemented separately — see [`docs/ios-sync-pull-merge-push.md`](ios-sync-pull-merge-push.md). This document covers the push mechanics shared by first-connect upload and the push phase of a full cycle.
+Product connect does **not** push-only. After broker auth, connect runs retag (when adopted) then the full **PULL → MERGE → PUSH** cycle — see entry point below and [`docs/ios-sync-pull-merge-push.md`](ios-sync-pull-merge-push.md). This document covers push mechanics (`FirstConnectUploader`) shared by that cycle’s push phase.
 
 ## Local sync state
 
 Optional `syncedAt: Date?` on:
 
+- `UserIdentityModel` (member settings — staleness / sync bookkeeping)
 - `SessionModel`
 - `ExerciseEntryModel`
 - `ModelSet`
 - `PersonalBestModel`
+- `ExerciseResetModel`
 
-`nil` means never successfully pushed (or not yet marked after a cloud-applied merge). After a successful batch upsert, the uploader sets `syncedAt` on those records locally. The cloud `synced_at` column is set in the same payload.
+`nil` means never successfully pushed (or not yet marked after a cloud-applied merge). After a successful batch upsert (or member settings PATCH), the uploader sets `syncedAt` on those records locally. The cloud `synced_at` column is set in the same payload where applicable.
 
 ## Dirty criterion (push)
 
@@ -26,20 +28,22 @@ On a pure first-connect (never synced), every local row has `syncedAt == nil`, s
 
 ## Upload order and batching
 
-`FirstConnectUploader` walks data in FK order:
+`FirstConnectUploader` walks data in FK / dependency order:
 
-1. `sessions`
-2. `exercise_entries`
-3. `sets`
-4. `personal_bests`
+1. `members` — settings PATCH only (staleness fields + sync bookkeeping). Never INSERT; broker create-or-adopt owns identity (`auth_user_id`, TeamUp mapping)
+2. `sessions`
+3. `exercise_entries`
+4. `sets`
+5. `personal_bests`
+6. `exercise_resets`
 
 Dirty exercise entries and sets are scoped to the member being synced (via parent session ownership) so orphan children are never pushed.
 
-Each table is pushed in batches of **`SyncConstants.uploadBatchSize` (50)** via PostgREST upsert:
+Each upsert table is pushed in batches of **`SyncConstants.uploadBatchSize` (50)** via PostgREST upsert:
 
 - `POST /rest/v1/{table}?on_conflict=id`
 - `Prefer: resolution=merge-duplicates,return=minimal`
-- `Authorization: Bearer {broker JWT}` (member RLS scope)
+- `Authorization: Bearer {session JWT}` (member RLS scope)
 
 On API failure, already-marked batches stay marked; unmarked records are retried on the next run.
 
@@ -47,25 +51,35 @@ On API failure, already-marked batches stay marked; unmarked records are retried
 
 | Area | Path |
 |------|------|
-| Orchestration | `src/utilities/sync-manager/SyncManager.swift` |
-| Upload pipeline | `src/utilities/sync-manager/FirstConnectUploader.swift` |
+| Connect orchestration | `src/utilities/sync-manager/ConnectFlowService.swift` |
+| Full cycle | `src/utilities/sync-manager/SyncManager.swift` |
+| Upload pipeline (push) | `src/utilities/sync-manager/FirstConnectUploader.swift` |
 | PostgREST client | `src/data/sync-service-access/PostgRESTSyncServiceAccess.swift` |
 | Local queries | `src/data/sync-service-access/SwiftDataSyncLocalDataAccess.swift` |
 | Row mapping | `src/data/sync-service-access/SyncPayloadMapper.swift` |
 
-Entry point after connect (first-connect push only):
+### Entry point after connect (product path)
+
+Connect UI / `ConnectFlowService` — **not** push-only:
 
 ```swift
-let result = await syncManager.uploadLocalHistoryAfterConnect(brokerSession: session)
+// ConnectFlowService.syncAfterConnect(session:)
+// 1. If broker adopted a different canonical member id → retag local history
+// 2. Run full cycle: PULL → MERGE → PUSH (SyncManager.runFullSyncCycle)
+let result = await service.syncAfterConnect(session: brokerSession)
+// Success UI ("You’re connected") only when result.completed
+// (pull.completed && push.completed)
 ```
 
-Full cycle (pull then push):
+Push-only (`uploadLocalHistoryAfterConnect`) remains for tests / harnesses. Do not use it as the product connect path — second-device connect must pull before push.
+
+Full cycle (same cycle connect uses after retag):
 
 ```swift
 let result = await syncManager.runFullSyncCycle(brokerSession: session)
 ```
 
-Stub broker + upload (tests / manual harness):
+Stub broker + push-only (tests / manual harness):
 
 ```swift
 let result = await syncManager.mintStubSessionAndUpload()
@@ -119,7 +133,7 @@ Empty `Release.xcconfig` → connect hidden, sync inert (safe default).
 
 2. Run `FirstConnectUploadIntegrationTests` (enabled by default when env is set).
 
-3. The test mints a stub broker session first, seeds local data under the **adopted** `member_id` from the JWT, then uploads. First run expects sessions/entries/sets/PBs pushed; second in-test upload expects `counts.total == 0`.
+3. The test mints a stub broker session first, seeds local data under the **adopted** `member_id` from the JWT, then uploads. First run expects dirty rows pushed (including member settings / resets when present); second in-test upload expects `counts.total == 0`.
 
 4. Verify in Supabase Table Editor (or SQL) that rows appear under the test `member_id` with matching UUIDs and no duplicates after re-run.
 

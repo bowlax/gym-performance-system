@@ -185,6 +185,7 @@ Add this line before end $$; in the block above:
 
 Add Playwright end-to-end tests covering the core flows (log a set, and the three
 progression actions) once the web surface is structurally settled, as part of pre-launch
-hardening - alongside real TeamUp verification, ES256 signing, and the phase 2 privacy
-policy. At that point the UI is stable enough that automated tests are worth their
-maintenance cost, and they become part of the pre-launch gate.
+hardening — alongside the phase 2 privacy policy review. Real TeamUp OAuth and ES256
+Auth sessions are already live in production; local runs of this script may still use the
+stub broker (setup above). At that point the UI is stable enough that automated tests are
+worth their maintenance cost, and they become part of the pre-launch gate.

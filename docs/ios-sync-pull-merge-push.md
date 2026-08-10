@@ -1,6 +1,10 @@
 # iOS sync: pull-merge-push cycle
 
-Builds on the first-connect push slice. Multi-device sync for the **normal** case (broker create-or-adopt already reconciled identity). The anonymous-local-then-adopt edge case is deferred (see Design decisions).
+Builds on the push slice documented in [`docs/ios-sync-first-connect.md`](ios-sync-first-connect.md). Multi-device sync for the **normal** case (broker create-or-adopt already reconciled identity).
+
+**Connect uses this cycle:** after broker auth, `ConnectFlowService.syncAfterConnect` retags local rows when the device adopted a canonical member id, then runs the same **PULL → MERGE → PUSH** path described here (`SyncManager.runFullSyncCycle`). Success is reported only when `SyncCycleResult.completed` (both pull and push). Push mechanics and upload order live in the first-connect doc — not duplicated here.
+
+The anonymous-local-then-adopt edge case is **implemented** as discard-cloud-wins (#33) — see Design decisions below (not deferred).
 
 ## Last-pull marker
 
@@ -37,7 +41,7 @@ let result = await syncManager.runFullSyncCycle(brokerSession: session)
 let result = await syncManager.mintStubSessionAndRunFullSyncCycle()
 ```
 
-Order: **PULL → MERGE → PUSH**. First-connect upload remains: `uploadLocalHistoryAfterConnect` (see `docs/ios-sync-first-connect.md`).
+Order: **PULL → MERGE → PUSH**. The PUSH phase is `FirstConnectUploader` (see [`docs/ios-sync-first-connect.md`](ios-sync-first-connect.md)). Product connect calls this cycle via `syncAfterConnect`, not push-only upload.
 
 ## Design decisions
 

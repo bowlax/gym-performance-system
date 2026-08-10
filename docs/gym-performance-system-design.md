@@ -512,26 +512,27 @@ A foundational phase 2 distinction:
 1. A member connects their TeamUp account, enabling sync
 2. A member skips connection and remains anonymous/local-only (iOS only)
 3. A previously anonymous member connects later from settings
-4. A connected member disconnects, reverting to local-only (central data retained by default)
-5. A member requests deletion of their central data (GDPR right to erasure)
+4. A connected iOS member disconnects: local tokens and connection flags are cleared; local training data and central/cloud data are both retained. Reconnecting (same or another device) restores sync access to the existing cloud history
+5. A member requests deletion of their central data (GDPR right to erasure) — admin-executed, separate from disconnect
+6. A web member signs out: the browser session ends (httpOnly cookie cleared); there is no local store on web, and central data is unchanged
 
 **Syncing:**
-6. A connected member's local data syncs to the central store
-7. A connected member's data syncs down to a new device
-8. A member logs data offline; the system syncs when connectivity returns
-9. Local and central data merge using UUID identity, last-write-wins on conflict (by updatedAt)
+7. A connected member's local data syncs to the central store
+8. A connected member's data syncs down to a new device
+9. A member logs data offline; the system syncs when connectivity returns
+10. Local and central data merge using UUID identity, last-write-wins on conflict (by updatedAt)
 
 **Migration:**
-10. An existing phase 1 member connects for the first time; local history merges up to central
+11. An existing phase 1 member connects for the first time; local history merges up to central
 
 **Token management:**
-11. A member's TeamUp token expires and is refreshed transparently
-12. Token refresh fails; the member is prompted to reconnect
+12. A member's session token expires and is refreshed transparently
+13. Token refresh fails; the member is prompted to reconnect
 
 **Sync behaviour:**
-13. Sync happens automatically in the background when connectivity allows
-14. A member triggers a manual sync via a "sync now" action
-15. A member views their sync status (last synced, syncing now, offline, error)
+14. Sync happens automatically in the background when connectivity allows
+15. A member triggers a manual sync via a "sync now" action
+16. A member views their sync status (last synced, syncing now, offline, error)
 
 ### Connected Member Use Cases -- Group 1
 
@@ -549,8 +550,9 @@ A foundational phase 2 distinction:
 9. A web member's actions write directly to the central store
 
 **Data control:**
-10. A member requests deletion of their central data (GDPR)
-11. A connected iOS member disconnects, keeping local data, optionally retaining central data
+10. A member requests deletion of their central data (GDPR) — administrator-executed erasure; not part of disconnect or sign-out
+11. A connected iOS member disconnects: clears local tokens/connection flags only; local training data and central/cloud data are both retained. Reconnect (same or another device) restores everything
+12. A web member signs out: ends the session only (no local data exists on web; central data unchanged)
 
 ### First Buildable Slice of Phase 2
 
@@ -708,7 +710,7 @@ The broker is the single place that understands TeamUp. It owns:
 - The TeamUp-customer-ID to member-UUID mapping
 - Create-or-adopt of the member record
 - Role assignment by surface
-- Minting the Supabase JWT
+- Establishing a Supabase Auth session whose JWT carries RLS claims (`member_id`, `gym_id`, `app_role`)
 
 ### The two identities and how they relate
 
@@ -735,8 +737,12 @@ OAuth is driven by the token broker Edge Function, not by the client holding Tea
 
 1. Browser (or app) hits the broker's authorize route (`?oauth=authorize`) with `deviceMemberId`, `surface`, and optional `returnUrl`
 2. Broker starts authorization-code + PKCE against TeamUp, redirects the user to TeamUp
-3. TeamUp redirects to the broker callback; the broker exchanges the code server-side, verifies identity, runs create-or-adopt, and mints a Supabase JWT
-4. Broker redirects back to `returnUrl` with the Supabase JWT (or returns JSON). TeamUp tokens stay on the server; the client holds only the Supabase JWT for RLS-scoped API calls
+3. TeamUp redirects to the broker callback; the broker exchanges the code server-side, verifies identity, runs create-or-adopt, and establishes a Supabase Auth session (ES256 JWT with `member_id`, `gym_id`, `app_role` via the custom access token hook)
+4. Broker redirects back to an allowlisted `returnUrl` with session tokens (`access_token`, `refresh_token`, …), or returns JSON when no allowlisted return URL applies. TeamUp tokens stay on the server. Surfaces then hold the session differently:
+   - **iOS** stores the session tokens in the Keychain (not in the clear on disk as app preference strings)
+   - **Member web** (Cloudflare Workers SSR) seals the tokens into an httpOnly cookie (`SESSION_SECRET`); the browser does not hold the JWT in the clear. The client obtains a short-lived access token for API calls via `GET /api/auth/session`; sign-out clears the cookie via `POST /api/auth/signout`
+
+**Production signing and secrets:** Prod OAuth uses Supabase Auth ES256 sessions. `JWT_SIGNING_SECRET` is local/stub-only (HS256 mint when TeamUp OAuth env vars are unset) and is removed from deployed secrets. OAuth `state` HMAC uses a dedicated `OAUTH_STATE_SECRET` (must not be the project JWT secret). GitHub issue [#17](https://github.com/bowlax/gym-performance-system/issues/17) (HS256 → Auth-session ES256) closed 21 Jul 2026.
 
 A stub POST path (`teamupToken: "stub-token"`) remains for local/dev testing without TeamUp OAuth env vars. Operational detail (env vars, curl, path selection): `supabase/README.md`.
 
@@ -747,8 +753,8 @@ A stub POST path (`teamupToken: "stub-token"`) remains for local/dev testing wit
 3. Broker looks up members by (gym_id, teamup_customer_id):
    - **No existing record** → CREATE a members row using the device's local UUID as primary key, storing the TeamUp customer ID. The local UUID becomes canonical
    - **Existing record** → ADOPT it. Return the existing member UUID. The device adopts this UUID going forward (second-device or returning-member case)
-4. Broker mints a Supabase JWT with claims: `member_id` (canonical UUID), `gym_id`, `app_role` (from surface/mode), and PostgREST `role: "authenticated"`
-5. App uses the Supabase JWT for sync and API requests; RLS reads `member_id`, `gym_id`, and `app_role`
+4. Broker establishes a Supabase Auth session whose JWT carries claims: `member_id` (canonical UUID), `gym_id`, `app_role` (from surface/mode), and PostgREST `role: "authenticated"`
+5. App uses that session JWT for sync and API requests; RLS reads `member_id`, `gym_id`, and `app_role`
 6. App syncs under the canonical member identity (see section 20)
 
 ### JWT claims (PostgREST vs app role)
@@ -761,10 +767,6 @@ PostgREST uses the JWT `role` claim as the Postgres session role (`authenticated
 | `app_role` | `member` \| `coach` \| `owner` | RLS and product access |
 | `member_id` | canonical member UUID | Member-scoped RLS |
 | `gym_id` | gym UUID | Gym tenancy in RLS |
-
-### Signing: HS256 interim → ES256 launch gate
-
-The broker currently signs JWTs with the legacy HS256 shared secret so create-or-adopt and sync can be proven while TeamUp verification is still stubbable. Before any sync features ship to real members, issuance must move to Supabase-native ES256 tokens (current project key). Tracked as a launch gate: GitHub issue [#17](https://github.com/bowlax/gym-performance-system/issues/17) (Migrate token broker from legacy HS256 signing to Supabase-native ES256 issuance before launch). Real TeamUp verification belongs in the same piece of work.
 
 ### Second-device reconciliation
 
@@ -823,22 +825,24 @@ Policy SQL is in `docs/supabase-schema-rls.md` and the migrations.
 
 ### Deletion model
 
-Two distinct member actions, deliberately separated:
+Two distinct actions, deliberately separated:
 
-- **Disconnect / remove from central (self-service):** the common, reversible action. Implemented as soft-delete (deleted_at) on the member's own rows, or clearing sync. Exposed to the member role.
-- **GDPR hard-erasure (administrator-executed on request):** rare, irreversible. NOT exposed to member or coach roles in RLS. Member requests it; administrator actions it via privileged access within the GDPR response period. Handled across both local and central stores together, with a record that the request was made and fulfilled.
+- **Disconnect (iOS) / sign-out (web):** the common, reversible action. **Not** a delete.
+  - **iOS disconnect** clears local session tokens and connection flags only. Local training data **and** central/cloud data are both **retained**. Reconnecting (same device or another) restores sync access to the existing cloud history — nothing was wiped by disconnect.
+  - **Web sign-out** ends the browser session (clears the httpOnly auth cookie). There is no local store on web; central data is unchanged.
+- **GDPR hard-erasure (administrator-executed on request):** rare, irreversible. **Not** part of disconnect or sign-out. NOT exposed to member or coach roles in RLS. Member requests it; administrator actions it via privileged access within the GDPR response period. Handled across both local and central stores together, with a record that the request was made and fulfilled. Soft-delete (`deleted_at`) may be used in sync/propagation of ordinary row removals; it is not what disconnect does to a member's cloud history.
 
 Rationale: hard-delete is irreversible and destructive; executing it administrator-side prevents catastrophic accidental taps, allows identity confirmation, handles local and central together, and preserves proof the request was honoured. GDPR does not require instant self-service erasure, only that valid requests are honoured within a reasonable period.
 
 ### Privacy policy dependency
 
-The privacy policy must be revised when sync ships to accurately describe:
-- Self-service disconnect and central data removal
-- Request-based full erasure and the response period
+The published privacy policy and landing FAQ already describe disconnect (iOS) and sign-out (web) in line with the behaviour above: disconnect/sign-out stop the session/sync on that surface without deleting retained local or central training data; full erasure is a separate request path.
+
+Keep the policy aligned when behaviour changes. In particular it must continue to state clearly:
+- Disconnect / sign-out do **not** delete central data
+- Request-based full erasure and the response period (administrator-executed)
 - The contact route for erasure requests (administrator, since Admin Surface is deferred to phase 3)
 - What data is held centrally versus local-only (anonymous members have no central data)
-
-This revision is tied to the sync release. The current policy remains accurate while the app is local-only and must NOT be changed until sync features actually ship.
 
 ### Coaches read-only on performance data
 

@@ -28,7 +28,13 @@
  *   TEAMUP_OAUTH_CLIENT_SECRET
  *   TEAMUP_OAUTH_REDIRECT_URI
  *   TEAMUP_OAUTH_PROVIDER_ID
- *   TEAMUP_OAUTH_SUCCESS_REDIRECT_URI (optional; returnUrl query param must match origin)
+ *   TEAMUP_OAUTH_ALLOWED_RETURN_URLS_IOS / _MEMBER_WEB / _COACH_WEB / _OWNER_WEB
+ *                         — comma-separated exact-match allowlists for the client
+ *                         `returnUrl` query param (per `surface`). Non-allowlisted
+ *                         returnUrl is ignored (callback returns JSON). Shipped
+ *                         clients today use ios + memberWeb; coach/owner lists are
+ *                         for when those surfaces go live.
+ *   TEAMUP_OAUTH_SUCCESS_REDIRECT_URI — deprecated; unused for return-url resolution
  *   TEAMUP_OAUTH_SCOPE (optional; default read_write provider:<PROVIDER_ID>)
  *   TEAMUP_OAUTH_AUTHORIZE_URL / TEAMUP_OAUTH_TOKEN_URL (optional overrides)
  *

@@ -94,6 +94,7 @@ create table members (
     id                  uuid primary key,        -- the per-install UUID, canonical identity
     gym_id              uuid not null references gyms(id),
     teamup_customer_id  text,                    -- populated when member connects. Null if not yet mapped
+    auth_user_id        uuid unique,             -- Supabase auth.users.id; broker-owned; devices must not PATCH
     display_name        text not null default 'Member',
     sync_enabled        boolean not null default true,
     staleness_enabled   boolean not null default false,
@@ -107,6 +108,11 @@ create table members (
     unique (gym_id, teamup_customer_id)          -- one member per TeamUp customer per gym
 );
 ```
+
+`auth_user_id` links the member row to a Supabase Auth user for ES256 session issuance
+(migration `20260720170000_members_auth_user_id.sql`). Populated only by the token broker
+(service role) when establishing/adopting an Auth user for a TeamUp customer. Device sync
+PATCHes must omit it (`SyncPayloadMapper.memberSettingsPatch`).
 
 ---
 

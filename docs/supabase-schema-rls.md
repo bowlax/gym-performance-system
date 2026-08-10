@@ -2,12 +2,15 @@
 
 **To be appended to supabase-schema.md**
 
-These policies enforce the phase 2 access model. They read claims from the Supabase JWT
-minted by the token broker Edge Function: member_id, gym_id, role.
+These policies enforce the phase 2 access model. They read claims from the Supabase Auth
+session JWT (issued via the token broker + Custom Access Token Hook): `member_id`,
+`gym_id`, `app_role`.
 
-> Note: these policies assume the JWT custom claims are accessible via
-> auth.jwt() ->> 'claim_name'. The exact claim path depends on how the broker
-> structures the JWT. Adjust the claim extraction to match the broker implementation.
+> Claims are top-level on the JWT (`auth.jwt() ->> 'claim_name'`). On the Auth-session
+> path the broker stores them in Auth `app_metadata`; `public.custom_access_token_hook`
+> (migration `20260720163000`) promotes them to top-level claims on every Auth-issued
+> access token (including refresh). `members.auth_user_id` is the broker-owned link from
+> the member row to `auth.users` — not an RLS claim, but part of the same security shape.
 
 ---
 
@@ -19,8 +22,8 @@ Throughout, these expressions read the JWT claims:
 - Current member: (auth.jwt() ->> 'member_id')::uuid
 - App role:       (auth.jwt() ->> 'app_role')   -- member | coach | owner
 
-The JWT `role` claim is reserved for PostgREST (`authenticated`). The token broker
-sets `role: "authenticated"` and puts the app role in `app_role`.
+The JWT `role` claim is reserved for PostgREST (`authenticated`). Product roles live in
+`app_role`. Most policies were migrated to `app_role` in `20260706170000_jwt_app_role_claim.sql`.
 
 ---
 
@@ -34,6 +37,7 @@ alter table sessions          enable row level security;
 alter table exercise_entries  enable row level security;
 alter table sets              enable row level security;
 alter table personal_bests    enable row level security;
+alter table exercise_resets   enable row level security;
 ```
 
 ---
@@ -264,6 +268,50 @@ create policy pb_insert_own on personal_bests
 
 -- Update: member own (soft-delete, field edits; reset is exercise_resets, not PB flags)
 create policy pb_update_own on personal_bests
+    for update
+    using (
+        member_id = (auth.jwt() ->> 'member_id')::uuid
+        and gym_id = (auth.jwt() ->> 'gym_id')::uuid
+    )
+    with check (
+        member_id = (auth.jwt() ->> 'member_id')::uuid
+        and gym_id = (auth.jwt() ->> 'gym_id')::uuid
+    );
+```
+
+---
+
+## exercise_resets
+
+Member-owned reset markers (`reset_at` per member + exercise). Same ownership pattern as
+sessions (direct `member_id` + `gym_id`). Source: migration
+`20260715180000_pb_staleness_and_exercise_resets.sql`.
+
+```sql
+-- Read: member own; coach/owner all in gym
+-- KNOWN QUIRK (live): staff branch still checks claim `role`, not `app_role`.
+-- Other tables were migrated to `app_role` in 20260706170000; this policy was
+-- added later and was not updated. JWT `role` is PostgREST `authenticated`, so
+-- the coach/owner OR branch never matches today — staff read of resets relies
+-- on fixing this to `app_role` (or members still read their own rows via member_id).
+create policy exercise_resets_read on exercise_resets
+    for select
+    using (
+        gym_id = (auth.jwt() ->> 'gym_id')::uuid
+        and (
+            (auth.jwt() ->> 'role') in ('coach','owner')
+            or member_id = (auth.jwt() ->> 'member_id')::uuid
+        )
+    );
+
+create policy exercise_resets_insert_own on exercise_resets
+    for insert
+    with check (
+        member_id = (auth.jwt() ->> 'member_id')::uuid
+        and gym_id = (auth.jwt() ->> 'gym_id')::uuid
+    );
+
+create policy exercise_resets_update_own on exercise_resets
     for update
     using (
         member_id = (auth.jwt() ->> 'member_id')::uuid
