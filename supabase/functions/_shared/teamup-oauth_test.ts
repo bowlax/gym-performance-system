@@ -48,7 +48,6 @@ const sampleConfig: TeamUpOAuthConfig = {
   scope: "read_write provider:5404319",
   authorizeUrl: "https://goteamup.com/api/v2/auth/oauth/authorize",
   tokenUrl: "https://goteamup.com/api/v2/auth/oauth/token",
-  successRedirectUri: "https://app.example/auth/callback",
 };
 
 Deno.test("stub token detection", () => {
@@ -245,7 +244,6 @@ Deno.test("return URL policy prefers validated client returnUrl", () => {
     );
     assertEquals(
       resolveOAuthReturnUrl(
-        sampleConfig,
         "ios",
         "gymperformance://connect",
       ),
@@ -253,16 +251,14 @@ Deno.test("return URL policy prefers validated client returnUrl", () => {
     );
     assertEquals(
       resolveOAuthReturnUrl(
-        sampleConfig,
         "memberWeb",
         "https://app.example/auth/other",
       ),
       null,
     );
-    assertEquals(resolveOAuthReturnUrl(sampleConfig, "memberWeb", null), null);
+    assertEquals(resolveOAuthReturnUrl("memberWeb", null), null);
     assertEquals(
       resolveOAuthReturnUrl(
-        sampleConfig,
         "unknown-surface",
         "https://app.example/auth/callback",
       ),

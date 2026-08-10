@@ -115,8 +115,6 @@ Required OAuth secrets (set together via `supabase secrets set`):
 
 The broker also accepts surfaces `coachWeb` / `ownerWeb` (role assignment) with allowlists `TEAMUP_OAUTH_ALLOWED_RETURN_URLS_COACH_WEB` / `_OWNER_WEB`. No coach/owner web clients are shipped yet — set those vars only when those surfaces go live.
 
-Deprecated / unused for return-url resolution: `TEAMUP_OAUTH_SUCCESS_REDIRECT_URI` (legacy; do not configure as the allowlist mechanism).
-
 Other optional OAuth overrides: `TEAMUP_OAUTH_SCOPE`, `TEAMUP_OAUTH_AUTHORIZE_URL`, `TEAMUP_OAUTH_TOKEN_URL`.
 
 **Authorize (browser redirect):**

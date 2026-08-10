@@ -23,14 +23,6 @@ export interface TeamUpOAuthConfig {
   scope: string;
   authorizeUrl: string;
   tokenUrl: string;
-  /**
-   * Deprecated for OAuth return-url resolution.
-   *
-   * Kept in config for compatibility with any external readers, but the
-   * broker now resolves client return URLs exclusively from per-surface
-   * allowlists.
-   */
-  successRedirectUri: string | null;
 }
 
 export interface OAuthStatePayload {
@@ -115,8 +107,6 @@ export function readTeamUpOAuthConfig(): TeamUpOAuthConfig | null {
     authorizeUrl: envOptional("TEAMUP_OAUTH_AUTHORIZE_URL") ??
       DEFAULT_AUTHORIZE_URL,
     tokenUrl: envOptional("TEAMUP_OAUTH_TOKEN_URL") ?? DEFAULT_TOKEN_URL,
-    successRedirectUri: envOptional("TEAMUP_OAUTH_SUCCESS_REDIRECT_URI") ??
-      null,
   };
 }
 
@@ -394,11 +384,9 @@ export async function exchangeTeamUpAuthorizationCode(
 }
 
 export function resolveOAuthReturnUrl(
-  config: TeamUpOAuthConfig,
   surface: string,
   requestedReturnUrl: string | null,
 ): string | null {
-  void config;
   if (requestedReturnUrl && isAllowedReturnUrl(surface, requestedReturnUrl)) {
     return requestedReturnUrl.trim();
   }

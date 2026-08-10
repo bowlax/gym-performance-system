@@ -34,7 +34,6 @@
  *                         returnUrl is ignored (callback returns JSON). Shipped
  *                         clients today use ios + memberWeb; coach/owner lists are
  *                         for when those surfaces go live.
- *   TEAMUP_OAUTH_SUCCESS_REDIRECT_URI — deprecated; unused for return-url resolution
  *   TEAMUP_OAUTH_SCOPE (optional; default read_write provider:<PROVIDER_ID>)
  *   TEAMUP_OAUTH_AUTHORIZE_URL / TEAMUP_OAUTH_TOKEN_URL (optional overrides)
  *
@@ -793,7 +792,6 @@ async function handleOAuthAuthorize(req: Request): Promise<Response> {
   // Dedicated secret — must not be the deprecating project JWT secret.
   const stateSecret = requireEnv("OAUTH_STATE_SECRET");
   const returnUrl = resolveOAuthReturnUrl(
-    config,
     params.surface,
     params.returnUrl,
   );
@@ -869,7 +867,6 @@ async function handleOAuthCallback(req: Request): Promise<Response> {
   }
 
   const returnUrl = resolveOAuthReturnUrl(
-    config,
     state.surface,
     state.returnUrl,
   );
