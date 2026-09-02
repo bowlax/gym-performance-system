@@ -394,10 +394,10 @@ export function logCaughtError(context: string, error: unknown): void {
   console.error(`${context} error value:`, String(error));
 }
 
-export function handleEdgeRequest(
+export function createEdgeRequestHandler(
   handler: (req: Request, claims: JwtClaims, authHeader: string) => Promise<Response>,
-): void {
-  Deno.serve(async (req) => {
+): (req: Request) => Promise<Response> {
+  return async (req) => {
     if (req.method === "OPTIONS") {
       return new Response("ok", { headers: corsHeaders });
     }
@@ -421,5 +421,11 @@ export function handleEdgeRequest(
       logCaughtError("edge", error);
       return jsonResponse({ error: "Internal server error" }, 500);
     }
-  });
+  };
+}
+
+export function handleEdgeRequest(
+  handler: (req: Request, claims: JwtClaims, authHeader: string) => Promise<Response>,
+): void {
+  Deno.serve(createEdgeRequestHandler(handler));
 }
