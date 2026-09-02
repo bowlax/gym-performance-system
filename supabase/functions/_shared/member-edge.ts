@@ -216,6 +216,12 @@ export function createUserClient(authHeader: string): UserClient {
   });
 }
 
+export function createServiceRoleClient(): UserClient {
+  return createClient(requireEnv("SUPABASE_URL"), requireEnv("SERVICE_ROLE_KEY"), {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
 export function todayUtcDateString(): string {
   return new Date().toISOString().slice(0, 10);
 }

@@ -53,3 +53,6 @@ verify_jwt = true
 
 [functions.owner-pb-frequency]
 verify_jwt = true
+
+[functions.owner-member-names]
+verify_jwt = true

@@ -1,0 +1,6 @@
+# Runtime secrets — never commit.
+# OWNER_BOT_KEY must be ≥ 32 chars (bot / tool Authorization: Bearer …).
+# OWNER_SESSION_SECRET must be ≥ 32 chars (seals the KV session blob).
+OWNER_BOT_KEY=
+OWNER_SESSION_SECRET=
+SUPABASE_PUBLISHABLE_KEY=

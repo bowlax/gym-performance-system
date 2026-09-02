@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gymperf-owner-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "triggers": {
+    "crons": ["0 5 * * *"]
+  },
+  "vars": {
+    "SUPABASE_URL": "https://ivrsxhuktebvypgtfoww.supabase.co"
+  },
+  // Create with: npx wrangler kv namespace create OWNER_SESSION
+  // then replace this id. Secrets: OWNER_BOT_KEY, OWNER_SESSION_SECRET,
+  // SUPABASE_PUBLISHABLE_KEY via `wrangler secret put`.
+  "kv_namespaces": [
+    {
+      "binding": "OWNER_SESSION",
+      "id": "REPLACE_AFTER_wrangler_kv_namespace_create"
+    }
+  ]
+}

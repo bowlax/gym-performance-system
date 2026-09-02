@@ -1,0 +1,17 @@
+{
+  "name": "gymperf-owner-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test src/owner-api-handlers.test.ts",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "cf-typegen": "wrangler types",
+    "seal-session": "bun src/write-sealed-session.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "latest",
+    "typescript": "^5.8.3",
+    "wrangler": "^4.118.0"
+  }
+}
