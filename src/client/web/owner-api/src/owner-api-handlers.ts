@@ -41,8 +41,15 @@ function jsonError(status: number, message: string): Response {
   });
 }
 
+/** Skip short GoTrue refresh tokens — they false-positive inside UUID/name JSON. */
+const MIN_SECRET_SUBSTRING_LENGTH = 24;
+
 function containsSecret(haystack: string, secret: string | undefined): boolean {
-  return Boolean(secret && secret.length > 0 && haystack.includes(secret));
+  return Boolean(
+    secret &&
+      secret.length >= MIN_SECRET_SUBSTRING_LENGTH &&
+      haystack.includes(secret),
+  );
 }
 
 function assertSafeBody(body: string, env: OwnerApiEnv, session: OwnerSessionData | null): void {
@@ -77,6 +84,9 @@ async function resolveOwnerAccessToken(
     return { token: existing.accessToken, session: existing };
   }
 
+  console.log(
+    `owner-api: refreshing GoTrue session placeholder=${existing.accessToken === "pending-refresh"} refresh_len=${existing.refreshToken.length} pub_len=${env.SUPABASE_PUBLISHABLE_KEY.length} pub_prefix=${env.SUPABASE_PUBLISHABLE_KEY.slice(0, 16)} pub_ws=${/\s/.test(env.SUPABASE_PUBLISHABLE_KEY)} url=${env.SUPABASE_URL}`,
+  );
   const refreshed = await refreshGoTrueSession({
     refreshToken: existing.refreshToken,
     supabaseUrl: env.SUPABASE_URL,
@@ -93,7 +103,9 @@ async function resolveOwnerAccessToken(
   if (!isValidOwnerSessionData(next)) {
     throw jsonError(503, "Owner session refresh produced an invalid session");
   }
+  console.log("owner-api: persisting rotated session to KV");
   await writeSealedOwnerSession(env.OWNER_SESSION, env.OWNER_SESSION_SECRET, next);
+  console.log("owner-api: session persisted");
   return { token: next.accessToken, session: next };
 }
 
@@ -164,6 +176,7 @@ export async function handleOwnerFetch(
   try {
     const resolved = await resolveOwnerAccessToken(env, deps);
     session = resolved.session;
+    console.log(`owner-api: proxy ${functionSlug}`);
     const response = await proxyOwnerFunction(
       env,
       functionSlug,
@@ -173,12 +186,16 @@ export async function handleOwnerFetch(
     );
     const body = await response.text();
     assertSafeBody(body, env, session);
+    console.log(`owner-api: upstream HTTP ${response.status} body_len=${body.length}`);
     return new Response(body, {
       status: response.status,
       headers: JSON_HEADERS,
     });
   } catch (error) {
     if (error instanceof Response) return error;
+    const name = error instanceof Error ? error.name : "Error";
+    const message = error instanceof Error ? error.message : "unknown";
+    console.error(`owner-api failed: ${name}: ${message}`);
     return jsonError(502, "Owner upstream failed");
   }
 }

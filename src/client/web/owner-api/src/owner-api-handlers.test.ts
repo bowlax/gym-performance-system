@@ -141,6 +141,30 @@ describe("handleOwnerFetch HTTP", () => {
     expect(response.status).toBe(405);
   });
 
+  test("short refresh token substring in upstream body is not a 502", async () => {
+    const shortRefresh = "shorttok12ab";
+    const env = await makeEnv({
+      accessToken: ACCESS_TOKEN,
+      refreshToken: shortRefresh,
+      expiresAt: 9_999_999_999,
+      issuedAt: 9_999_996_399,
+    });
+    const response = await handleOwnerFetch(ownerRequest("/api/owner/current-pbs"), env, {
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            currentPBs: [{ member_id: "m1", note: `name contains ${shortRefresh}` }],
+          }),
+          { status: 200 },
+        ),
+    });
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    expect(text).toContain(shortRefresh);
+    expect(text).not.toContain(BOT_KEY);
+    expect(text).not.toContain(ACCESS_TOKEN);
+  });
+
   test("correct bot key proxies owner-current-pbs", async () => {
     const env = await makeEnv(session(9_999_999_999));
     const response = await handleOwnerFetch(ownerRequest("/api/owner/current-pbs"), env, {
@@ -307,6 +331,64 @@ describe("refreshGoTrueSession", () => {
           { status: 200 },
         );
       },
+    });
+    expect(result).toEqual({
+      accessToken: "new-at",
+      refreshToken: "new-rt",
+      expiresAt: 4600,
+    });
+  });
+
+  test("accepts string expires_in and millisecond expires_at", async () => {
+    const stringIn = await refreshGoTrueSession({
+      refreshToken: "old",
+      supabaseUrl: "https://example.supabase.co",
+      publishableKey: "anon",
+      nowSeconds: 1000,
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            access_token: "new-at",
+            refresh_token: "new-rt",
+            expires_in: "3600",
+          }),
+          { status: 200 },
+        ),
+    });
+    expect(stringIn.expiresAt).toBe(4600);
+
+    const millis = await refreshGoTrueSession({
+      refreshToken: "old",
+      supabaseUrl: "https://example.supabase.co",
+      publishableKey: "anon",
+      nowSeconds: 1000,
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            access_token: "new-at",
+            refresh_token: "new-rt",
+            expires_at: 1_700_000_000_000,
+          }),
+          { status: 200 },
+        ),
+    });
+    expect(millis.expiresAt).toBe(1_700_000_000);
+  });
+
+  test("defaults expiry rather than dropping a rotated refresh_token", async () => {
+    const result = await refreshGoTrueSession({
+      refreshToken: "old",
+      supabaseUrl: "https://example.supabase.co",
+      publishableKey: "anon",
+      nowSeconds: 1000,
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            access_token: "new-at",
+            refresh_token: "new-rt",
+          }),
+          { status: 200 },
+        ),
     });
     expect(result).toEqual({
       accessToken: "new-at",

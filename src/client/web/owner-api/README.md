@@ -41,8 +41,12 @@ top-level `app_role=owner` (Custom Access Token Hook must be on) and that
 cd src/client/web/owner-api
 # OWNER_SESSION_SECRET in .dev.vars must match the Worker secret
 bun run seal-session
-npx wrangler kv key put lee --binding OWNER_SESSION --path .sealed-lee.txt
+npx wrangler kv key put lee --binding OWNER_SESSION --remote --path .sealed-lee.txt
 ```
+
+`seal-session` refreshes once locally so KV holds a live access token.
+Do not run the refresh-proof script between sealing and the first live
+Worker call — it rotates the refresh token.
 
 5. Deploy Edge Functions (`owner-current-pbs`, `owner-pb-frequency`,
    `owner-member-names`) and this Worker (`npm run deploy`).

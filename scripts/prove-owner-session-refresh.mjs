@@ -12,6 +12,8 @@
  */
 
 import { decodeJwt } from "jose";
+import { createClient } from "@supabase/supabase-js";
+import { randomBytes } from "node:crypto";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,10 +39,13 @@ function env() {
   const web = loadEnvFile(join(ROOT, "src/client/web/member-surface/.env.local"));
   const url = web.GYMPERF_SUPABASE_URL || sb.SUPABASE_URL;
   const anon = web.GYMPERF_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !anon) {
-    throw new Error("Missing GYMPERF_SUPABASE_URL / GYMPERF_SUPABASE_PUBLISHABLE_KEY");
+  const serviceRole = sb.SERVICE_ROLE_KEY;
+  if (!url || !anon || !serviceRole) {
+    throw new Error(
+      "Missing GYMPERF_SUPABASE_URL / GYMPERF_SUPABASE_PUBLISHABLE_KEY / SERVICE_ROLE_KEY",
+    );
   }
-  return { url, anon };
+  return { url, anon, serviceRole };
 }
 
 async function refresh(url, anon, refreshToken) {
@@ -116,10 +121,39 @@ async function main() {
     throw new Error("Expected old refresh_token to be rejected after rotation");
   }
 
-  lee.refreshToken = second.refresh_token;
-  lee.expiresAt = second.expires_at ?? lee.expiresAt;
+  // Parent reuse after the reuse window revokes the whole token family.
+  // Mint a fresh Lee session so seal-session / KV still have a usable token.
+  const { serviceRole } = env();
+  const admin = createClient(url, serviceRole, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const anonClient = createClient(url, anon, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const password = randomBytes(32).toString("base64url");
+  const updated = await admin.auth.admin.updateUserById(lee.authUserId, {
+    password,
+    email_confirm: true,
+  });
+  if (updated.error) throw updated.error;
+  const signed = await anonClient.auth.signInWithPassword({
+    email: lee.email,
+    password,
+  });
+  if (signed.error) throw signed.error;
+  const session = signed.data.session;
+  if (!session?.refresh_token) {
+    throw new Error("Recovery sign-in returned no refresh_token");
+  }
+
+  lee.refreshToken = session.refresh_token;
+  lee.expiresAt =
+    session.expires_at ??
+    Math.floor(Date.now() / 1000) + (session.expires_in ?? 3600);
   writeFileSync(STATE_PATH, `${JSON.stringify(state, null, 2)}\n`);
-  console.log("Owner session refresh: rotated twice, claims still owner, parent rejected.");
+  console.log(
+    "Owner session refresh: rotated twice, claims still owner, parent rejected, usable session restored.",
+  );
 }
 
 main().catch((error) => {
