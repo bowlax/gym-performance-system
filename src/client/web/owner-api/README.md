@@ -15,6 +15,14 @@ All `POST`. Header: `Authorization: Bearer <OWNER_BOT_KEY>`.
 | `/api/owner/current-pbs` | `owner-current-pbs` |
 | `/api/owner/pb-frequency` | `owner-pb-frequency` (JSON body passed through) |
 | `/api/owner/members` | `owner-member-names` (`{"refresh":true}` or `?refresh=1` to sync names) |
+| `/api/owner/session-activity` | PostgREST `owner_session_activity` (`member_id`, `from`, `to`) |
+| `/api/owner/set-detail` | PostgREST `owner_set_detail` (`member_id`, `exercise_id`, `from`, `to`) |
+| `/api/owner/exercise-catalogue` | PostgREST `owner_exercise_catalogue` (`name`, `category`) |
+
+Raw-fact view routes accept an optional JSON object. Omitting filters is
+gym-wide (same as unfiltered `current-pbs`); gym isolation is the owner
+JWT on the view, not a required `member_id`. Unknown keys or malformed
+UUIDs/dates return 400 and are not forwarded to PostgREST.
 
 Missing key → 401. Wrong key → 403. Unprovisioned session → 503.
 

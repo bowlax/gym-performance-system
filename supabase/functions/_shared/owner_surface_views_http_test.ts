@@ -266,7 +266,13 @@ Deno.test({
 
       throwIf(
         (await admin.from("sessions").insert([
-          { id: sessionA1, gym_id: gymA, member_id: memberA, date: "2026-07-02" },
+          {
+            id: sessionA1,
+            gym_id: gymA,
+            member_id: memberA,
+            date: "2026-07-02",
+            calories_burned: 420,
+          },
           { id: sessionA2, gym_id: gymA, member_id: memberA, date: "2026-08-15" },
           { id: sessionB1, gym_id: gymA, member_id: memberB, date: "2026-08-20" },
           {
@@ -401,6 +407,15 @@ Deno.test({
       assertEquals(sessionIds.has(sessionDeleted), false);
       assertEquals(sessionIds.has(sessionC), false);
       assertEquals(sessionsA.length, 3);
+      const sessionsById = new Map(
+        sessionsA.map((row) => [row.session_id, row]),
+      );
+      const withCalories = sessionsById.get(sessionA1);
+      const withoutCalories = sessionsById.get(sessionA2);
+      assertEquals("calories_burned" in (withCalories ?? {}), true);
+      assertEquals(withCalories?.calories_burned, 420);
+      assertEquals("calories_burned" in (withoutCalories ?? {}), true);
+      assertEquals(withoutCalories?.calories_burned, null);
       for (const row of sessionsA) {
         assertEquals(row.gym_id, gymA);
         assertEquals(typeof row.member_id, "string");

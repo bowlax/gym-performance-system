@@ -29,16 +29,15 @@ async function latestMigrationSql(): Promise<string> {
 }
 
 function extractCreateView(sql: string, viewName: string): string {
-  const match = sql.match(
-    new RegExp(
-      `create view public\\.${viewName}[\\s\\S]*?;`,
-      "i",
-    ),
+  const pattern = new RegExp(
+    `create(?: or replace)? view public\\.${viewName}[\\s\\S]*?;`,
+    "gi",
   );
-  if (!match) {
+  const matches = [...sql.matchAll(pattern)];
+  if (matches.length === 0) {
     throw new Error(`No create view public.${viewName} found in migrations`);
   }
-  return match[0];
+  return matches[matches.length - 1][0];
 }
 
 function grantsFor(sql: string, viewName: string): string[] {
@@ -104,4 +103,7 @@ Deno.test("owner raw-fact views are security_invoker and owner-gated via grants"
 
   assertEquals(/create function .*owner-member-exercise-history/i.test(sql), false);
   assertEquals(/goteamup\.com/i.test(sql), false);
+
+  const sessionView = extractCreateView(sql, "owner_session_activity");
+  assertStringIncludes(sessionView, "s.calories_burned");
 });

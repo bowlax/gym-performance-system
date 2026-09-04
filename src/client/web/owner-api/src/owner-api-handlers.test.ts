@@ -277,6 +277,169 @@ describe("handleOwnerFetch HTTP", () => {
   });
 });
 
+const VIEW_PATHS = [
+  {
+    path: "/api/owner/session-activity",
+    view: "owner_session_activity",
+    gymWide: [
+      { session_id: "s1", member_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", session_date: "2026-07-01", calories_burned: 420 },
+      { session_id: "s2", member_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", session_date: "2026-07-02", calories_burned: null },
+    ],
+    filters: {
+      member_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      from: "2026-07-01",
+      to: "2026-07-31",
+    },
+    expectQuery: [
+      "member_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "session_date=gte.2026-07-01",
+      "session_date=lte.2026-07-31",
+    ],
+    filtered: [{ session_id: "s1", member_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }],
+  },
+  {
+    path: "/api/owner/set-detail",
+    view: "owner_set_detail",
+    gymWide: [
+      { set_id: "st1", member_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", exercise_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" },
+      { set_id: "st2", member_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", exercise_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" },
+    ],
+    filters: {
+      member_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      exercise_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      from: "2026-07-01",
+      to: "2026-09-30",
+    },
+    expectQuery: [
+      "member_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "exercise_id=eq.cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "session_date=gte.2026-07-01",
+      "session_date=lte.2026-09-30",
+    ],
+    filtered: [{ set_id: "st1", member_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }],
+  },
+  {
+    path: "/api/owner/exercise-catalogue",
+    view: "owner_exercise_catalogue",
+    gymWide: [
+      { exercise_id: "e1", name: "Bench Press", category: "pbExercise" },
+      { exercise_id: "e2", name: "Back Squat", category: "pbExercise" },
+    ],
+    filters: { name: "Bench", category: "pbExercise" },
+    expectQuery: ["name=ilike.*Bench*", "category=eq.pbExercise"],
+    filtered: [{ exercise_id: "e1", name: "Bench Press", category: "pbExercise" }],
+  },
+] as const;
+
+describe("handleOwnerFetch HTTP raw-fact views", () => {
+  for (const spec of VIEW_PATHS) {
+    test(`${spec.path} missing bot key -> 401`, async () => {
+      const env = await makeEnv(session(9_999_999_999));
+      const response = await handleOwnerFetch(
+        new Request(`https://x${spec.path}`, { method: "POST" }),
+        env,
+      );
+      expect(response.status).toBe(401);
+      expect(JSON.parse(await response.text())).toEqual({ error: "Unauthorized" });
+    });
+
+    test(`${spec.path} wrong bot key -> 403`, async () => {
+      const env = await makeEnv(session(9_999_999_999));
+      const response = await handleOwnerFetch(
+        new Request(`https://x${spec.path}`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${"z".repeat(40)}` },
+        }),
+        env,
+      );
+      expect(response.status).toBe(403);
+      expect(JSON.parse(await response.text())).toEqual({ error: "Forbidden" });
+    });
+
+    test(`${spec.path} correct bot key, no filters -> gym-wide via owner session GET`, async () => {
+      const env = await makeEnv(session(9_999_999_999));
+      let captured = "";
+      let capturedAuth = "";
+      let capturedMethod = "";
+      const response = await handleOwnerFetch(ownerRequest(spec.path, { body: "{}" }), env, {
+        fetchImpl: async (input, init) => {
+          captured = String(input);
+          capturedAuth = headerAuth(init) ?? "";
+          capturedMethod = init?.method ?? "GET";
+          expect(captured).not.toContain("/functions/v1/");
+          return new Response(JSON.stringify(spec.gymWide), { status: 200 });
+        },
+      });
+      expect(response.status).toBe(200);
+      expect(capturedMethod).toBe("GET");
+      expect(captured).toContain(`/rest/v1/${spec.view}`);
+      expect(captured).not.toContain("member_id=eq.");
+      expect(capturedAuth).toBe(`Bearer ${ACCESS_TOKEN}`);
+      const body = await response.json();
+      expect(body).toEqual(spec.gymWide);
+      expect(Array.isArray(body)).toBe(true);
+      expect((body as unknown[]).length).toBe(spec.gymWide.length);
+      expect(JSON.stringify(body)).not.toContain(BOT_KEY);
+      expect(JSON.stringify(body)).not.toContain(ACCESS_TOKEN);
+    });
+
+    test(`${spec.path} correct bot key, with filters -> scoped PostgREST query`, async () => {
+      const env = await makeEnv(session(9_999_999_999));
+      let captured = "";
+      const response = await handleOwnerFetch(
+        ownerRequest(spec.path, { body: JSON.stringify(spec.filters) }),
+        env,
+        {
+          fetchImpl: async (input, init) => {
+            captured = decodeURIComponent(String(input));
+            expect(headerAuth(init)).toBe(`Bearer ${ACCESS_TOKEN}`);
+            return new Response(JSON.stringify(spec.filtered), { status: 200 });
+          },
+        },
+      );
+      expect(response.status).toBe(200);
+      expect(captured).toContain(`/rest/v1/${spec.view}`);
+      for (const fragment of spec.expectQuery) {
+        expect(captured).toContain(fragment);
+      }
+      expect(await response.json()).toEqual(spec.filtered);
+    });
+  }
+
+  test("unknown filter key is 400 and does not call PostgREST", async () => {
+    const env = await makeEnv(session(9_999_999_999));
+    let called = false;
+    const response = await handleOwnerFetch(
+      ownerRequest("/api/owner/session-activity", {
+        body: JSON.stringify({ gym_id: "0abc9301-b048-40f5-8bdc-9bb389916b59" }),
+      }),
+      env,
+      {
+        fetchImpl: async () => {
+          called = true;
+          return new Response("[]", { status: 200 });
+        },
+      },
+    );
+    expect(response.status).toBe(400);
+    expect(called).toBe(false);
+    expect(JSON.parse(await response.text())).toEqual({ error: "Unknown filter 'gym_id'" });
+  });
+
+  test("malformed member_id is 400", async () => {
+    const env = await makeEnv(session(9_999_999_999));
+    const response = await handleOwnerFetch(
+      ownerRequest("/api/owner/set-detail", {
+        body: JSON.stringify({ member_id: "not-a-uuid" }),
+      }),
+      env,
+      { fetchImpl: async () => new Response("[]", { status: 200 }) },
+    );
+    expect(response.status).toBe(400);
+    expect(JSON.parse(await response.text())).toEqual({ error: "member_id must be a UUID" });
+  });
+});
+
 describe("handleOwnerScheduled", () => {
   test("calls member-names refresh with the stored owner access token", async () => {
     let called = "";

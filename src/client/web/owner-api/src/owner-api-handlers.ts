@@ -1,6 +1,11 @@
 import { authorizeBotKey } from "./bot-auth";
 import { refreshGoTrueSession } from "./gotrue-refresh";
 import {
+  parseOwnerViewQuery,
+  VIEW_ROUTES,
+  type OwnerViewRoute,
+} from "./owner-view-filters";
+import {
   isValidOwnerSessionData,
   readSealedOwnerSession,
   sessionNeedsRefresh,
@@ -149,6 +154,42 @@ export async function proxyOwnerFunction(
   });
 }
 
+export async function proxyOwnerView(
+  env: OwnerApiEnv,
+  route: OwnerViewRoute,
+  accessToken: string,
+  request: Request,
+  deps: OwnerApiDeps,
+): Promise<Response> {
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  const bodyText = request.method === "POST" ? await request.text() : "";
+  const parsed = parseOwnerViewQuery(route, bodyText);
+  if (!parsed.ok) {
+    return jsonError(400, parsed.error);
+  }
+
+  const target = new URL(
+    `rest/v1/${parsed.view}`,
+    env.SUPABASE_URL.endsWith("/") ? env.SUPABASE_URL : `${env.SUPABASE_URL}/`,
+  );
+  target.search = parsed.search.toString();
+
+  const upstream = await fetchImpl(target.toString(), {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      apikey: env.SUPABASE_PUBLISHABLE_KEY,
+      Accept: "application/json",
+    },
+  });
+
+  const text = await upstream.text();
+  return new Response(text, {
+    status: upstream.status,
+    headers: JSON_HEADERS,
+  });
+}
+
 export async function handleOwnerFetch(
   request: Request,
   env: OwnerApiEnv,
@@ -161,7 +202,8 @@ export async function handleOwnerFetch(
   }
 
   const functionSlug = ROUTES[url.pathname];
-  if (!functionSlug) {
+  const viewRoute = VIEW_ROUTES[url.pathname];
+  if (!functionSlug && !viewRoute) {
     return jsonError(404, "Not found");
   }
   if (request.method !== "POST") {
@@ -176,14 +218,16 @@ export async function handleOwnerFetch(
   try {
     const resolved = await resolveOwnerAccessToken(env, deps);
     session = resolved.session;
-    console.log(`owner-api: proxy ${functionSlug}`);
-    const response = await proxyOwnerFunction(
-      env,
-      functionSlug,
-      resolved.token,
-      request,
-      deps,
-    );
+    console.log(`owner-api: proxy ${functionSlug ?? viewRoute?.view}`);
+    const response = viewRoute
+      ? await proxyOwnerView(env, viewRoute, resolved.token, request, deps)
+      : await proxyOwnerFunction(
+          env,
+          functionSlug!,
+          resolved.token,
+          request,
+          deps,
+        );
     const body = await response.text();
     assertSafeBody(body, env, session);
     console.log(`owner-api: upstream HTTP ${response.status} body_len=${body.length}`);
