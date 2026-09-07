@@ -50,14 +50,23 @@ export async function fetchMemberStaleness(
   };
 }
 
+function optionalTimestamp(value: unknown): string | null {
+  return typeof value === "string" && value !== "" ? value : null;
+}
+
+export type ExerciseResetLine = {
+  resetAt: string;
+  resetOccurredAt: string | null;
+};
+
 export async function fetchExerciseResetAt(
   supabase: UserClient,
   memberId: string,
   exerciseId: string,
-): Promise<string | null> {
+): Promise<ExerciseResetLine | null> {
   const { data, error } = await supabase
     .from("exercise_resets")
-    .select("reset_at")
+    .select("reset_at, updated_at")
     .eq("member_id", memberId)
     .eq("exercise_id", exerciseId)
     .is("deleted_at", null)
@@ -67,13 +76,20 @@ export async function fetchExerciseResetAt(
     throw error;
   }
 
-  const resetAt = (data as { reset_at?: string } | null)?.reset_at;
-  return typeof resetAt === "string" ? resetAt : null;
+  const row = data as { reset_at?: string; updated_at?: string } | null;
+  if (typeof row?.reset_at !== "string") {
+    return null;
+  }
+  return {
+    resetAt: row.reset_at,
+    resetOccurredAt: optionalTimestamp(row.updated_at),
+  };
 }
 
 interface SetDerivationRow {
   id: string;
   session_date: string;
+  created_at: string | null;
   weight: number | null;
   reps: number | null;
   time_seconds: number | null;
@@ -88,7 +104,7 @@ export async function fetchExerciseSetsForDerivation(
   let query = supabase
     .from("exercise_entries")
     .select(
-      "session:sessions!inner(date, member_id), sets(id, weight, reps, time_seconds, distance, deleted_at)",
+      "session:sessions!inner(date, member_id), sets(id, weight, reps, time_seconds, distance, deleted_at, created_at)",
     )
     .eq("exercise_id", exerciseId)
     .is("deleted_at", null);
@@ -120,6 +136,7 @@ export async function fetchExerciseSetsForDerivation(
       rows.push({
         id: set.id,
         session_date: sessionDate,
+        created_at: optionalTimestamp(set.created_at),
         weight: typeof set.weight === "number" ? set.weight : null,
         reps: typeof set.reps === "number" ? set.reps : null,
         time_seconds: typeof set.time_seconds === "number" ? set.time_seconds : null,
@@ -139,7 +156,7 @@ export async function fetchManualPBsForDerivation(
   const { data, error } = await supabase
     .from("personal_bests")
     .select(
-      "id, gym_id, member_id, exercise_id, set_id, weight, reps, time_seconds, distance, achieved_at, entry_type",
+      "id, gym_id, member_id, exercise_id, set_id, weight, reps, time_seconds, distance, achieved_at, entry_type, created_at",
     )
     .eq("member_id", memberId)
     .eq("exercise_id", exerciseId)
@@ -163,6 +180,7 @@ export function recordsFromStore(
     records.push({
       id: set.id,
       achievedAt: set.session_date,
+      occurredAt: set.created_at,
       weight: set.weight,
       reps: set.reps,
       time: set.time_seconds,
@@ -175,6 +193,7 @@ export function recordsFromStore(
     records.push({
       id: pb.id,
       achievedAt: pb.achieved_at,
+      occurredAt: pb.created_at ?? null,
       weight: pb.weight,
       reps: pb.reps,
       time: pb.time_seconds,
@@ -199,7 +218,7 @@ export async function deriveCurrentPBState(
     return { currentPB: null, staleness: { enabled: false, periods: 2, unit: "quarters" }, resetAt: null };
   }
 
-  const [staleness, resetAt, sets, manuals] = await Promise.all([
+  const [staleness, resetLine, sets, manuals] = await Promise.all([
     fetchMemberStaleness(supabase, memberId),
     fetchExerciseResetAt(supabase, memberId, exercise.id),
     fetchExerciseSetsForDerivation(supabase, exercise.id, memberId),
@@ -211,11 +230,12 @@ export async function deriveCurrentPBState(
     rule: exercise.pb_rule as PBRule,
     records,
     staleness,
-    resetAt,
+    resetAt: resetLine?.resetAt ?? null,
+    resetOccurredAt: resetLine?.resetOccurredAt ?? null,
     evaluatedAt: todayUtcDateString(),
   });
 
-  return { currentPB: derived.currentPB, staleness, resetAt };
+  return { currentPB: derived.currentPB, staleness, resetAt: resetLine?.resetAt ?? null };
 }
 
 export function personalBestToEvaluationState(
@@ -338,7 +358,7 @@ interface GymDerivationSources {
   members: GymMemberSource[];
   exercises: GymExerciseSource[];
   recordsByMemberExercise: Map<string, DerivationRecord[]>;
-  resetAtByMemberExercise: Map<string, string>;
+  resetLineByMemberExercise: Map<string, ExerciseResetLine>;
 }
 
 async function fetchGymDerivationSources(
@@ -361,19 +381,19 @@ async function fetchGymDerivationSources(
       supabase
         .from("exercise_entries")
         .select(
-          "exercise_id, session:sessions!inner(date, member_id), sets(id, weight, reps, time_seconds, distance, deleted_at)",
+          "exercise_id, session:sessions!inner(date, member_id), sets(id, weight, reps, time_seconds, distance, deleted_at, created_at)",
         )
         .is("deleted_at", null),
       supabase
         .from("personal_bests")
         .select(
-          "id, member_id, exercise_id, weight, reps, time_seconds, distance, achieved_at, entry_type",
+          "id, member_id, exercise_id, weight, reps, time_seconds, distance, achieved_at, entry_type, created_at",
         )
         .eq("entry_type", MANUAL_ENTRY)
         .is("deleted_at", null),
       supabase
         .from("exercise_resets")
-        .select("member_id, exercise_id, reset_at")
+        .select("member_id, exercise_id, reset_at, updated_at")
         .is("deleted_at", null),
     ]);
 
@@ -447,6 +467,7 @@ async function fetchGymDerivationSources(
       addRecord(memberId, exerciseId, {
         id: set.id,
         achievedAt: sessionDate,
+        occurredAt: optionalTimestamp(set.created_at),
         weight: typeof set.weight === "number" ? set.weight : null,
         reps: typeof set.reps === "number" ? set.reps : null,
         time: typeof set.time_seconds === "number" ? set.time_seconds : null,
@@ -464,6 +485,7 @@ async function fetchGymDerivationSources(
     addRecord(record.member_id, record.exercise_id, {
       id: record.id,
       achievedAt: typeof record.achieved_at === "string" ? record.achieved_at : null,
+      occurredAt: optionalTimestamp(record.created_at),
       weight: typeof record.weight === "number" ? record.weight : null,
       reps: typeof record.reps === "number" ? record.reps : null,
       time: typeof record.time_seconds === "number" ? record.time_seconds : null,
@@ -472,15 +494,18 @@ async function fetchGymDerivationSources(
     });
   }
 
-  const resetAtByMemberExercise = new Map<string, string>();
+  const resetLineByMemberExercise = new Map<string, ExerciseResetLine>();
   for (const row of resetsResult.data ?? []) {
     const record = row as Record<string, unknown>;
     if (typeof record.member_id !== "string") continue;
     if (typeof record.exercise_id !== "string") continue;
     if (typeof record.reset_at !== "string") continue;
-    resetAtByMemberExercise.set(
+    resetLineByMemberExercise.set(
       `${record.member_id}:${record.exercise_id}`,
-      record.reset_at,
+      {
+        resetAt: record.reset_at,
+        resetOccurredAt: optionalTimestamp(record.updated_at),
+      },
     );
   }
 
@@ -488,7 +513,7 @@ async function fetchGymDerivationSources(
     members,
     exercises,
     recordsByMemberExercise,
-    resetAtByMemberExercise,
+    resetLineByMemberExercise,
   };
 }
 
@@ -507,11 +532,13 @@ export async function deriveGymCurrentPBs(
     for (const exercise of sources.exercises) {
       const key = `${member.id}:${exercise.id}`;
       const records = sources.recordsByMemberExercise.get(key) ?? [];
+      const reset = sources.resetLineByMemberExercise.get(key);
       const { currentPB } = derivePBs({
         rule: exercise.pb_rule,
         records,
         staleness: member.staleness,
-        resetAt: sources.resetAtByMemberExercise.get(key) ?? null,
+        resetAt: reset?.resetAt ?? null,
+        resetOccurredAt: reset?.resetOccurredAt ?? null,
         evaluatedAt,
       });
       if (!currentPB) continue;

@@ -146,6 +146,7 @@ export async function logSession(
       manualPBs: bundleBefore.manualPBsByExercise.get(ex.exerciseId) ?? [],
       staleness: bundleBefore.staleness,
       resetAt: bundleBefore.resetAtByExercise.get(ex.exerciseId) ?? null,
+      resetOccurredAt: bundleBefore.resetOccurredAtByExercise.get(ex.exerciseId) ?? null,
     });
     beforeCurrentByExercise.set(ex.exerciseId, before.currentPB);
   }
@@ -197,6 +198,7 @@ export async function logSession(
       manualPBs: bundleAfter.manualPBsByExercise.get(entry.exerciseId) ?? [],
       staleness: bundleAfter.staleness,
       resetAt: bundleAfter.resetAtByExercise.get(entry.exerciseId) ?? null,
+      resetOccurredAt: bundleAfter.resetOccurredAtByExercise.get(entry.exerciseId) ?? null,
     });
 
     const logged = input.exercises.find((ex) => ex.exerciseId === entry.exerciseId);

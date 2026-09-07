@@ -72,6 +72,7 @@ enum PBReadDerivation {
                         PBDerivation.Record(
                             id: set.id.uuidString,
                             achievedAt: PBDerivation.formatISODate(session.date),
+                            occurredAt: PBDerivation.formatISOTimestamp(set.createdAt),
                             weight: set.weight,
                             reps: set.reps,
                             time: set.time,
@@ -90,6 +91,7 @@ enum PBReadDerivation {
                 PBDerivation.Record(
                     id: pb.id.uuidString,
                     achievedAt: pb.achievedAt.map(PBDerivation.formatISODate),
+                    occurredAt: PBDerivation.formatISOTimestamp(pb.createdAt),
                     weight: pb.weight,
                     reps: pb.reps,
                     time: pb.time,
@@ -102,11 +104,24 @@ enum PBReadDerivation {
         return records
     }
 
+    struct ResetLine {
+        var resetAt: String
+        var occurredAt: String
+    }
+
     static func resetAtISO(
         memberId: UUID,
         exerciseId: UUID,
         in context: ModelContext
     ) throws -> String? {
+        try resetLine(memberId: memberId, exerciseId: exerciseId, in: context)?.resetAt
+    }
+
+    static func resetLine(
+        memberId: UUID,
+        exerciseId: UUID,
+        in context: ModelContext
+    ) throws -> ResetLine? {
         let descriptor = FetchDescriptor<ExerciseResetModel>(
             predicate: #Predicate {
                 $0.memberId == memberId && $0.exerciseId == exerciseId
@@ -116,7 +131,10 @@ enum PBReadDerivation {
               row.deletedAt == nil else {
             return nil
         }
-        return PBDerivation.formatISODate(row.resetAt)
+        return ResetLine(
+            resetAt: PBDerivation.formatISODate(row.resetAt),
+            occurredAt: PBDerivation.formatISOTimestamp(row.updatedAt)
+        )
     }
 
     static func resetAtDate(
@@ -154,7 +172,7 @@ enum PBReadDerivation {
             exerciseId: exercise.id,
             performanceDataAccess: performanceDataAccess
         )
-        let resetISO = try resetAtISO(
+        let reset = try resetLine(
             memberId: memberId,
             exerciseId: exercise.id,
             in: modelContext
@@ -163,8 +181,9 @@ enum PBReadDerivation {
             rule: rule,
             records: records,
             staleness: staleness,
-            resetAt: resetISO,
-            evaluatedAt: evaluatedAt
+            resetAt: reset?.resetAt,
+            evaluatedAt: evaluatedAt,
+            resetOccurredAt: reset?.occurredAt
         )
         let badges = Set(
             PBDerivation.badgeIds(rule: rule, records: records)
@@ -178,7 +197,7 @@ enum PBReadDerivation {
                 personalBest(from: $0, memberId: memberId, exerciseId: exercise.id)
             },
             badgeIds: badges,
-            resetAt: resetISO.map(PBDerivation.parseISODate),
+            resetAt: reset.map { PBDerivation.parseISODate($0.resetAt) },
             stalenessEnabled: memberSetting.enabled
         )
     }
@@ -228,7 +247,7 @@ enum PBReadDerivation {
         let resetsDescriptor = FetchDescriptor<ExerciseResetModel>(
             predicate: #Predicate { $0.memberId == memberId }
         )
-        let resetISOByExercise: [UUID: String] = Dictionary(
+        let resetByExercise: [UUID: ResetLine] = Dictionary(
             uniqueKeysWithValues: try contextFetchResets(
                 descriptor: resetsDescriptor,
                 context: modelContext
@@ -248,6 +267,7 @@ enum PBReadDerivation {
                         PBDerivation.Record(
                             id: set.id.uuidString,
                             achievedAt: PBDerivation.formatISODate(batch.sessionDate),
+                            occurredAt: PBDerivation.formatISOTimestamp(set.createdAt),
                             weight: set.weight,
                             reps: set.reps,
                             time: set.time,
@@ -262,6 +282,7 @@ enum PBReadDerivation {
                     PBDerivation.Record(
                         id: pb.id.uuidString,
                         achievedAt: pb.achievedAt.map(PBDerivation.formatISODate),
+                        occurredAt: PBDerivation.formatISOTimestamp(pb.createdAt),
                         weight: pb.weight,
                         reps: pb.reps,
                         time: pb.time,
@@ -271,12 +292,14 @@ enum PBReadDerivation {
                 )
             }
 
+            let reset = resetByExercise[exercise.id]
             let derived = PBDerivation.derivePBs(
                 rule: rule,
                 records: records,
                 staleness: staleness,
-                resetAt: resetISOByExercise[exercise.id],
-                evaluatedAt: evaluatedAt
+                resetAt: reset?.resetAt,
+                evaluatedAt: evaluatedAt,
+                resetOccurredAt: reset?.occurredAt
             )
             if let current = derived.currentPB {
                 results.append(
@@ -312,7 +335,7 @@ enum PBReadDerivation {
                 (record.entryKind == "set" && excludingSetIds.contains(UUID(uuidString: record.id) ?? UUID()))
         }
 
-        let resetISO = try resetAtISO(
+        let reset = try resetLine(
             memberId: memberId,
             exerciseId: exercise.id,
             in: modelContext
@@ -321,8 +344,9 @@ enum PBReadDerivation {
             rule: rule,
             records: records,
             staleness: staleness,
-            resetAt: resetISO,
-            evaluatedAt: evaluatedAt
+            resetAt: reset?.resetAt,
+            evaluatedAt: evaluatedAt,
+            resetOccurredAt: reset?.occurredAt
         )
         return derived.currentPB.map {
             personalBest(from: $0, memberId: memberId, exerciseId: exercise.id)
@@ -332,9 +356,17 @@ enum PBReadDerivation {
     private static func contextFetchResets(
         descriptor: FetchDescriptor<ExerciseResetModel>,
         context: ModelContext
-    ) throws -> [(UUID, String)] {
+    ) throws -> [(UUID, ResetLine)] {
         try context.fetch(descriptor)
             .filter { $0.deletedAt == nil }
-            .map { ($0.exerciseId, PBDerivation.formatISODate($0.resetAt)) }
+            .map {
+                (
+                    $0.exerciseId,
+                    ResetLine(
+                        resetAt: PBDerivation.formatISODate($0.resetAt),
+                        occurredAt: PBDerivation.formatISOTimestamp($0.updatedAt)
+                    )
+                )
+            }
     }
 }

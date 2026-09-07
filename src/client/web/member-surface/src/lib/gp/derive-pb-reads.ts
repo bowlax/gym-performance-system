@@ -16,6 +16,7 @@ export interface DerivedSetRow {
   exercise_id: string;
   session_id: string;
   session_date: string;
+  created_at: string | null;
   weight: number | null;
   reps: number | null;
   time_seconds: number | null;
@@ -31,6 +32,7 @@ export interface DerivedManualPBRow {
   time_seconds: number | null;
   distance: number | null;
   achieved_at: string | null;
+  created_at: string | null;
   entry_type: string | null;
 }
 
@@ -56,6 +58,7 @@ export interface BoardDerivationBundle {
   setsByExercise: Map<string, DerivedSetRow[]>;
   manualPBsByExercise: Map<string, DerivedManualPBRow[]>;
   resetAtByExercise: Map<string, string>;
+  resetOccurredAtByExercise: Map<string, string>;
 }
 
 function mapStalenessUnit(dbUnit: string): StalenessSetting["unit"] {
@@ -92,19 +95,32 @@ export async function fetchMemberStaleness(
   return stalenessFromMemberRow(data as Record<string, unknown> | null);
 }
 
+function optionalTimestamp(value: unknown): string | null {
+  return typeof value === "string" && value !== "" ? value : null;
+}
+
+export type ExerciseResetLine = {
+  resetAt: string;
+  resetOccurredAt: string | null;
+};
+
 export async function fetchExerciseResetAt(
   supabase: SupabaseClient,
   exerciseId: string,
-): Promise<string | null> {
+): Promise<ExerciseResetLine | null> {
   const { data, error } = await supabase
     .from("exercise_resets")
-    .select("reset_at")
+    .select("reset_at, updated_at")
     .eq("exercise_id", exerciseId)
     .is("deleted_at", null)
     .maybeSingle();
   if (error) throw new Error(error.message);
   const resetAt = data?.reset_at;
-  return typeof resetAt === "string" ? resetAt : null;
+  if (typeof resetAt !== "string") return null;
+  return {
+    resetAt,
+    resetOccurredAt: optionalTimestamp(data?.updated_at),
+  };
 }
 
 export async function fetchExerciseSetsForDerivation(
@@ -114,7 +130,7 @@ export async function fetchExerciseSetsForDerivation(
   const { data, error } = await supabase
     .from("exercise_entries")
     .select(
-      "exercise_id, session:sessions!inner(id, date), sets(id, weight, reps, time_seconds, distance, deleted_at)",
+      "exercise_id, session:sessions!inner(id, date), sets(id, weight, reps, time_seconds, distance, deleted_at, created_at)",
     )
     .eq("exercise_id", exerciseId)
     .is("deleted_at", null);
@@ -139,6 +155,7 @@ export async function fetchExerciseSetsForDerivation(
       time_seconds: number | null;
       distance: number | null;
       deleted_at?: string | null;
+      created_at?: string | null;
     }>) {
       if (set.deleted_at != null) continue;
       rows.push({
@@ -146,6 +163,7 @@ export async function fetchExerciseSetsForDerivation(
         exercise_id,
         session_id: sessionId,
         session_date: sessionDate,
+        created_at: optionalTimestamp(set.created_at),
         weight: set.weight,
         reps: set.reps,
         time_seconds: set.time_seconds,
@@ -163,7 +181,7 @@ export async function fetchManualPBsForDerivation(
   let query = supabase
     .from("personal_bests")
     .select(
-      "id, exercise_id, set_id, weight, reps, time_seconds, distance, achieved_at, entry_type",
+      "id, exercise_id, set_id, weight, reps, time_seconds, distance, achieved_at, entry_type, created_at",
     )
     .neq("entry_type", SESSION_DERIVED)
     .is("deleted_at", null);
@@ -186,6 +204,7 @@ export async function fetchManualPBsForDerivation(
     distance: typeof row.distance === "number" ? row.distance : null,
     achieved_at:
       typeof row.achieved_at === "string" ? row.achieved_at : null,
+    created_at: optionalTimestamp(row.created_at),
     entry_type:
       typeof row.entry_type === "string" ? row.entry_type : null,
   }));
@@ -199,13 +218,13 @@ export async function fetchBoardDerivationBundle(
     supabase
       .from("exercise_entries")
       .select(
-        "exercise_id, session:sessions!inner(id, date), sets(id, weight, reps, time_seconds, distance, deleted_at)",
+        "exercise_id, session:sessions!inner(id, date), sets(id, weight, reps, time_seconds, distance, deleted_at, created_at)",
       )
       .is("deleted_at", null),
     fetchManualPBsForDerivation(supabase),
     supabase
       .from("exercise_resets")
-      .select("exercise_id, reset_at")
+      .select("exercise_id, reset_at, updated_at")
       .is("deleted_at", null),
   ]);
 
@@ -232,6 +251,7 @@ export async function fetchBoardDerivationBundle(
       time_seconds: number | null;
       distance: number | null;
       deleted_at?: string | null;
+      created_at?: string | null;
     }>) {
       if (set.deleted_at != null) continue;
       bucket.push({
@@ -239,6 +259,7 @@ export async function fetchBoardDerivationBundle(
         exercise_id: exerciseId,
         session_id: sessionId,
         session_date: sessionDate,
+        created_at: optionalTimestamp(set.created_at),
         weight: set.weight,
         reps: set.reps,
         time_seconds: set.time_seconds,
@@ -256,15 +277,24 @@ export async function fetchBoardDerivationBundle(
   }
 
   const resetAtByExercise = new Map<string, string>();
+  const resetOccurredAtByExercise = new Map<string, string>();
   for (const row of resetsResult.data ?? []) {
     const exerciseId = row.exercise_id;
     const resetAt = row.reset_at;
     if (typeof exerciseId === "string" && typeof resetAt === "string") {
       resetAtByExercise.set(exerciseId, resetAt);
+      const occurredAt = optionalTimestamp(row.updated_at);
+      if (occurredAt) resetOccurredAtByExercise.set(exerciseId, occurredAt);
     }
   }
 
-  return { staleness, setsByExercise, manualPBsByExercise, resetAtByExercise };
+  return {
+    staleness,
+    setsByExercise,
+    manualPBsByExercise,
+    resetAtByExercise,
+    resetOccurredAtByExercise,
+  };
 }
 
 export function buildDerivationRecords(params: {
@@ -278,6 +308,7 @@ export function buildDerivationRecords(params: {
     records.push({
       id: set.id,
       achievedAt: set.session_date,
+      occurredAt: set.created_at,
       weight: set.weight,
       reps: set.reps,
       time: set.time_seconds,
@@ -292,6 +323,7 @@ export function buildDerivationRecords(params: {
     records.push({
       id: pb.id,
       achievedAt: pb.achieved_at,
+      occurredAt: pb.created_at,
       weight: pb.weight,
       reps: pb.reps,
       time: pb.time_seconds,
@@ -371,6 +403,7 @@ export function deriveExerciseReadState(params: {
   manualPBs: DerivedManualPBRow[];
   staleness: StalenessSetting;
   resetAt: string | null;
+  resetOccurredAt?: string | null;
   evaluatedAt?: string;
 }): ExerciseDerivationReadState {
   const rule = params.pbRule as PBRule | null | undefined;
@@ -396,6 +429,7 @@ export function deriveExerciseReadState(params: {
     records,
     staleness: params.staleness,
     resetAt: params.resetAt,
+    resetOccurredAt: params.resetOccurredAt ?? null,
     evaluatedAt,
   });
 

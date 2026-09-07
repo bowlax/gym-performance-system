@@ -14,7 +14,6 @@ import {
   type ExerciseResetRow,
 } from "../_shared/member-edge.ts";
 import {
-  fetchExerciseResetAt,
   laterResetDate,
 } from "../_shared/edge-pb-reads.ts";
 

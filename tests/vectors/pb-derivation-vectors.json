@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "issue": 28,
-  "purpose": "Current PB and lifetime PB selection over sets + manual entries. Current = best record with achievedAt strictly after resetAt (when set) AND fresh. Lifetime = best record overall — no reset filter, no freshness filter. Undated manuals (achievedAt null) are NEVER fresh — regardless of the staleness setting — so they are lifetime-only; current is a claim about now, which an undated entry cannot support even when time-filtering is off. Reset does not affect undated records for lifetime.",
+  "purpose": "Current PB and lifetime PB selection over sets + manual entries. Current = best record after the reset line (when set) AND fresh. After the line is calendar-day exclusive (`achievedAt > resetAt`). When the calendar days are equal, a same-day timestamp tie-break applies: record.occurredAt (created_at) > resetOccurredAt (exercise_resets.updated_at) counts as after the line; missing timestamps keep equal-day excluded (OQ-D2 / TC-D7). Timestamps are never used when the calendar days differ, and never used in staleness/period math or equal-value latest-wins. Lifetime = best record overall — no reset filter, no freshness filter. Undated manuals (achievedAt null) are NEVER fresh — regardless of the staleness setting — so they are lifetime-only; current is a claim about now, which an undated entry cannot support even when time-filtering is off. Reset does not affect undated records for lifetime.",
   "openQuestions": [
     {
       "id": "OQ-D2",
@@ -353,6 +353,44 @@
       "expectedCurrentId": null,
       "expectedLifetimeId": "rec-undated",
       "notes": "Decision 2026-07-21: undated is never fresh regardless of staleness. Current is a claim about now; an undated entry cannot support that claim even when time-filtering is off. Lifetime is the only place it appears. Closes the previously untested staleness-OFF interaction (TC-D10 covered staleness ON only)."
+    },
+    {
+      "id": "TC-D21",
+      "description": "Same calendar day as reset, PB after reset in real time: current is the post-reset PB",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": false, "periods": 2, "unit": "quarters" },
+      "resetAt": "2026-09-07",
+      "resetOccurredAt": "2026-09-07T10:00:00Z",
+      "evaluatedAt": "2026-09-07",
+      "records": [
+        { "id": "rec-pre", "achievedAt": "2026-08-01", "weight": 100, "reps": 5, "entryKind": "session" },
+        { "id": "rec-same-day-after", "achievedAt": "2026-09-07", "occurredAt": "2026-09-07T14:00:00Z", "weight": 110, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedCurrentId": "rec-same-day-after",
+      "expectedLifetimeId": "rec-same-day-after",
+      "notes": "Same-day timestamp tie-break: calendar dates equal, record created_at > reset updated_at → current."
+    },
+    {
+      "id": "TC-D22",
+      "description": "Same calendar day as reset, PB before reset in real time: current excluded (TC-D7 reaffirmed with timestamps)",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": false, "periods": 2, "unit": "quarters" },
+      "resetAt": "2026-09-07",
+      "resetOccurredAt": "2026-09-07T14:00:00Z",
+      "evaluatedAt": "2026-09-07",
+      "records": [
+        { "id": "rec-pre", "achievedAt": "2026-08-01", "weight": 100, "reps": 5, "entryKind": "session" },
+        { "id": "rec-same-day-before", "achievedAt": "2026-09-07", "occurredAt": "2026-09-07T10:00:00Z", "weight": 110, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedCurrentId": null,
+      "expectedLifetimeId": "rec-same-day-before",
+      "notes": "Same-day timestamp tie-break reverse: calendar dates equal, record created_at < reset updated_at → excluded from current. Lifetime ignores reset."
     }
   ]
 }

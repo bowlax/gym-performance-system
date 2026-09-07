@@ -23,6 +23,8 @@ enum PBDerivation {
         var id: String
         /// ISO date `YYYY-MM-DD`, or nil for undated manuals.
         var achievedAt: String?
+        /// ISO-8601 instant (`created_at`). Same-day reset tie-break only.
+        var occurredAt: String? = nil
         var weight: Double?
         var reps: Int?
         var time: Double?
@@ -45,6 +47,27 @@ enum PBDerivation {
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
+
+    private static let isoTimestampFractional: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let isoTimestamp: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    /// Instant for same-day reset tie-break. Not used in staleness / period math.
+    static func formatISOTimestamp(_ date: Date) -> String {
+        isoTimestampFractional.string(from: date)
+    }
+
+    static func parseISOTimestamp(_ iso: String) -> Date? {
+        isoTimestampFractional.date(from: iso) ?? isoTimestamp.date(from: iso)
+    }
 
     static func parseISODate(_ iso: String) -> Date {
         guard let date = isoFormatter.date(from: iso) else {
@@ -159,6 +182,8 @@ enum PBDerivation {
             && !beats(challenger: rhs, current: lhs, rule: rule)
     }
 
+    /// Equal-value current-PB pick: later calendar `achievedAt` wins.
+    /// Must not consult `occurredAt` — that clock is reset/freshness only.
     private static func moreRecentAchievedAt(challenger: Record, current: Record?) -> Bool {
         guard let current else { return true }
         guard let challengerDate = challenger.achievedAt else { return false }
@@ -179,24 +204,45 @@ enum PBDerivation {
         return best
     }
 
-    private static func isAfterReset(achievedAt: String?, resetAt: String?) -> Bool {
+    /// Calendar-day exclusive, plus same-day timestamp tie-break only.
+    /// `occurredAt` / `resetOccurredAt` are never used when the dates differ.
+    private static func isAfterReset(
+        achievedAt: String?,
+        resetAt: String?,
+        occurredAt: String?,
+        resetOccurredAt: String?
+    ) -> Bool {
         guard let resetAt else { return true }
         guard let achievedAt else { return false }
-        return achievedAt > resetAt
+        if achievedAt > resetAt { return true }
+        if achievedAt < resetAt { return false }
+        guard let occurredAt, let resetOccurredAt else { return false }
+        guard let recordInstant = parseISOTimestamp(occurredAt),
+              let resetInstant = parseISOTimestamp(resetOccurredAt) else {
+            return false
+        }
+        return recordInstant > resetInstant
     }
 
-    /// currentPB = best where achievedAt > resetAt AND fresh.
-    /// lifetimePB = best overall (no reset / freshness filter).
+    /// currentPB = best where after reset AND fresh.
+    /// After reset = `achievedAt > resetAt`, or same calendar day with
+    /// `occurredAt > resetOccurredAt`. lifetimePB ignores reset / freshness.
     static func derivePBs(
         rule: PBRule,
         records: [Record],
         staleness: StalenessSetting,
         resetAt: String?,
-        evaluatedAt: String
+        evaluatedAt: String,
+        resetOccurredAt: String? = nil
     ) -> DeriveResult {
         let lifetimePB = bestRecord(from: records, rule: rule)
         let currentCandidates = records.filter { record in
-            isAfterReset(achievedAt: record.achievedAt, resetAt: resetAt)
+            isAfterReset(
+                achievedAt: record.achievedAt,
+                resetAt: resetAt,
+                occurredAt: record.occurredAt,
+                resetOccurredAt: resetOccurredAt
+            )
                 && isFresh(
                     achievedAt: record.achievedAt,
                     staleness: staleness,

@@ -105,7 +105,7 @@ type OwnerPBRow = {
 };
 
 Deno.test({
-  name: "HTTP POST member JWT is refused; owner JWT returns gym-wide derived current PBs only",
+  name: "HTTP POST member and coach JWTs are refused; owner JWT returns gym-wide derived current PBs only",
   ignore: liveEnv() == null,
   sanitizeResources: false,
   sanitizeOps: false,
@@ -133,6 +133,7 @@ Deno.test({
     const memberA = crypto.randomUUID();
     const memberB = crypto.randomUUID();
     const memberCaller = crypto.randomUUID();
+    const coachCaller = crypto.randomUUID();
     const ownerCaller = crypto.randomUUID();
     const exerciseId = crypto.randomUUID();
     const sessionA = crypto.randomUUID();
@@ -170,6 +171,12 @@ Deno.test({
           gym_id: gymId,
           teamup_customer_id: "TU-CALLER",
           display_name: "Member Caller",
+        },
+        {
+          id: coachCaller,
+          gym_id: gymId,
+          teamup_customer_id: "TU-COACH",
+          display_name: "Coach Caller",
         },
         {
           id: ownerCaller,
@@ -257,6 +264,11 @@ Deno.test({
         gymId,
         appRole: "member",
       });
+      const coachToken = await mintJwt(env.jwtSecret, {
+        memberId: coachCaller,
+        gymId,
+        appRole: "coach",
+      });
       const ownerToken = await mintJwt(env.jwtSecret, {
         memberId: ownerCaller,
         gymId,
@@ -270,6 +282,14 @@ Deno.test({
       const memberBody = await memberRes.json() as { error?: string; currentPBs?: unknown };
       assertEquals(memberBody.error, "Forbidden");
       assertEquals(memberBody.currentPBs, undefined);
+
+      const coachRes = await handleOwnerCurrentPBsRequest(
+        postWithToken(coachToken),
+      );
+      assertEquals(coachRes.status, 403);
+      const coachBody = await coachRes.json() as { error?: string; currentPBs?: unknown };
+      assertEquals(coachBody.error, "Forbidden");
+      assertEquals(coachBody.currentPBs, undefined);
 
       const ownerRes = await handleOwnerCurrentPBsRequest(
         postWithToken(ownerToken),

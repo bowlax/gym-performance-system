@@ -63,6 +63,7 @@ export interface PersonalBestRow {
   achieved_at: string | null;
   entry_type: string;
   deleted_at?: string | null;
+  created_at?: string | null;
 }
 
 export interface ExerciseResetRow {

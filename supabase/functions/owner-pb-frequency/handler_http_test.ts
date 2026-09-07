@@ -135,7 +135,7 @@ type FrequencyRow = {
 
 Deno.test({
   name:
-    "HTTP POST member JWT is refused; owner JWT counts badges in the window only",
+    "HTTP POST member and coach JWTs are refused; owner JWT counts badges in the window only",
   ignore: liveEnv() == null,
   sanitizeResources: false,
   sanitizeOps: false,
@@ -161,6 +161,7 @@ Deno.test({
     const memberA = crypto.randomUUID();
     const memberB = crypto.randomUUID();
     const memberCaller = crypto.randomUUID();
+    const coachCaller = crypto.randomUUID();
     const ownerCaller = crypto.randomUUID();
     const squatId = crypto.randomUUID();
     const benchId = crypto.randomUUID();
@@ -214,6 +215,12 @@ Deno.test({
           gym_id: gymId,
           teamup_customer_id: "FREQ-CALLER",
           display_name: "Freq Caller",
+        },
+        {
+          id: coachCaller,
+          gym_id: gymId,
+          teamup_customer_id: "FREQ-COACH",
+          display_name: "Freq Coach",
         },
         {
           id: ownerCaller,
@@ -319,6 +326,11 @@ Deno.test({
         gymId,
         appRole: "member",
       });
+      const coachToken = await mintJwt(env.jwtSecret, {
+        memberId: coachCaller,
+        gymId,
+        appRole: "coach",
+      });
       const ownerToken = await mintJwt(env.jwtSecret, {
         memberId: ownerCaller,
         gymId,
@@ -337,6 +349,17 @@ Deno.test({
       };
       assertEquals(memberBody.error, "Forbidden");
       assertEquals(memberBody.members, undefined);
+
+      const coachRes = await handleOwnerPbFrequencyRequest(
+        postWithToken(coachToken, window),
+      );
+      assertEquals(coachRes.status, 403);
+      const coachBody = await coachRes.json() as {
+        error?: string;
+        members?: unknown;
+      };
+      assertEquals(coachBody.error, "Forbidden");
+      assertEquals(coachBody.members, undefined);
 
       const ownerRes = await handleOwnerPbFrequencyRequest(
         postWithToken(ownerToken, window),

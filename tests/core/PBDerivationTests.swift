@@ -30,7 +30,7 @@ struct PBDerivationTests {
     @Test
     func vectorCountsMatchSpec() throws {
         #expect(Fixtures.expiry.count == 24)
-        #expect(Fixtures.derivation.count == 20)
+        #expect(Fixtures.derivation.count == 22)
         #expect(Fixtures.badges.count == 8)
         #expect(Fixtures.lifetimeVisibility.count == 8)
     }
@@ -78,7 +78,8 @@ struct PBDerivationTests {
             records: PBDerivationVectorSupport.records(from: vector.records),
             staleness: vector.staleness,
             resetAt: vector.resetAt,
-            evaluatedAt: vector.evaluatedAt
+            evaluatedAt: vector.evaluatedAt,
+            resetOccurredAt: vector.resetOccurredAt
         )
         #expect(result.currentPB?.id == vector.expectedCurrentId, "\(vector.id) current")
         #expect(result.lifetimePB?.id == vector.expectedLifetimeId, "\(vector.id) lifetime")

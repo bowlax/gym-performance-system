@@ -298,7 +298,7 @@ export async function fetchMergedProgression(
   exerciseId: string,
   exercise: ExerciseRow,
 ): Promise<MergedProgressionData> {
-  const [staleness, sets, manualPBs, resetAt] = await Promise.all([
+  const [staleness, sets, manualPBs, resetLine] = await Promise.all([
     fetchMemberStaleness(supabase),
     fetchExerciseSetsForDerivation(supabase, exerciseId),
     fetchManualPBsForDerivation(supabase, exerciseId),
@@ -311,7 +311,8 @@ export async function fetchMergedProgression(
     sets,
     manualPBs,
     staleness,
-    resetAt,
+    resetAt: resetLine?.resetAt ?? null,
+    resetOccurredAt: resetLine?.resetOccurredAt ?? null,
   });
 
   const sessionHistory = buildExerciseSessionHistory(
@@ -458,6 +459,7 @@ export async function fetchCurrentPBs(
       manualPBs: bundle.manualPBsByExercise.get(exercise.id) ?? [],
       staleness: bundle.staleness,
       resetAt: bundle.resetAtByExercise.get(exercise.id) ?? null,
+      resetOccurredAt: bundle.resetOccurredAtByExercise.get(exercise.id) ?? null,
     });
 
     if (!derived.currentPB) continue;

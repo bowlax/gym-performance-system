@@ -26,6 +26,7 @@ private struct PBExpiryVectorFile: Codable {
 struct PBDerivationVectorRecord: Codable, Sendable {
     let id: String
     let achievedAt: String?
+    let occurredAt: String?
     let weight: Double?
     let reps: Int?
     let time: Double?
@@ -39,6 +40,7 @@ struct PBDerivationVector: Codable, Sendable {
     let rule: String
     let staleness: PBDerivation.StalenessSetting
     let resetAt: String?
+    let resetOccurredAt: String?
     let evaluatedAt: String
     let records: [PBDerivationVectorRecord]
     let expectedCurrentId: String?
@@ -136,6 +138,7 @@ enum PBDerivationVectorSupport {
             PBDerivation.Record(
                 id: record.id,
                 achievedAt: record.achievedAt,
+                occurredAt: record.occurredAt,
                 weight: record.weight,
                 reps: record.reps,
                 time: record.time,

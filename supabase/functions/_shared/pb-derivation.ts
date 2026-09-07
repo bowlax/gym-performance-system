@@ -25,6 +25,8 @@ export interface DerivationRecord extends SetState {
   id: string;
   /** ISO date `YYYY-MM-DD`, or null/undefined for undated manuals. */
   achievedAt?: string | null;
+  /** ISO-8601 instant (`created_at`). Same-day reset tie-break only. */
+  occurredAt?: string | null;
   entryKind?: string;
 }
 
@@ -33,6 +35,8 @@ export interface DerivePBsInput {
   records: DerivationRecord[];
   staleness: StalenessSetting;
   resetAt?: string | null;
+  /** ISO-8601 instant (`exercise_resets.updated_at`). Same-day tie-break only. */
+  resetOccurredAt?: string | null;
   evaluatedAt: string;
 }
 
@@ -165,6 +169,8 @@ function tiesUnderRule(
   return !beats(left, right, rule) && !beats(right, left, rule);
 }
 
+/** Equal-value current-PB pick: later calendar `achievedAt` wins.
+ * Must not consult `occurredAt` — that clock is reset/freshness only. */
 function moreRecentAchievedAt(
   challenger: DerivationRecord,
   current: DerivationRecord | null,
@@ -199,9 +205,21 @@ function bestCurrentRecord(
   return best;
 }
 
+/** Instant for same-day reset tie-break. Not used in staleness / period math. */
+function parseISOTimestamp(iso: string): number | null {
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * Calendar-day exclusive, plus same-day timestamp tie-break only.
+ * `occurredAt` / `resetOccurredAt` are never used when the dates differ.
+ */
 function isAfterReset(
   achievedAt: string | null | undefined,
   resetAt: string | null | undefined,
+  occurredAt?: string | null,
+  resetOccurredAt?: string | null,
 ): boolean {
   if (resetAt == null) {
     return true;
@@ -209,20 +227,41 @@ function isAfterReset(
   if (achievedAt == null) {
     return false;
   }
-  return achievedAt > resetAt;
+  if (achievedAt > resetAt) {
+    return true;
+  }
+  if (achievedAt < resetAt) {
+    return false;
+  }
+  if (occurredAt == null || resetOccurredAt == null) {
+    return false;
+  }
+  const recordMs = parseISOTimestamp(occurredAt);
+  const resetMs = parseISOTimestamp(resetOccurredAt);
+  if (recordMs == null || resetMs == null) {
+    return false;
+  }
+  return recordMs > resetMs;
 }
 
 /**
- * currentPB = best where achievedAt > resetAt AND fresh.
- * lifetimePB = best overall (no reset / freshness filter).
+ * currentPB = best where after reset AND fresh.
+ * After reset = `achievedAt > resetAt`, or same calendar day with
+ * `occurredAt > resetOccurredAt`. lifetimePB ignores reset / freshness.
  */
 export function derivePBs(input: DerivePBsInput): DerivePBsResult {
-  const { rule, records, staleness, resetAt, evaluatedAt } = input;
+  const { rule, records, staleness, resetAt, resetOccurredAt, evaluatedAt } =
+    input;
 
   const lifetimePB = bestRecord(records, rule);
 
   const currentCandidates = records.filter((record) =>
-    isAfterReset(record.achievedAt, resetAt) &&
+    isAfterReset(
+      record.achievedAt,
+      resetAt,
+      record.occurredAt,
+      resetOccurredAt,
+    ) &&
     isFresh(record.achievedAt, staleness, evaluatedAt)
   );
   const currentPB = bestCurrentRecord(currentCandidates, rule);
