@@ -43,7 +43,7 @@ function PrivacyScreen() {
 
       <article className="prose prose-sm max-w-none text-foreground [&_h2]:mt-8 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-foreground [&_h3]:mt-4 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-foreground [&_p]:mt-2 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:text-muted-foreground [&_li]:text-sm [&_li]:leading-relaxed [&_li]:text-muted-foreground [&_td]:text-sm [&_td]:text-muted-foreground [&_th]:text-sm [&_a]:text-primary">
         <p className="text-muted-foreground">
-          <strong className="text-foreground">Last updated: 4 August 2026</strong>
+          <strong className="text-foreground">Last updated: 11 September 2026</strong>
         </p>
 
         <p>
@@ -220,7 +220,7 @@ function PrivacyScreen() {
           database provider, in their <strong>eu-west-2 (London, UK)</strong> data
           centre. Identity verification uses <strong>TeamUp</strong>, your gym&apos;s
           membership platform. The iOS app is distributed via{" "}
-          <strong>Apple&apos;s App Store / TestFlight</strong>, which is subject to
+          <strong>Apple&apos;s App Store</strong>, which is subject to
           Apple&apos;s own privacy terms for app distribution. The same connected
           account can also be used on the web member surface.
         </p>

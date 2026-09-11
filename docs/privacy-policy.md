@@ -1,6 +1,6 @@
 # GymPerformance Privacy Policy
 
-**Last updated: 4 August 2026**
+**Last updated: 11 September 2026**
 
 This policy explains what information GymPerformance collects, why, and
 what choices you have. It applies to the GymPerformance app and its
@@ -110,7 +110,7 @@ keep using the app locally.
 Your connected data is stored using **Supabase**, a database provider,
 in their **eu-west-2 (London, UK)** data centre. Identity verification
 uses **TeamUp**, your gym's membership platform. The iOS app is
-distributed via **Apple's App Store / TestFlight**, which is subject to
+distributed via **Apple's App Store**, which is subject to
 Apple's own privacy terms for app distribution. The same connected
 account can also be used on the web member surface.
 

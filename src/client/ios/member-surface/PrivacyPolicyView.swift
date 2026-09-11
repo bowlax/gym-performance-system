@@ -29,7 +29,7 @@ struct PrivacyPolicyView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("GymPerformance Privacy Policy")
                 .exerciseTitleStyle()
-            Text("Last updated: 4 August 2026")
+            Text("Last updated: 11 September 2026")
                 .captionLabelStyle()
         }
     }
@@ -106,7 +106,7 @@ struct PrivacyPolicyView: View {
     """
 
     private let whereStored = """
-    Your connected data is stored using Supabase, a database provider, in their eu-west-2 (London, UK) data centre. Identity verification uses TeamUp, your gym's membership platform. The app is distributed via Apple's App Store / TestFlight, which is subject to Apple's own privacy terms for app distribution.
+    Your connected data is stored using Supabase, a database provider, in their eu-west-2 (London, UK) data centre. Identity verification uses TeamUp, your gym's membership platform. The app is distributed via Apple's App Store, which is subject to Apple's own privacy terms for app distribution.
 
     We do not sell, rent, or share your data with any other third party, and we do not use your data for advertising.
     """
