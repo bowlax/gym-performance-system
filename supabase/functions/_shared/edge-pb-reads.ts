@@ -561,11 +561,23 @@ export async function deriveGymCurrentPBs(
   return summaries;
 }
 
+export interface OwnerPbFrequencyHit {
+  exercise_id: string;
+  exercise_name: string;
+  achieved_at: string;
+  measurement_type: string;
+  weight: number | null;
+  reps: number | null;
+  time_seconds: number | null;
+  distance: number | null;
+}
+
 export interface OwnerPbFrequencyRow {
   member_id: string;
   teamup_customer_id: string | null;
   count: number;
   exercises: string[];
+  hits: OwnerPbFrequencyHit[];
 }
 
 function achievedInWindow(
@@ -577,21 +589,38 @@ function achievedInWindow(
   return achievedAt >= from && achievedAt <= to;
 }
 
+export interface GymPbFrequencySources {
+  members: Array<{
+    id: string;
+    teamup_customer_id: string | null;
+  }>;
+  exercises: Array<{
+    id: string;
+    name: string;
+    pb_rule: PBRule;
+    measurement_type: string;
+  }>;
+  recordsByMemberExercise: ReadonlyMap<string, DerivationRecord[]>;
+}
+
 /**
  * Per-member historic PB counts in [from, to] (inclusive ISO dates).
  * Runs `badgeIds` on full dated history (running max needs pre-window
  * records), then keeps badges whose achievedAt falls in the window.
+ * `hits` is that same filtered badge list — not a second PB definition.
+ * Resets and staleness are not inputs; they do not affect badges.
+ * Members with no in-window badges are omitted.
  */
-export async function deriveGymPbFrequency(
-  supabase: UserClient,
+export function gymPbFrequencyFromSources(
+  sources: GymPbFrequencySources,
   from: string,
   to: string,
-): Promise<OwnerPbFrequencyRow[]> {
-  const sources = await fetchGymDerivationSources(supabase);
+): OwnerPbFrequencyRow[] {
   const rows: OwnerPbFrequencyRow[] = [];
 
   for (const member of sources.members) {
     const exerciseNames: string[] = [];
+    const hits: OwnerPbFrequencyHit[] = [];
     let count = 0;
 
     for (const exercise of sources.exercises) {
@@ -606,14 +635,34 @@ export async function deriveGymPbFrequency(
       if (inWindow.length === 0) continue;
       count += inWindow.length;
       exerciseNames.push(exercise.name);
+      for (const record of inWindow) {
+        if (record.achievedAt == null) continue;
+        hits.push({
+          exercise_id: exercise.id,
+          exercise_name: exercise.name,
+          achieved_at: record.achievedAt,
+          measurement_type: exercise.measurement_type,
+          weight: record.weight ?? null,
+          reps: record.reps ?? null,
+          time_seconds: record.time ?? null,
+          distance: record.distance ?? null,
+        });
+      }
     }
 
     if (count === 0) continue;
+    hits.sort((left, right) => {
+      if (left.achieved_at !== right.achieved_at) {
+        return left.achieved_at < right.achieved_at ? -1 : 1;
+      }
+      return left.exercise_name.localeCompare(right.exercise_name);
+    });
     rows.push({
       member_id: member.id,
       teamup_customer_id: member.teamup_customer_id,
       count,
       exercises: exerciseNames,
+      hits,
     });
   }
 
@@ -622,4 +671,13 @@ export async function deriveGymPbFrequency(
     return left.member_id.localeCompare(right.member_id);
   });
   return rows;
+}
+
+export async function deriveGymPbFrequency(
+  supabase: UserClient,
+  from: string,
+  to: string,
+): Promise<OwnerPbFrequencyRow[]> {
+  const sources = await fetchGymDerivationSources(supabase);
+  return gymPbFrequencyFromSources(sources, from, to);
 }

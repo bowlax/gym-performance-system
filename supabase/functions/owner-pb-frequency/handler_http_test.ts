@@ -126,11 +126,23 @@ function postWithToken(token: string, body: unknown): Request {
   });
 }
 
+type FrequencyHit = {
+  exercise_id: string;
+  exercise_name: string;
+  achieved_at: string;
+  measurement_type: string;
+  weight: number | null;
+  reps: number | null;
+  time_seconds: number | null;
+  distance: number | null;
+};
+
 type FrequencyRow = {
   member_id: string;
   teamup_customer_id: string | null;
   count: number;
   exercises: string[];
+  hits: FrequencyHit[];
 };
 
 Deno.test({
@@ -376,15 +388,62 @@ Deno.test({
       assertEquals(ownerBody.sets, undefined);
 
       assertEquals(ownerBody.members.length, 2);
+      for (const row of ownerBody.members) {
+        assertEquals(row.hits.length, row.count);
+      }
       assertEquals(ownerBody.members[0].member_id, memberB);
       assertEquals(ownerBody.members[0].teamup_customer_id, "FREQ-B");
       assertEquals(ownerBody.members[0].count, 3);
       assertEquals(ownerBody.members[0].exercises, ["Test Squat", "Test Bench"]);
+      assertEquals(ownerBody.members[0].hits, [
+        {
+          exercise_id: squatId,
+          exercise_name: "Test Squat",
+          achieved_at: "2026-07-05",
+          measurement_type: "weightAndReps",
+          weight: 100,
+          reps: 5,
+          time_seconds: null,
+          distance: null,
+        },
+        {
+          exercise_id: benchId,
+          exercise_name: "Test Bench",
+          achieved_at: "2026-07-12",
+          measurement_type: "weightAndReps",
+          weight: 70,
+          reps: 5,
+          time_seconds: null,
+          distance: null,
+        },
+        {
+          exercise_id: squatId,
+          exercise_name: "Test Squat",
+          achieved_at: "2026-07-20",
+          measurement_type: "weightAndReps",
+          weight: 110,
+          reps: 5,
+          time_seconds: null,
+          distance: null,
+        },
+      ]);
 
       assertEquals(ownerBody.members[1].member_id, memberA);
       assertEquals(ownerBody.members[1].teamup_customer_id, "FREQ-A");
       assertEquals(ownerBody.members[1].count, 1);
       assertEquals(ownerBody.members[1].exercises, ["Test Squat"]);
+      assertEquals(ownerBody.members[1].hits, [
+        {
+          exercise_id: squatId,
+          exercise_name: "Test Squat",
+          achieved_at: "2026-07-02",
+          measurement_type: "weightAndReps",
+          weight: 90,
+          reps: 5,
+          time_seconds: null,
+          distance: null,
+        },
+      ]);
 
       const keys = new Set(
         ownerBody.members.flatMap((row) => Object.keys(row)),

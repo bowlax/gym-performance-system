@@ -3,7 +3,10 @@
  *
  * Access is owner_surface_grants (same gate as owner-current-pbs). Counts
  * come from badgeIds on full history, then filtered by achievedAt in
- * [from, to]. Does not reimplement freshness / tie-break / running max.
+ * [from, to]. `hits` is that same filtered badge list (exercise, date,
+ * logged values of the badge event) — not a second PB definition and not
+ * a raw set/session dump. Does not reimplement freshness / tie-break /
+ * running max; resets and staleness do not affect badges.
  */
 
 import {

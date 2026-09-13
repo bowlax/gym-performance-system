@@ -200,6 +200,37 @@ means something. Buildable now; with ~16 connected members today, the
 feature would work but read thin — worth building once population is
 flagged as "worth it" rather than waiting for a specific number.
 
+**Shipped payload (`owner-pb-frequency`).** POST `{ period: "this_week" | "this_month" }` or `{ from, to }` as `YYYY-MM-DD`. Response:
+
+```
+{
+  period: { from, to },
+  members: [
+    {
+      member_id,
+      teamup_customer_id,
+      count,          // historic badges in the window
+      exercises,      // distinct exercise names with ≥1 badge in the window
+      hits: [         // same badgeIds run as count; one row per historic PB
+        {
+          exercise_id,
+          exercise_name,
+          achieved_at,     // calendar DATE (YYYY-MM-DD)
+          measurement_type,
+          weight, reps, time_seconds, distance  // logged values of that badge
+        }
+      ]
+    }
+  ]
+}
+```
+
+Members with `count === 0` are omitted. `hits.length` equals `count`. Hits
+are derived badge events (the same running-max / undated-excluded / ties-
+not-badged / reset-ignored contract as `count`), not a raw set or session
+list. This endpoint does not read `owner_set_detail`. `achieved_at` is a
+date; session identity is not included.
+
 ---
 
 ### 3.3 Inactivity view — "who hasn't trained in 7–10 days"

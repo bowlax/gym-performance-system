@@ -26,6 +26,40 @@ UUIDs/dates return 400 and are not forwarded to PostgREST.
 
 Missing key → 401. Wrong key → 403. Unprovisioned session → 503.
 
+## `/api/owner/pb-frequency` response
+
+Body is proxied unchanged from `owner-pb-frequency`. Request: `{ "period": "this_week" | "this_month" }` or `{ "from": "YYYY-MM-DD", "to": "YYYY-MM-DD" }`.
+
+```
+{
+  "period": { "from": "YYYY-MM-DD", "to": "YYYY-MM-DD" },
+  "members": [
+    {
+      "member_id": "uuid",
+      "teamup_customer_id": "string | null",
+      "count": 3,
+      "exercises": ["Squat", "Bench"],
+      "hits": [
+        {
+          "exercise_id": "uuid",
+          "exercise_name": "Squat",
+          "achieved_at": "YYYY-MM-DD",
+          "measurement_type": "weightAndReps",
+          "weight": 100,
+          "reps": 5,
+          "time_seconds": null,
+          "distance": null
+        }
+      ]
+    }
+  ]
+}
+```
+
+`hits` is additive. Members with no badges in the window are omitted.
+`hits` is one row per historic PB badge in the window (same `badgeIds`
+run as `count`), not a raw set list. `achieved_at` is a calendar date.
+
 ## One-time setup
 
 1. Create KV: `npx wrangler kv namespace create OWNER_SESSION` and paste the
