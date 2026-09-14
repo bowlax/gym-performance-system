@@ -11,6 +11,9 @@
  * Usage:
  *   node scripts/prove-auth-user-dimension.mjs
  *
+ * After proving, wipe Wolf synthetic rows (linked SQL, not PostgREST delete):
+ *   node scripts/cleanup-synthetic-auth-proof.mjs
+ *
  * Precondition: Custom Access Token Hook ENABLED in the dashboard
  * (Authentication → Hooks → Custom Access Token → public.custom_access_token_hook).
  */

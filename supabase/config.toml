@@ -48,6 +48,12 @@ verify_jwt = true
 [functions.delete-personal-best]
 verify_jwt = true
 
+[functions.delete-session]
+verify_jwt = true
+
+[functions.update-manual-pb]
+verify_jwt = true
+
 [functions.owner-current-pbs]
 verify_jwt = true
 

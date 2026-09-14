@@ -24,7 +24,10 @@ export interface ProgressionEntryRow {
   isUndated: boolean;
   setId: string | null;
   personalBestId: string | null;
+  weight: number | null;
   reps: number | null;
+  time_seconds: number | null;
+  distance: number | null;
 }
 
 const SESSION_DERIVED = "sessionDerived";
@@ -84,7 +87,10 @@ export function mergeProgressionEntries(params: {
       isUndated: false,
       setId: summary.set.id,
       personalBestId,
+      weight: summary.set.weight,
       reps: summary.set.reps,
+      time_seconds: summary.set.time_seconds,
+      distance: summary.set.distance,
     });
   }
 
@@ -117,7 +123,10 @@ export function mergeProgressionEntries(params: {
       isUndated,
       setId: pb.set_id,
       personalBestId: pb.id,
+      weight: pb.weight,
       reps: pb.reps,
+      time_seconds: pb.time_seconds,
+      distance: pb.distance,
     });
   }
 
@@ -134,7 +143,10 @@ export function mergeProgressionEntries(params: {
         isUndated: false,
         setId: null,
         personalBestId: null,
+        weight: null,
         reps: null,
+        time_seconds: null,
+        distance: null,
       });
     }
   }

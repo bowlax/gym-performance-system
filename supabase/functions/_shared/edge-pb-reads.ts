@@ -107,7 +107,8 @@ export async function fetchExerciseSetsForDerivation(
       "session:sessions!inner(date, member_id), sets(id, weight, reps, time_seconds, distance, deleted_at, created_at)",
     )
     .eq("exercise_id", exerciseId)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .is("session.deleted_at", null);
   if (memberId) {
     query = query.eq("session.member_id", memberId);
   }
@@ -378,12 +379,16 @@ async function fetchGymDerivationSources(
         .eq("is_active", true)
         .not("pb_rule", "is", null)
         .is("deleted_at", null),
+      // sessions!inner does not imply deleted_at is null; a session-only
+      // tombstone would otherwise still feed its live child sets into
+      // owner-current-pbs and owner-pb-frequency.
       supabase
         .from("exercise_entries")
         .select(
           "exercise_id, session:sessions!inner(date, member_id), sets(id, weight, reps, time_seconds, distance, deleted_at, created_at)",
         )
-        .is("deleted_at", null),
+        .is("deleted_at", null)
+        .is("session.deleted_at", null),
       supabase
         .from("personal_bests")
         .select(

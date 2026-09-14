@@ -1,7 +1,9 @@
 import {
   ADD_MANUAL_PB_URL,
   DELETE_PERSONAL_BEST_URL,
+  DELETE_SESSION_URL,
   RESET_CURRENT_PB_URL,
+  UPDATE_MANUAL_PB_URL,
 } from "./env";
 
 export interface PersonalBestRecord {
@@ -127,4 +129,50 @@ export async function deletePersonalBest(
   return {
     deleted: (raw.deleted as PersonalBestRecord | null) ?? null,
   };
+}
+
+export interface UpdateManualPBInput {
+  exerciseId: string;
+  personalBestId: string;
+  /** Null = undated lifetime entry. */
+  achievedAt?: string | null;
+  weight?: number | null;
+  reps?: number | null;
+  time_seconds?: number | null;
+  distance?: number | null;
+}
+
+export interface UpdateManualPBResult {
+  personalBest: PersonalBestRecord | null;
+}
+
+export async function updateManualPB(
+  token: string,
+  input: UpdateManualPBInput,
+): Promise<UpdateManualPBResult> {
+  const raw = await postJson<Record<string, unknown>>(
+    UPDATE_MANUAL_PB_URL,
+    token,
+    {
+      exerciseId: input.exerciseId,
+      personalBestId: input.personalBestId,
+      achievedAt: input.achievedAt ?? null,
+      weight: input.weight ?? null,
+      reps: input.reps ?? null,
+      time_seconds: input.time_seconds ?? null,
+      distance: input.distance ?? null,
+    },
+  );
+  return {
+    personalBest: (raw.personalBest as PersonalBestRecord | null) ?? null,
+  };
+}
+
+export async function deleteSession(
+  token: string,
+  sessionId: string,
+): Promise<void> {
+  await postJson<Record<string, unknown>>(DELETE_SESSION_URL, token, {
+    sessionId,
+  });
 }

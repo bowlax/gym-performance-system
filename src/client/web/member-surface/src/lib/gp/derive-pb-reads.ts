@@ -133,7 +133,8 @@ export async function fetchExerciseSetsForDerivation(
       "exercise_id, session:sessions!inner(id, date), sets(id, weight, reps, time_seconds, distance, deleted_at, created_at)",
     )
     .eq("exercise_id", exerciseId)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .is("session.deleted_at", null);
   if (error) throw new Error(error.message);
 
   const rows: DerivedSetRow[] = [];
@@ -220,7 +221,8 @@ export async function fetchBoardDerivationBundle(
       .select(
         "exercise_id, session:sessions!inner(id, date), sets(id, weight, reps, time_seconds, distance, deleted_at, created_at)",
       )
-      .is("deleted_at", null),
+      .is("deleted_at", null)
+      .is("session.deleted_at", null),
     fetchManualPBsForDerivation(supabase),
     supabase
       .from("exercise_resets")

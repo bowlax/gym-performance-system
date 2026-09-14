@@ -8,6 +8,10 @@ import { assertEquals } from "jsr:@std/assert@1";
 import { SignJWT } from "jsr:@panva/jose@6";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { handleOwnerMemberNamesRequest } from "./handler.ts";
+import {
+  onlyIfLoopback,
+  tombstoneIsolatedGymTree,
+} from "../_shared/test-isolated-gym-teardown.ts";
 
 const ENDPOINT = "http://localhost/functions/v1/owner-member-names";
 
@@ -53,7 +57,7 @@ function liveEnv(): LiveEnv | null {
   if (!url || !anonKey || !serviceRoleKey || !jwtSecret) {
     return null;
   }
-  return { url, anonKey, serviceRoleKey, jwtSecret };
+  return onlyIfLoopback({ url, anonKey, serviceRoleKey, jwtSecret });
 }
 
 async function mintJwt(
@@ -186,10 +190,11 @@ Deno.test({
       const leaked = JSON.stringify(ownerBody);
       assertEquals(leaked.includes("Bearer"), false);
     } finally {
-      await admin.from("members").delete().eq("gym_id", gymId);
-      await admin.from("owner_surface_grants").delete().eq("gym_id", gymId);
-      await admin.from("gyms").delete().eq("id", gymId);
-      Deno.env.get = originalGet;
+      try {
+        await tombstoneIsolatedGymTree(admin, [gymId]);
+      } finally {
+        Deno.env.get = originalGet;
+      }
     }
   },
 });

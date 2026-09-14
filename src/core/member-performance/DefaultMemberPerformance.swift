@@ -270,7 +270,7 @@ final class DefaultMemberPerformance: MemberPerformance {
     ) throws -> [WeeklySessionCount] {
         let calendar = mondayCalendar()
         let sessions = try performanceDataAccess.fetchSessions(memberId: memberId)
-            .filter { $0.date >= from }
+            .filter { $0.deletedAt == nil && $0.date >= from }
 
         var weekStart = startOfWeek(for: from, calendar: calendar)
         let today = calendar.startOfDay(for: Date())
@@ -339,6 +339,17 @@ final class DefaultMemberPerformance: MemberPerformance {
         return history
     }
 
+    /// Soft-delete a session and every child entry/set.
+    ///
+    /// Matches web `softDeleteSet`: stamp `deletedAt` + `updatedAt` so the
+    /// rows stay in the store, become dirty (`updatedAt > syncedAt`), and
+    /// sync as tombstones. Never `context.delete` — a hard-delete cannot
+    /// push and a later pull treats "cloud has it, local doesn't" as catch-up.
+    ///
+    /// Pre-tombstone hard-deletes left live cloud rows with no deletion log.
+    /// Those split-brain sessions cannot be distinguished from "never synced
+    /// to this device" and cannot be cleaned up automatically. Permanent
+    /// limitation, not a TODO.
     func deleteSession(id: UUID, memberId: UUID) throws {
         guard let session = try performanceDataAccess.fetchSession(id: id) else {
             throw MemberPerformanceError.sessionNotFound(id)
@@ -352,19 +363,21 @@ final class DefaultMemberPerformance: MemberPerformance {
             throw MemberPerformanceError.sessionNotFound(id)
         }
 
+        let now = Date()
         let entries = try performanceDataAccess.fetchExerciseEntries(sessionId: id)
 
         for entry in entries {
             let sets = try performanceDataAccess.fetchSets(exerciseEntryId: entry.id)
 
             for set in sets {
-                try store.removeSet(set)
+                stampTombstone(set, at: now)
             }
 
-            try store.removeExerciseEntry(entry)
+            stampTombstone(entry, at: now)
         }
 
-        try store.removeSession(session)
+        stampTombstone(session, at: now)
+        try store.persistChanges()
     }
 
     func resetCurrentPB(memberId: UUID, exerciseId: UUID, undo: Bool = false) throws {
@@ -395,7 +408,8 @@ final class DefaultMemberPerformance: MemberPerformance {
         guard let pb = allPBs.first(where: { $0.id == id && $0.entryType == .manualEntry }) else { return }
         guard pb.memberId == memberId else { return }
 
-        try store.removePersonalBest(pb)
+        stampTombstone(pb, at: Date())
+        try store.persistChanges()
     }
 
     func projectedCurrentPBAfterDeletingHistoryEntry(
@@ -435,6 +449,9 @@ final class DefaultMemberPerformance: MemberPerformance {
         )
     }
 
+    /// Soft-delete a single set (or manual PB). Same tombstone stamp as
+    /// `deleteSession` / web `softDeleteSet`. Does not cascade to parent
+    /// entry/session — matching the web single-set path.
     func deleteHistoryEntry(
         setId: UUID?,
         personalBestId: UUID?,
@@ -451,7 +468,8 @@ final class DefaultMemberPerformance: MemberPerformance {
                 memberId: memberId,
                 exerciseId: exerciseId
             ) {
-                try store.removeSet(set)
+                stampTombstone(set, at: Date())
+                try store.persistChanges()
                 return
             }
 
@@ -489,6 +507,26 @@ final class DefaultMemberPerformance: MemberPerformance {
         }
 
         return nil
+    }
+
+    private func stampTombstone(_ session: SessionModel, at now: Date) {
+        session.deletedAt = now
+        session.updatedAt = now
+    }
+
+    private func stampTombstone(_ entry: ExerciseEntryModel, at now: Date) {
+        entry.deletedAt = now
+        entry.updatedAt = now
+    }
+
+    private func stampTombstone(_ set: ModelSet, at now: Date) {
+        set.deletedAt = now
+        set.updatedAt = now
+    }
+
+    private func stampTombstone(_ pb: PersonalBestModel, at now: Date) {
+        pb.deletedAt = now
+        pb.updatedAt = now
     }
 
     private func deletionRemovesCurrentPB(

@@ -13,7 +13,8 @@ The web experience for gym members. Covers session logging, PB tracking, progres
 
 - **Reads and simple writes** — direct Supabase client calls under RLS (Auth-session JWT from the broker)
 - **PB logging** — `log-set` Edge Function (`/functions/v1/log-set`)
-- **Progression actions** — `add-manual-pb`, `reset-current-pb`, `delete-personal-best`
+- **Progression actions** — `add-manual-pb`, `update-manual-pb`, `reset-current-pb`, `delete-personal-best`
+- **Session delete** — `delete-session` Edge Function (cascade tombstone of the session and every child entry/set)
 - **Authentication** — real TeamUp OAuth via `token-broker` (`/functions/v1/token-broker?oauth=authorize` …). Callback returns Auth session tokens; the Worker seals them into an **httpOnly** cookie (`gp_auth`, sealed with `SESSION_SECRET`). The browser does **not** hold the JWT in the clear. The client obtains a short-lived access token via `GET /api/auth/session`; `POST /api/auth/signout` clears the cookie
 
 ## Environment variables
@@ -34,8 +35,10 @@ Edge function URLs are derived from `GYMPERF_SUPABASE_URL`:
 - `{SUPABASE_URL}/functions/v1/token-broker`
 - `{SUPABASE_URL}/functions/v1/log-set`
 - `{SUPABASE_URL}/functions/v1/add-manual-pb`
+- `{SUPABASE_URL}/functions/v1/update-manual-pb`
 - `{SUPABASE_URL}/functions/v1/reset-current-pb`
 - `{SUPABASE_URL}/functions/v1/delete-personal-best`
+- `{SUPABASE_URL}/functions/v1/delete-session`
 
 ## Local development
 
@@ -73,3 +76,14 @@ Live workers.dev URL pattern: `https://gymperf-member-web.<account>.workers.dev`
 Visual tokens are defined in `docs/design-system.md` at the repo root. The web implementation values section pins fixed hex colours and spacing for cross-platform parity with iOS.
 
 Refer to `docs/gym-performance-system-design.md` for full architectural context.
+
+## Remaining platform differences
+
+Member-facing training actions are the same on iPhone and web: log a session, delete a session, add / edit / delete a manual PB, reset a current PB, board, progression, heatmap, and staleness settings.
+
+What still differs is platform, not capability:
+
+- First-run PB setup is guided on iPhone; on the web you add manuals from an exercise's progression screen
+- iPhone works offline (and before TeamUp connect); web requires sign-in
+- Disconnect is iPhone Settings; web signs out. Neither deletes training data — see `docs/member-disconnect-signout.md`
+

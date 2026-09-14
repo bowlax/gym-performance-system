@@ -359,6 +359,70 @@ export async function softDeleteSet(
   }
 }
 
+/**
+ * Soft-delete a session and every child entry/set.
+ * Same stamp as `softDeleteSet` / iOS `deleteSession`: `deleted_at` + `updated_at`
+ * on the whole tree so later pulls apply tombstones instead of resurrecting.
+ */
+export async function softDeleteSessionCascade(
+  supabase: UserClient,
+  sessionId: string,
+  memberId: string,
+): Promise<void> {
+  const { data: session, error: sessionError } = await supabase
+    .from("sessions")
+    .select("id, member_id")
+    .eq("id", sessionId)
+    .maybeSingle();
+
+  if (sessionError) {
+    throw sessionError;
+  }
+  if (!session || (session as { member_id: string }).member_id !== memberId) {
+    throw jsonResponse({ error: "Session not found" }, 404);
+  }
+
+  const { data: entries, error: entriesError } = await supabase
+    .from("exercise_entries")
+    .select("id")
+    .eq("session_id", sessionId);
+
+  if (entriesError) {
+    throw entriesError;
+  }
+
+  const now = new Date().toISOString();
+  const entryIds = (entries ?? [])
+    .map((row) => (row as { id?: string }).id)
+    .filter((id): id is string => typeof id === "string");
+
+  if (entryIds.length > 0) {
+    const { error: setsError } = await supabase
+      .from("sets")
+      .update({ deleted_at: now, updated_at: now })
+      .in("exercise_entry_id", entryIds);
+    if (setsError) {
+      throw setsError;
+    }
+
+    const { error: entryUpdateError } = await supabase
+      .from("exercise_entries")
+      .update({ deleted_at: now, updated_at: now })
+      .in("id", entryIds);
+    if (entryUpdateError) {
+      throw entryUpdateError;
+    }
+  }
+
+  const { error: sessionUpdateError } = await supabase
+    .from("sessions")
+    .update({ deleted_at: now, updated_at: now })
+    .eq("id", sessionId);
+  if (sessionUpdateError) {
+    throw sessionUpdateError;
+  }
+}
+
 interface PostgrestErrorLike {
   message?: string;
   details?: string;

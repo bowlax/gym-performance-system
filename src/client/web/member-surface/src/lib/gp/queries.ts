@@ -233,7 +233,8 @@ export async function fetchExerciseSessionHistory(
       "id, session:sessions!inner(id, date), sets(id, weight, reps, time_seconds, distance, deleted_at)",
     )
     .eq("exercise_id", exerciseId)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .is("session.deleted_at", null);
   if (error) throw new Error(error.message);
 
   const rows = (data ?? []) as unknown as Array<{
@@ -551,9 +552,10 @@ async function fetchExerciseIdsWithHistory(
 
   const { data: entryRows, error: entryError } = await supabase
     .from("exercise_entries")
-    .select("exercise_id, sets(id, deleted_at)")
+    .select("exercise_id, session:sessions!inner(id), sets(id, deleted_at)")
     .in("exercise_id", exerciseIds)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .is("session.deleted_at", null);
   if (entryError) throw new Error(entryError.message);
 
   for (const row of entryRows ?? []) {

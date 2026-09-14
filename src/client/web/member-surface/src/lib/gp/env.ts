@@ -23,6 +23,8 @@ export const LOG_SET_URL = `${SUPABASE_URL}/functions/v1/log-set`;
 export const ADD_MANUAL_PB_URL = `${SUPABASE_URL}/functions/v1/add-manual-pb`;
 export const RESET_CURRENT_PB_URL = `${SUPABASE_URL}/functions/v1/reset-current-pb`;
 export const DELETE_PERSONAL_BEST_URL = `${SUPABASE_URL}/functions/v1/delete-personal-best`;
+export const DELETE_SESSION_URL = `${SUPABASE_URL}/functions/v1/delete-session`;
+export const UPDATE_MANUAL_PB_URL = `${SUPABASE_URL}/functions/v1/update-manual-pb`;
 
 /** OAuth return target for the broker redirect (server route). */
 export function oauthCallbackUrl(origin: string = defaultOrigin()): string {

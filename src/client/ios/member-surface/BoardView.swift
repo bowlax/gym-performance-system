@@ -256,6 +256,7 @@ struct BoardView: View {
                 memberId: dependencies.memberId
             )
             sessions = try dependencies.performanceDataAccess.fetchSessions(memberId: dependencies.memberId)
+                .filter { $0.deletedAt == nil }
                 .sorted { $0.date < $1.date }
             trainingHeatmapData = CalendarHeatmapBuilder.build(
                 sessionDates: sessions.map(\.date)

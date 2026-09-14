@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Ellipsis, Trash2, Trophy } from "lucide-react";
+import { Ellipsis, Pencil, Trash2, Trophy } from "lucide-react";
 import { AppShell, AuthGate, SectionHeader } from "@/components/gp/app-shell";
 import { FormField } from "@/components/gp/form-field";
 import {
@@ -54,13 +54,21 @@ import {
   type ExerciseRow,
   type MergedProgressionData,
 } from "@/lib/gp/queries";
-import { fieldsForMeasurement, formatPBValue, combineMmSs, fieldLabel, fieldUnit, isCableRow } from "@/lib/gp/format";
+import { fieldsForMeasurement, formatPBValue, combineMmSs, fieldLabel, fieldUnit, isCableRow, splitMmSs } from "@/lib/gp/format";
 import {
   addManualPB,
   resetCurrentPB,
+  updateManualPB,
   type AddManualPBResult,
 } from "@/lib/gp/pb-actions";
 import { todayISO } from "@/lib/gp/log-set";
+import {
+  manualSheetSaveLabel,
+  manualSheetSuccessMessage,
+  manualSheetTitle,
+  snapshotManualSheetIntent,
+  type ManualSheetIntent,
+} from "@/lib/gp/manual-pb-sheet-copy";
 import { cn } from "@/lib/utils";
 import { MmSsFields } from "@/components/gp/mm-ss-fields";
 
@@ -112,6 +120,7 @@ function ProgressionContent() {
   const tokenTag = session?.token?.slice(-8) ?? "anon";
 
   const [manualOpen, setManualOpen] = useState(!!manual);
+  const [editingManual, setEditingManual] = useState<ManualPBEditTarget | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ProgressionEntryRow | null>(null);
@@ -140,9 +149,22 @@ function ProgressionContent() {
 
   const handleManualOpenChange = (open: boolean) => {
     setManualOpen(open);
-    if (!open && manual) {
-      void navigate({ to: "/" });
+    if (!open) {
+      setEditingManual(null);
+      if (manual) {
+        void navigate({ to: "/" });
+      }
     }
+  };
+
+  const openAddManual = () => {
+    setEditingManual(null);
+    setManualOpen(true);
+  };
+
+  const openEditManual = (target: ManualPBEditTarget) => {
+    setEditingManual(target);
+    setManualOpen(true);
   };
 
   const refreshProgression = async () => {
@@ -183,6 +205,10 @@ function ProgressionContent() {
   const history = historyQuery.data?.entries ?? [];
   const current = historyQuery.data?.currentPB ?? null;
   const lifetimePB = historyQuery.data?.lifetimePB ?? null;
+  const lifetimeManualTarget =
+    lifetimePB != null && lifetimePB.set_id == null
+      ? editingFromDisplay(lifetimePB)
+      : null;
   const staleness = historyQuery.data?.staleness ?? { enabled: false, periods: 2, unit: "quarters" as const };
   const resetAt = historyQuery.data?.resetAt ?? null;
   const hasHistory =
@@ -206,6 +232,7 @@ function ProgressionContent() {
           onOpenChange={handleManualOpenChange}
           exercise={exercise}
           current={current}
+          editing={null}
           token={session?.token ?? null}
           onSaved={async (result) => {
             await refreshProgression();
@@ -286,6 +313,11 @@ function ProgressionContent() {
             )}
             emptyReason={emptyReason}
             celebrate={celebrate}
+            onEditLifetime={
+              lifetimeManualTarget
+                ? () => openEditManual(lifetimeManualTarget)
+                : undefined
+            }
           />
         </div>
         <DropdownMenu>
@@ -299,7 +331,7 @@ function ProgressionContent() {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuItem onSelect={() => setManualOpen(true)}>
+            <DropdownMenuItem onSelect={() => openAddManual()}>
               Add PB manually
             </DropdownMenuItem>
             {current && (
@@ -326,13 +358,18 @@ function ProgressionContent() {
         exercise={exercise}
         history={history}
         onDelete={openDeleteDialog}
+        onEdit={(row) => {
+          const target = editingFromHistoryRow(row);
+          if (target) openEditManual(target);
+        }}
       />
 
       <ManualPBSheet
         open={manualOpen}
-        onOpenChange={setManualOpen}
+        onOpenChange={handleManualOpenChange}
         exercise={exercise}
         current={current}
+        editing={editingManual}
         token={session?.token ?? null}
         onSaved={async (result) => {
           await refreshProgression();
@@ -447,6 +484,59 @@ function formatExercisePB(
   });
 }
 
+interface ManualPBEditTarget {
+  id: string;
+  weight: number | null;
+  reps: number | null;
+  time_seconds: number | null;
+  distance: number | null;
+  achieved_at: string | null;
+}
+
+function isEditableManual(row: ProgressionEntryRow): boolean {
+  return row.personalBestId != null && row.setId == null && !row.isResetMarker;
+}
+
+function editingFromDisplay(pb: DerivedPBDisplay): ManualPBEditTarget {
+  const raw = pb.raw ?? {};
+  return {
+    id: pb.id,
+    weight: typeof raw.weight === "number" ? raw.weight : null,
+    reps: typeof raw.reps === "number" ? raw.reps : pb.reps,
+    time_seconds: typeof raw.time_seconds === "number" ? raw.time_seconds : null,
+    distance: typeof raw.distance === "number" ? raw.distance : null,
+    achieved_at: pb.achieved_at,
+  };
+}
+
+function editingFromHistoryRow(row: ProgressionEntryRow): ManualPBEditTarget | null {
+  if (!isEditableManual(row) || row.personalBestId == null) return null;
+  return {
+    id: row.personalBestId,
+    weight: row.weight,
+    reps: row.reps,
+    time_seconds: row.time_seconds,
+    distance: row.distance,
+    achieved_at: row.isUndated ? null : row.date,
+  };
+}
+
+function valuesFromEditing(
+  editing: ManualPBEditTarget,
+  measurement: string,
+): Record<string, string> {
+  if (measurement === "timeOnly") {
+    const { mm, ss } = splitMmSs(editing.time_seconds);
+    return { mm, ss };
+  }
+  const values: Record<string, string> = {};
+  if (editing.weight != null) values.weight = String(editing.weight);
+  if (editing.reps != null) values.reps = String(editing.reps);
+  if (editing.time_seconds != null) values.time = String(editing.time_seconds);
+  if (editing.distance != null) values.distance = String(editing.distance);
+  return values;
+}
+
 function CurrentPBHero({
   exercise,
   currentPB,
@@ -454,6 +544,7 @@ function CurrentPBHero({
   showLifetime,
   emptyReason,
   celebrate,
+  onEditLifetime,
 }: {
   exercise: ExerciseRow;
   currentPB: DerivedPBDisplay | null;
@@ -461,6 +552,7 @@ function CurrentPBHero({
   showLifetime: boolean;
   emptyReason: ReturnType<typeof currentPBEmptyReason>;
   celebrate: boolean;
+  onEditLifetime?: () => void;
 }) {
   const measurement = exercise.measurement_type ?? "";
   const currentFormatted = currentPB
@@ -552,6 +644,15 @@ function CurrentPBHero({
               ) : (
                 <div className="mt-1 text-xs text-muted-foreground">Undated</div>
               )}
+              {onEditLifetime && (
+                <button
+                  type="button"
+                  onClick={onEditLifetime}
+                  className="mt-3 text-sm font-semibold text-primary"
+                >
+                  Edit
+                </button>
+              )}
             </>
           ) : (
             <div className="mt-1 font-numeric text-2xl font-semibold text-muted-foreground">
@@ -569,6 +670,7 @@ function ManualPBSheet({
   onOpenChange,
   exercise,
   current,
+  editing,
   token,
   onSaved,
 }: {
@@ -576,12 +678,19 @@ function ManualPBSheet({
   onOpenChange: (open: boolean) => void;
   exercise: ExerciseRow;
   current: DerivedPBDisplay | null;
+  editing: ManualPBEditTarget | null;
   token: string | null;
   onSaved: (result: AddManualPBResult) => Promise<void>;
 }) {
   const measurement = exercise.measurement_type ?? "";
   const fields = fieldsForMeasurement(measurement);
   const useMmSs = measurement === "timeOnly";
+  const [intent, setIntent] = useState<ManualSheetIntent>(
+    snapshotManualSheetIntent(editing),
+  );
+  const isEditing = intent === "edit";
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
   const [includeDate, setIncludeDate] = useState(false);
   const [achievedAt, setAchievedAt] = useState(todayISO());
   const [values, setValues] = useState<Record<string, string>>({});
@@ -590,13 +699,24 @@ function ManualPBSheet({
   >(null);
   const [saving, setSaving] = useState(false);
 
+  // Snapshot add vs edit when the sheet opens. Closing clears `editing` in
+  // the same render as `open=false`; deriving copy from that live prop made
+  // a successful edit flash Add-PB / "New PB saved".
   useEffect(() => {
     if (!open) return;
-    setIncludeDate(false);
-    setAchievedAt(todayISO());
-    setValues({});
+    const currentEditing = editingRef.current;
+    setIntent(snapshotManualSheetIntent(currentEditing));
     setFeedback(null);
-  }, [open]);
+    if (currentEditing) {
+      setIncludeDate(currentEditing.achieved_at != null);
+      setAchievedAt(currentEditing.achieved_at ?? todayISO());
+      setValues(valuesFromEditing(currentEditing, measurement));
+    } else {
+      setIncludeDate(false);
+      setAchievedAt(todayISO());
+      setValues({});
+    }
+  }, [open, measurement]);
 
   const canSave = useMmSs
     ? values.mm?.trim() !== "" || values.ss?.trim() !== ""
@@ -620,6 +740,22 @@ function ManualPBSheet({
     setSaving(true);
     setFeedback(null);
     try {
+      if (editing) {
+        const updated = await updateManualPB(token, {
+          exerciseId: exercise.id,
+          personalBestId: editing.id,
+          achievedAt: includeDate ? achievedAt : null,
+          ...payload,
+        });
+        setFeedback({ type: "success" });
+        await onSaved({
+          isNewPB: false,
+          personalBest: updated.personalBest,
+        });
+        window.setTimeout(() => onOpenChange(false), 800);
+        return;
+      }
+
       const result = await addManualPB(token, {
         exerciseId: exercise.id,
         achievedAt: includeDate ? achievedAt : null,
@@ -659,12 +795,14 @@ function ManualPBSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto rounded-t-[20px]">
         <SheetHeader>
-          <SheetTitle>Add PB manually</SheetTitle>
+          <SheetTitle>{manualSheetTitle(intent)}</SheetTitle>
         </SheetHeader>
         <div className="mt-6 space-y-6">
           <div>
             <div className="text-sm font-semibold text-foreground">{exercise.name}</div>
-            {current && currentFormatted ? (
+            {isEditing ? (
+              <p className="mt-2 text-xs text-muted-foreground">Edit manual PB</p>
+            ) : current && currentFormatted ? (
               <div className="mt-2">
                 <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Current PB
@@ -703,15 +841,16 @@ function ManualPBSheet({
               />
             ) : (
               <p className="text-xs text-muted-foreground">
-                Leave the date off if you only remember the value. It counts
-                toward your lifetime best, not your current PB.
+                {isEditing
+                  ? "Without a date this stays a lifetime-only entry and will not appear as your current PB on the board."
+                  : "Leave the date off if you only remember the value. It counts toward your lifetime best, not your current PB."}
               </p>
             )}
           </div>
 
           <div className="rounded-[16px] bg-card p-4 space-y-3">
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              New PB
+              {isEditing ? "Values" : "New PB"}
             </div>
             {useMmSs ? (
               <MmSsFields
@@ -749,7 +888,7 @@ function ManualPBSheet({
 
           {feedback?.type === "success" && (
             <div className="rounded-[16px] bg-card p-4 text-sm font-medium text-green-600">
-              New PB saved
+              {manualSheetSuccessMessage(intent)}
             </div>
           )}
           {feedback?.type === "notPB" && (
@@ -764,7 +903,7 @@ function ManualPBSheet({
           )}
 
           <Button type="button" disabled={!canSave || saving} onClick={() => void save()}>
-            {saving ? "Saving…" : "Save PB"}
+            {manualSheetSaveLabel(intent, saving)}
           </Button>
         </div>
       </SheetContent>
@@ -873,10 +1012,12 @@ function HistoryList({
   exercise,
   history,
   onDelete,
+  onEdit,
 }: {
   exercise: ExerciseRow;
   history: ProgressionEntryRow[];
   onDelete: (row: ProgressionEntryRow) => void;
+  onEdit: (row: ProgressionEntryRow) => void;
 }) {
   const rows = [...history].sort((a, b) => {
     const ta = a.date ? new Date(a.date).getTime() : 0;
@@ -931,6 +1072,16 @@ function HistoryList({
                       <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                         Reset
                       </span>
+                    )}
+                    {!row.isResetMarker && isEditableManual(row) && (
+                      <button
+                        type="button"
+                        aria-label="Edit manual PB"
+                        onClick={() => onEdit(row)}
+                        className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-primary"
+                      >
+                        <Pencil className="size-4" />
+                      </button>
                     )}
                     {!row.isResetMarker && (
                       <button

@@ -12,6 +12,9 @@
  * Usage:
  *   node scripts/prove-ios-refresh-live.mjs
  *
+ * After proving, wipe Wolf synthetic rows (linked SQL, not PostgREST delete):
+ *   node scripts/cleanup-synthetic-auth-proof.mjs
+ *
  * Does NOT set TEAMUP_OAUTH_*. Requires the Custom Access Token Hook ENABLED.
  */
 

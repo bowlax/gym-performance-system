@@ -911,9 +911,25 @@ struct MemberPerformanceTests {
 
         try test.memberPerformance.deleteSession(id: session.id, memberId: testMemberId)
 
-        #expect(try test.performanceDataAccess.fetchSession(id: session.id) == nil)
-        #expect(try test.performanceDataAccess.fetchExerciseEntries(sessionId: session.id).isEmpty)
-        #expect(try test.performanceDataAccess.fetchSets(exerciseEntryId: entry.id).isEmpty)
+        let stored = try test.performanceDataAccess.fetchSession(id: session.id)
+        #expect(stored != nil)
+        #expect(stored?.deletedAt != nil)
+        let entries = try test.performanceDataAccess.fetchExerciseEntries(sessionId: session.id)
+        #expect(entries.count == 1)
+        #expect(entries.first?.deletedAt != nil)
+        let sets = try test.performanceDataAccess.fetchSets(exerciseEntryId: entry.id)
+        #expect(sets.count == 1)
+        #expect(sets.first?.deletedAt != nil)
+        #expect(try test.memberPerformance.exerciseHistory(
+            memberId: testMemberId,
+            exerciseId: freeSquatId,
+            from: Date.distantPast
+        ).isEmpty)
+        let weeks = try test.memberPerformance.sessionConsistency(
+            memberId: testMemberId,
+            from: Calendar.current.startOfDay(for: Date())
+        )
+        #expect(weeks.allSatisfy { $0.count == 0 })
     }
 
     @Test
@@ -932,12 +948,264 @@ struct MemberPerformanceTests {
 
         try test.memberPerformance.deleteSession(id: session.id, memberId: testMemberId)
 
-        #expect(try test.performanceDataAccess.fetchSession(id: session.id) == nil)
+        let stored = try test.performanceDataAccess.fetchSession(id: session.id)
+        #expect(stored != nil)
+        #expect(stored?.deletedAt != nil)
         #expect(try derivedCurrentPB(
             memberPerformance: test.memberPerformance,
             exerciseId: freeSquatId
         ) == nil)
         #expect(try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId).isEmpty)
+    }
+
+    @Test
+    func testDeleteSessionTombstoneIsDirtyForPush() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let session = makeSession()
+        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
+        let set = makeSet(exerciseEntryId: entry.id, weight: 90.0, reps: 5)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [entry],
+            sets: [entry.id: [set]]
+        )
+        let syncedAt = Date().addingTimeInterval(-60)
+        session.syncedAt = syncedAt
+        entry.syncedAt = syncedAt
+        set.syncedAt = syncedAt
+        try test.performanceDataAccess.persistChanges()
+
+        try test.memberPerformance.deleteSession(id: session.id, memberId: testMemberId)
+
+        #expect(SyncDirtiness.isDirty(updatedAt: session.updatedAt, syncedAt: session.syncedAt))
+        #expect(SyncDirtiness.isDirty(updatedAt: entry.updatedAt, syncedAt: entry.syncedAt))
+        #expect(SyncDirtiness.isDirty(updatedAt: set.updatedAt, syncedAt: set.syncedAt))
+        let local = SwiftDataSyncLocalDataAccess(context: test.context)
+        let dirtySessions = try local.fetchDirtySessions(memberId: testMemberId)
+        #expect(dirtySessions.contains(where: { $0.id == session.id }))
+        let row = SyncPayloadMapper.sessionRow(
+            session,
+            gymId: UUID(),
+            deviceId: UUID(),
+            syncedAt: Date()
+        )
+        #expect(row["deleted_at"] is String)
+    }
+
+    @Test
+    func testCloudSessionTombstoneHidesLiveChildrenOnSecondDevicePull() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let session = makeSession()
+        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
+        let set = makeSet(exerciseEntryId: entry.id, weight: 85.0, reps: 5)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [entry],
+            sets: [entry.id: [set]]
+        )
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
+            exerciseId: freeSquatId
+        )?.weight == 85.0)
+
+        let deletedAt = Date().addingTimeInterval(10)
+        let remote = CloudSessionRow(
+            id: session.id,
+            gymId: UUID(),
+            memberId: testMemberId,
+            date: session.date,
+            notes: session.notes,
+            caloriesBurned: session.caloriesBurned,
+            createdAt: session.createdAt,
+            updatedAt: deletedAt,
+            syncedAt: deletedAt,
+            deletedAt: deletedAt,
+            sourceDeviceId: nil
+        )
+        let outcome = try SyncRecordMerger.mergeSession(
+            remote,
+            localDataAccess: SwiftDataSyncLocalDataAccess(context: test.context)
+        )
+        #expect(outcome == .cloudWon)
+        #expect(session.deletedAt != nil)
+        #expect(try test.performanceDataAccess.fetchSets(exerciseEntryId: entry.id).first?.deletedAt == nil)
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
+            exerciseId: freeSquatId
+        ) == nil)
+    }
+
+    @Test
+    func testCloudSessionTombstoneInsertOnReinstallDoesNotResurrectAsLive() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let sessionId = UUID()
+        let deletedAt = Date()
+        let remote = CloudSessionRow(
+            id: sessionId,
+            gymId: UUID(),
+            memberId: testMemberId,
+            date: Date(),
+            notes: nil,
+            caloriesBurned: nil,
+            createdAt: deletedAt,
+            updatedAt: deletedAt,
+            syncedAt: deletedAt,
+            deletedAt: deletedAt,
+            sourceDeviceId: nil
+        )
+        let outcome = try SyncRecordMerger.mergeSession(
+            remote,
+            localDataAccess: SwiftDataSyncLocalDataAccess(context: test.context)
+        )
+        #expect(outcome == .inserted)
+        let stored = try test.performanceDataAccess.fetchSession(id: sessionId)
+        #expect(stored?.deletedAt != nil)
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
+            exerciseId: freeSquatId
+        ) == nil)
+    }
+
+    @Test
+    func testWebOriginatedCascadedSessionTombstoneHidesOnPull() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let session = makeSession()
+        let entry = makeEntry(sessionId: session.id, exerciseId: freeSquatId)
+        let set = makeSet(exerciseEntryId: entry.id, weight: 85.0, reps: 5)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [entry],
+            sets: [entry.id: [set]]
+        )
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
+            exerciseId: freeSquatId
+        )?.weight == 85.0)
+
+        let deletedAt = Date().addingTimeInterval(10)
+        let gymId = UUID()
+        let local = SwiftDataSyncLocalDataAccess(context: test.context)
+
+        let sessionOutcome = try SyncRecordMerger.mergeSession(
+            CloudSessionRow(
+                id: session.id,
+                gymId: gymId,
+                memberId: testMemberId,
+                date: session.date,
+                notes: session.notes,
+                caloriesBurned: session.caloriesBurned,
+                createdAt: session.createdAt,
+                updatedAt: deletedAt,
+                syncedAt: deletedAt,
+                deletedAt: deletedAt,
+                sourceDeviceId: nil
+            ),
+            localDataAccess: local
+        )
+        let entryOutcome = try SyncRecordMerger.mergeExerciseEntry(
+            CloudExerciseEntryRow(
+                id: entry.id,
+                gymId: gymId,
+                sessionId: session.id,
+                exerciseId: freeSquatId,
+                createdAt: entry.createdAt,
+                updatedAt: deletedAt,
+                syncedAt: deletedAt,
+                deletedAt: deletedAt,
+                sourceDeviceId: nil
+            ),
+            localDataAccess: local
+        )
+        let setOutcome = try SyncRecordMerger.mergeSet(
+            CloudSetRow(
+                id: set.id,
+                gymId: gymId,
+                exerciseEntryId: entry.id,
+                weight: set.weight,
+                reps: set.reps,
+                timeSeconds: set.time,
+                distance: set.distance,
+                createdAt: set.createdAt,
+                updatedAt: deletedAt,
+                syncedAt: deletedAt,
+                deletedAt: deletedAt,
+                sourceDeviceId: nil
+            ),
+            localDataAccess: local
+        )
+
+        #expect(sessionOutcome == .cloudWon)
+        #expect(entryOutcome == .cloudWon)
+        #expect(setOutcome == .cloudWon)
+        #expect(session.deletedAt != nil)
+        #expect(entry.deletedAt != nil)
+        #expect(set.deletedAt != nil)
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
+            exerciseId: freeSquatId
+        ) == nil)
+        #expect(try test.memberPerformance.exerciseHistory(
+            memberId: testMemberId,
+            exerciseId: freeSquatId,
+            from: Date.distantPast
+        ).isEmpty)
+    }
+
+    @Test
+    func testWebOriginatedManualPBEditReachesIOSOnPull() throws {
+        let test = try makeMemberPerformance()
+        let freeSquatId = seedExerciseId(named: "Free Squat")
+        let undated = PersonalBestModel(
+            memberId: testMemberId,
+            exerciseId: freeSquatId,
+            weight: 100,
+            reps: 5,
+            achievedAt: nil,
+            entryType: .manualEntry
+        )
+        try test.performanceDataAccess.savePersonalBest(undated)
+        #expect(try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
+            exerciseId: freeSquatId
+        ) == nil)
+
+        let dated = Calendar.current.date(from: DateComponents(year: 2026, month: 8, day: 15))!
+        let updatedAt = Date().addingTimeInterval(10)
+        let outcome = try SyncRecordMerger.mergePersonalBest(
+            CloudPersonalBestRow(
+                id: undated.id,
+                gymId: UUID(),
+                memberId: testMemberId,
+                exerciseId: freeSquatId,
+                setId: nil,
+                weight: 110,
+                reps: 5,
+                timeSeconds: nil,
+                distance: nil,
+                achievedAt: dated,
+                entryType: PBEntryType.manualEntry.rawValue,
+                createdAt: undated.createdAt,
+                updatedAt: updatedAt,
+                syncedAt: updatedAt,
+                deletedAt: nil,
+                sourceDeviceId: nil
+            ),
+            localDataAccess: SwiftDataSyncLocalDataAccess(context: test.context)
+        )
+
+        #expect(outcome == .cloudWon)
+        #expect(undated.weight == 110)
+        #expect(undated.achievedAt != nil)
+        let current = try derivedCurrentPB(
+            memberPerformance: test.memberPerformance,
+            exerciseId: freeSquatId
+        )
+        #expect(current?.id == undated.id)
+        #expect(current?.weight == 110)
     }
 
     // MARK: -- PB Management
@@ -1005,10 +1273,12 @@ struct MemberPerformanceTests {
             exerciseId: freeSquatId
         )
 
-        #expect(try test.performanceDataAccess.fetchAllPBs(
+        let remaining = try test.performanceDataAccess.fetchAllPBs(
             memberId: testMemberId,
             exerciseId: freeSquatId
-        ).isEmpty)
+        )
+        #expect(remaining.count == 1)
+        #expect(remaining.first?.deletedAt != nil)
     }
 
     @Test
@@ -1073,10 +1343,12 @@ struct MemberPerformanceTests {
             memberPerformance: test.memberPerformance,
             exerciseId: freeSquatId
         ) == nil)
-        #expect(try test.performanceDataAccess.fetchAllPBs(
+        let remaining = try test.performanceDataAccess.fetchAllPBs(
             memberId: testMemberId,
             exerciseId: freeSquatId
-        ).isEmpty)
+        )
+        #expect(remaining.count == 1)
+        #expect(remaining.first?.deletedAt != nil)
     }
 
     // MARK: -- History entry deletion
@@ -1110,7 +1382,10 @@ struct MemberPerformanceTests {
         )
 
         #expect(try test.performanceDataAccess.fetchSession(id: session.id) != nil)
-        #expect(try test.performanceDataAccess.fetchSets(exerciseEntryId: entry.id).isEmpty)
+        #expect(try test.performanceDataAccess.fetchSession(id: session.id)?.deletedAt == nil)
+        let sets = try test.performanceDataAccess.fetchSets(exerciseEntryId: entry.id)
+        #expect(sets.count == 1)
+        #expect(sets.first?.deletedAt != nil)
         let currentPB = try derivedCurrentPB(
             memberPerformance: test.memberPerformance,
             exerciseId: freeSquatId
@@ -1157,7 +1432,9 @@ struct MemberPerformanceTests {
             exerciseId: freeSquatId
         )
 
-        #expect(try test.performanceDataAccess.fetchSets(exerciseEntryId: laterEntry.id).isEmpty)
+        let laterSets = try test.performanceDataAccess.fetchSets(exerciseEntryId: laterEntry.id)
+        #expect(laterSets.count == 1)
+        #expect(laterSets.first?.deletedAt != nil)
         let restoredPB = try derivedCurrentPB(
             memberPerformance: test.memberPerformance,
             exerciseId: freeSquatId
@@ -1189,10 +1466,12 @@ struct MemberPerformanceTests {
             memberPerformance: test.memberPerformance,
             exerciseId: freeSquatId
         ) == nil)
-        #expect(try test.performanceDataAccess.fetchAllPBs(
+        let remaining = try test.performanceDataAccess.fetchAllPBs(
             memberId: testMemberId,
             exerciseId: freeSquatId
-        ).isEmpty)
+        )
+        #expect(remaining.count == 1)
+        #expect(remaining.first?.deletedAt != nil)
     }
 
     @Test
@@ -1982,9 +2261,15 @@ final class MemberPerformanceTests: XCTestCase {
 
         try test.memberPerformance.deleteSession(id: session.id, memberId: testMemberId)
 
-        XCTAssertNil(try test.performanceDataAccess.fetchSession(id: session.id))
-        XCTAssertTrue(try test.performanceDataAccess.fetchExerciseEntries(sessionId: session.id).isEmpty)
-        XCTAssertTrue(try test.performanceDataAccess.fetchSets(exerciseEntryId: entry.id).isEmpty)
+        let stored = try test.performanceDataAccess.fetchSession(id: session.id)
+        XCTAssertNotNil(stored)
+        XCTAssertNotNil(stored?.deletedAt)
+        let entries = try test.performanceDataAccess.fetchExerciseEntries(sessionId: session.id)
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertNotNil(entries.first?.deletedAt)
+        let sets = try test.performanceDataAccess.fetchSets(exerciseEntryId: entry.id)
+        XCTAssertEqual(sets.count, 1)
+        XCTAssertNotNil(sets.first?.deletedAt)
     }
 
     func testTC_MP27_DeleteSessionContainingPBRemovesPBWhenNoHistory() throws {
@@ -2001,7 +2286,8 @@ final class MemberPerformanceTests: XCTestCase {
 
         try test.memberPerformance.deleteSession(id: session.id, memberId: testMemberId)
 
-        XCTAssertNil(try test.performanceDataAccess.fetchSession(id: session.id))
+        XCTAssertNotNil(try test.performanceDataAccess.fetchSession(id: session.id))
+        XCTAssertNotNil(try test.performanceDataAccess.fetchSession(id: session.id)?.deletedAt)
         XCTAssertNil(try derivedCurrentPB(memberPerformance: test.memberPerformance, exerciseId: freeSquatId))
         XCTAssertTrue(try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId).isEmpty)
     }
@@ -2043,7 +2329,9 @@ final class MemberPerformanceTests: XCTestCase {
             exerciseId: freeSquatId
         )
 
-        XCTAssertTrue(try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId).isEmpty)
+        let remaining = try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId)
+        XCTAssertEqual(remaining.count, 1)
+        XCTAssertNotNil(remaining.first?.deletedAt)
     }
 
     func testTC_MP33_DeletePersonalBestLeavesNoCurrentPBWhenDeletingOnlyRecord() throws {
@@ -2063,7 +2351,9 @@ final class MemberPerformanceTests: XCTestCase {
         )
 
         XCTAssertNil(try derivedCurrentPB(memberPerformance: test.memberPerformance, exerciseId: freeSquatId))
-        XCTAssertTrue(try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId).isEmpty)
+        let remaining = try test.performanceDataAccess.fetchAllPBs(memberId: testMemberId, exerciseId: freeSquatId)
+        XCTAssertEqual(remaining.count, 1)
+        XCTAssertNotNil(remaining.first?.deletedAt)
     }
 }
 #endif

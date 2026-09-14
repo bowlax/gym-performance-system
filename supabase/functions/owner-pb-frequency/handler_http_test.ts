@@ -13,6 +13,10 @@ import {
   resolveFrequencyWindow,
 } from "./handler.ts";
 import { badgeIds } from "../_shared/pb-derivation.ts";
+import {
+  onlyIfLoopback,
+  tombstoneIsolatedGymTree,
+} from "../_shared/test-isolated-gym-teardown.ts";
 
 const ENDPOINT = "http://localhost/functions/v1/owner-pb-frequency";
 
@@ -87,12 +91,12 @@ function liveEnv(): LiveEnv | null {
   if (!url || !anonKey || !serviceRoleKey || !jwtSecret) {
     return null;
   }
-  return {
+  return onlyIfLoopback({
     url: unquote(url),
     anonKey: unquote(anonKey),
     serviceRoleKey: unquote(serviceRoleKey),
     jwtSecret: unquote(jwtSecret),
-  };
+  });
 }
 
 async function mintJwt(
@@ -452,7 +456,162 @@ Deno.test({
       assertEquals(keys.has("sets"), false);
       assert(ownerBody.members[1].count === 1, "June 30 PB must not count in July");
     } finally {
-      Deno.env.get = originalGet;
+      try {
+        await tombstoneIsolatedGymTree(admin, [gymId]);
+      } finally {
+        Deno.env.get = originalGet;
+      }
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "HTTP POST owner-pb-frequency excludes a session-level-only tombstone whose children are still live",
+  ignore: liveEnv() == null,
+  sanitizeResources: false,
+  sanitizeOps: false,
+  async fn() {
+    const env = liveEnv();
+    if (!env) throw new Error("live env disappeared");
+
+    const originalGet = Deno.env.get.bind(Deno.env);
+    Deno.env.get = (name: string) => {
+      if (name === "SUPABASE_URL") return env.url;
+      if (name === "SUPABASE_ANON_KEY") return env.anonKey;
+      if (name === "SUPABASE_PUBLISHABLE_KEY") return env.anonKey;
+      if (name === "SERVICE_ROLE_KEY") return env.serviceRoleKey;
+      if (name === "JWT_SIGNING_SECRET") return env.jwtSecret;
+      return originalGet(name);
+    };
+
+    const admin = createClient(env.url, env.serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const gymId = crypto.randomUUID();
+    const memberId = crypto.randomUUID();
+    const ownerCaller = crypto.randomUUID();
+    const squatId = crypto.randomUUID();
+    const liveSession = crypto.randomUUID();
+    const tombstoneSession = crypto.randomUUID();
+    const liveEntry = crypto.randomUUID();
+    const tombstoneEntry = crypto.randomUUID();
+    const liveSet = crypto.randomUUID();
+    const tombstoneSet = crypto.randomUUID();
+    const providerId = `owner-freq-tombstone-${gymId.slice(0, 8)}`;
+
+    try {
+      const gymInsert = await admin.from("gyms").insert({
+        id: gymId,
+        teamup_provider_id: providerId,
+        name: "Owner Frequency Tombstone Gym",
+      });
+      if (gymInsert.error) throw gymInsert.error;
+
+      const membersInsert = await admin.from("members").insert([
+        {
+          id: memberId,
+          gym_id: gymId,
+          teamup_customer_id: "FREQ-TOMB",
+          display_name: "Freq Tomb",
+        },
+        {
+          id: ownerCaller,
+          gym_id: gymId,
+          teamup_customer_id: "FREQ-TOMB-OWNER",
+          display_name: "Freq Tomb Owner",
+        },
+      ]);
+      if (membersInsert.error) throw membersInsert.error;
+
+      const exerciseInsert = await admin.from("exercises").insert({
+        id: squatId,
+        gym_id: gymId,
+        name: "Tombstone Squat",
+        category: "pbExercise",
+        measurement_type: "weightAndReps",
+        pb_rule: "heaviestWeightAtReps",
+        target_reps: 5,
+        display_order: 1,
+        is_active: true,
+      });
+      if (exerciseInsert.error) throw exerciseInsert.error;
+
+      const sessionInsert = await admin.from("sessions").insert([
+        {
+          id: liveSession,
+          gym_id: gymId,
+          member_id: memberId,
+          date: "2026-07-02",
+        },
+        {
+          id: tombstoneSession,
+          gym_id: gymId,
+          member_id: memberId,
+          date: "2026-07-20",
+          deleted_at: "2026-07-21T00:00:00Z",
+        },
+      ]);
+      if (sessionInsert.error) throw sessionInsert.error;
+
+      const entryInsert = await admin.from("exercise_entries").insert([
+        {
+          id: liveEntry,
+          gym_id: gymId,
+          session_id: liveSession,
+          exercise_id: squatId,
+        },
+        {
+          id: tombstoneEntry,
+          gym_id: gymId,
+          session_id: tombstoneSession,
+          exercise_id: squatId,
+        },
+      ]);
+      if (entryInsert.error) throw entryInsert.error;
+
+      const setInsert = await admin.from("sets").insert([
+        {
+          id: liveSet,
+          gym_id: gymId,
+          exercise_entry_id: liveEntry,
+          weight: 90,
+          reps: 5,
+        },
+        {
+          id: tombstoneSet,
+          gym_id: gymId,
+          exercise_entry_id: tombstoneEntry,
+          weight: 200,
+          reps: 5,
+        },
+      ]);
+      if (setInsert.error) throw setInsert.error;
+
+      const ownerToken = await mintJwt(env.jwtSecret, {
+        memberId: ownerCaller,
+        gymId,
+        appRole: "owner",
+      });
+      const window = { from: "2026-07-01", to: "2026-07-31" };
+      const ownerRes = await handleOwnerPbFrequencyRequest(
+        postWithToken(ownerToken, window),
+      );
+      assertEquals(ownerRes.status, 200);
+      const ownerBody = await ownerRes.json() as { members: FrequencyRow[] };
+      assertEquals(ownerBody.members.length, 1);
+      assertEquals(ownerBody.members[0].member_id, memberId);
+      assertEquals(ownerBody.members[0].count, 1);
+      assertEquals(ownerBody.members[0].hits.length, 1);
+      assertEquals(ownerBody.members[0].hits[0].weight, 90);
+      assertEquals(ownerBody.members[0].hits[0].achieved_at, "2026-07-02");
+    } finally {
+      try {
+        await tombstoneIsolatedGymTree(admin, [gymId]);
+      } finally {
+        Deno.env.get = originalGet;
+      }
     }
   },
 });

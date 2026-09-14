@@ -278,4 +278,66 @@ struct FirstConnectUploaderTests {
         #expect(cloud.pbBatches.count == 1)
         #expect(cloud.pbBatches.first?.first?["set_id"] as? String == set.id.uuidString)
     }
+
+    @Test
+    @MainActor
+    func uploadPushesSessionTombstoneWithDeletedAt() async throws {
+        let context = try TestHelpers.makeInMemoryContext()
+        let local = SwiftDataSyncLocalDataAccess(context: context)
+        let cloud = MockSyncServiceAccess()
+        let memberId = UUID(uuidString: "AAAAAAAA-0000-0000-0000-000000000002")!
+        let gymId = UUID(uuidString: "0abc9301-b048-40f5-8bdc-9bb389916b59")!
+        let credentials = SyncCredentials(
+            supabaseURL: URL(string: "https://example.supabase.co")!,
+            publishableKey: "test-key",
+            accessToken: "token",
+            memberId: memberId,
+            gymId: gymId,
+            deviceId: UUID()
+        )
+
+        let syncedAt = Date(timeIntervalSince1970: 100)
+        let deletedAt = Date(timeIntervalSince1970: 500)
+        let session = SessionModel(
+            memberId: memberId,
+            date: Date(),
+            updatedAt: deletedAt,
+            syncedAt: syncedAt,
+            deletedAt: deletedAt
+        )
+        let entry = ExerciseEntryModel(
+            sessionId: session.id,
+            exerciseId: UUID(),
+            updatedAt: deletedAt,
+            syncedAt: syncedAt,
+            deletedAt: deletedAt
+        )
+        let set = ModelSet(
+            exerciseEntryId: entry.id,
+            weight: 90,
+            reps: 5,
+            updatedAt: deletedAt,
+            syncedAt: syncedAt,
+            deletedAt: deletedAt
+        )
+        context.insert(session)
+        context.insert(entry)
+        context.insert(set)
+        try context.save()
+
+        let uploader = FirstConnectUploader(
+            localDataAccess: local,
+            syncServiceAccess: cloud,
+            credentials: credentials,
+            batchSize: 10
+        )
+        let result = await uploader.upload(memberId: memberId)
+        #expect(result.completed == true)
+        #expect(result.counts.sessions == 1)
+        #expect(result.counts.exerciseEntries == 1)
+        #expect(result.counts.sets == 1)
+        #expect(cloud.sessionBatches.first?.first?["deleted_at"] is String)
+        #expect(cloud.entryBatches.first?.first?["deleted_at"] is String)
+        #expect(cloud.setBatches.first?.first?["deleted_at"] is String)
+    }
 }

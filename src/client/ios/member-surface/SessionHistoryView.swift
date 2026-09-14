@@ -106,6 +106,7 @@ struct SessionHistoryView: View {
     private func loadSessions() async {
         do {
             let fetched = try dependencies.performanceDataAccess.fetchSessions(memberId: dependencies.memberId)
+                .filter { $0.deletedAt == nil }
                 .sorted { $0.date > $1.date }
             sessions = fetched
 

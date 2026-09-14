@@ -69,6 +69,25 @@ struct SyncPayloadMapperTests {
     }
 
     @Test
+    func sessionRowMapsDeletedAtTombstone() {
+        let memberId = UUID(uuidString: "AAAAAAAA-0000-0000-0000-000000000002")!
+        let gymId = UUID(uuidString: "0abc9301-b048-40f5-8bdc-9bb389916b59")!
+        let deletedAt = Date(timeIntervalSince1970: 1_735_776_000)
+        let session = SessionModel(
+            memberId: memberId,
+            date: Date(timeIntervalSince1970: 1_735_689_600),
+            deletedAt: deletedAt
+        )
+        let row = SyncPayloadMapper.sessionRow(
+            session,
+            gymId: gymId,
+            deviceId: UUID(),
+            syncedAt: deletedAt
+        )
+        #expect(row["deleted_at"] is String)
+    }
+
+    @Test
     func memberSettingsPatchMapsStalenessOnly() {
         let memberId = UUID(uuidString: "AAAAAAAA-0000-0000-0000-000000000002")!
         let deviceId = UUID()

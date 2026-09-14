@@ -1,8 +1,18 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Plus, ChevronLeft, X } from "lucide-react";
+import { Plus, ChevronLeft, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { FormField } from "@/components/gp/form-field";
 import { MmSsFields } from "@/components/gp/mm-ss-fields";
 import {
@@ -29,6 +39,7 @@ import {
   isCableRow,
 } from "@/lib/gp/format";
 import { logSession, todayISO } from "@/lib/gp/log-set";
+import { deleteSession } from "@/lib/gp/pb-actions";
 import {
   stashSessionSaveSummary,
   type SessionSaveSummary,
@@ -524,7 +535,11 @@ function ExercisePicker({
 
 function SessionHistorySection() {
   const { supabase, session } = useAuth();
+  const queryClient = useQueryClient();
   const [openId, setOpenId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<SessionListRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const tokenTag = session?.token?.slice(-8) ?? "anon";
 
   const listQuery = useQuery({
@@ -535,6 +550,27 @@ function SessionHistorySection() {
     },
     enabled: !!supabase,
   });
+
+  const handleDeleteSession = async () => {
+    if (!session?.token || !pendingDelete) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteSession(session.token, pendingDelete.id);
+      setPendingDelete(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["session-history"] }),
+        queryClient.invalidateQueries({ queryKey: ["board"] }),
+        queryClient.invalidateQueries({ queryKey: ["sessions"] }),
+        queryClient.invalidateQueries({ queryKey: ["session-detail"] }),
+        queryClient.invalidateQueries({ queryKey: ["pb-history"] }),
+      ]);
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   if (openId) {
     return (
@@ -580,19 +616,25 @@ function SessionHistorySection() {
         title="Session history"
         caption={`${sessions.length} ${sessions.length === 1 ? "session" : "sessions"}`}
       />
+      {deleteError && (
+        <p className="mb-3 text-xs text-destructive">{deleteError}</p>
+      )}
       <ul className="rounded-[16px] bg-card">
         {sessions.map((s, i) => (
-          <li key={s.id}>
+          <li
+            key={s.id}
+            className={
+              "flex items-stretch " +
+              (i === 0 ? "rounded-t-[16px] " : "") +
+              (i === sessions.length - 1
+                ? "rounded-b-[16px] "
+                : "border-b border-border/50 ")
+            }
+          >
             <button
               type="button"
               onClick={() => setOpenId(s.id)}
-              className={
-                "flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-muted/40 " +
-                (i === 0 ? "rounded-t-[16px] " : "") +
-                (i === sessions.length - 1
-                  ? "rounded-b-[16px] "
-                  : "border-b border-border/50 ")
-              }
+              className="flex min-w-0 flex-1 items-center justify-between px-4 py-3 text-left transition-colors hover:bg-muted/40"
             >
               <SessionRowSummary s={s} />
               <ChevronLeft
@@ -600,9 +642,48 @@ function SessionHistorySection() {
                 aria-hidden
               />
             </button>
+            <button
+              type="button"
+              aria-label="Delete session"
+              onClick={() => {
+                setDeleteError(null);
+                setPendingDelete(s);
+              }}
+              className="inline-flex size-11 shrink-0 items-center justify-center text-muted-foreground hover:bg-muted hover:text-destructive"
+            >
+              <Trash2 className="size-4" />
+            </button>
           </li>
         ))}
       </ul>
+      <AlertDialog
+        open={pendingDelete != null}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setPendingDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this session?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDeleteSession();
+              }}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

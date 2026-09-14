@@ -222,6 +222,8 @@ async function cmdCreate() {
   console.log(JSON.stringify(state, null, 2));
   console.log(`\nAuth user id: ${user.id}`);
   console.log(`State written to ${STATE_PATH}`);
+  console.log("\nThis member stays in Wolf gym until:");
+  console.log("  node scripts/cleanup-synthetic-auth-proof.mjs");
 }
 
 async function issueSession() {
@@ -353,7 +355,10 @@ function usage() {
   node scripts/prove-custom-access-token-hook.mjs create
   node scripts/prove-custom-access-token-hook.mjs session --label baseline|after-hook|after-disable|after-refresh
   node scripts/prove-custom-access-token-hook.mjs rls
-  node scripts/prove-custom-access-token-hook.mjs refresh`);
+  node scripts/prove-custom-access-token-hook.mjs refresh
+
+Cleanup (linked SQL, not PostgREST delete):
+  node scripts/cleanup-synthetic-auth-proof.mjs`);
 }
 
 const [cmd, ...rest] = process.argv.slice(2);

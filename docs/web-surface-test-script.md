@@ -62,6 +62,9 @@ sessions if a clean slate is needed (see Cleanup at the end).
       correctly.
 - [ ] Session history (reached from Log a Session) lists past sessions, most recent first.
 - [ ] Tapping a session shows the exercises and sets logged in it.
+- [ ] Each history row has a delete affordance (trash). Confirming delete tombstones the
+      whole session; it disappears from history, the heatmap, and the board. Cancelling
+      leaves it in place.
 
 ---
 
@@ -89,6 +92,21 @@ Open an exercise with some history (log a few ascending sets first if needed).
       not saved" message, and NO record is added (nothing persisted).
 - [ ] Adding a manual PB when there is **no current PB**: becomes the opening PB.
 - [ ] After adding, the hero, chart, and history all refresh to reflect the change.
+
+---
+
+## 4b. Progression - Edit a Manual PB
+
+Matches iOS: in-place update of the same row. Does **not** have to beat the current PB.
+
+- [ ] Manual history rows (not session sets) show an edit affordance next to delete.
+- [ ] A lifetime PB that is a live manual also has Edit on the lifetime card.
+- [ ] Opening edit prefills the existing values and date (or date off if undated).
+- [ ] Saving a weaker value still persists; the board re-derives (it may stay on a
+      stronger session set, or become this row if it is now the best dated record).
+- [ ] Turning the date off makes it lifetime-only and not current on the board.
+- [ ] Turning the date on can make an undated lifetime entry become current.
+- [ ] The row id does not change (not a delete-and-recreate).
 
 ---
 

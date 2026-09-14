@@ -8,6 +8,10 @@
 import { assertEquals, assert } from "jsr:@std/assert@1";
 import { SignJWT } from "jsr:@panva/jose@6";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  onlyIfLoopback,
+  tombstoneIsolatedGymTree,
+} from "./test-isolated-gym-teardown.ts";
 
 const VIEWS = [
   "owner_session_activity",
@@ -47,12 +51,12 @@ function liveEnv(): LiveEnv | null {
   if (!url || !anonKey || !serviceRoleKey || !jwtSecret) {
     return null;
   }
-  return {
+  return onlyIfLoopback({
     url: unquote(url).replace(/\/$/, ""),
     anonKey: unquote(anonKey),
     serviceRoleKey: unquote(serviceRoleKey),
     jwtSecret: unquote(jwtSecret),
-  };
+  });
 }
 
 async function mintJwt(
@@ -519,37 +523,7 @@ Deno.test({
         `anon must not read owner views, got ${anonRes.status}`,
       );
     } finally {
-      await admin.from("sets").delete().in("id", [
-        setA1,
-        setA2,
-        setB1,
-        setDeleted,
-        setC,
-      ]);
-      await admin.from("exercise_entries").delete().in("id", [
-        entryA1,
-        entryA2,
-        entryB1,
-        entryDeleted,
-        entryC,
-      ]);
-      await admin.from("sessions").delete().in("id", [
-        sessionA1,
-        sessionA2,
-        sessionB1,
-        sessionDeleted,
-        sessionC,
-      ]);
-      await admin.from("exercises").delete().in("id", [pressA, squatA, pressB]);
-      await admin.from("members").delete().in("id", [
-        memberA,
-        memberB,
-        memberC,
-        memberCaller,
-        coachCaller,
-      ]);
-      await admin.from("owner_surface_grants").delete().in("gym_id", [gymA, gymB]);
-      await admin.from("gyms").delete().in("id", [gymA, gymB]);
+      await tombstoneIsolatedGymTree(admin, [gymA, gymB]);
     }
   },
 });
