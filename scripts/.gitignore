@@ -5,3 +5,4 @@ node_modules/
 .ios-refresh-live-input.json
 .owner-auth.json
 .owner-session-refresh-proof.json
+.teamup-m2m-token

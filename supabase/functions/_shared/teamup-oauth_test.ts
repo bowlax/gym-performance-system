@@ -18,6 +18,7 @@ import {
   shouldUseStubTeamUpPath,
   signOAuthState,
   stubTeamUpVerification,
+  teamUpDisplayNameFromClaims,
   verifyOAuthState,
   isStubTokenRejectedWhenOAuthConfigured,
   type OAuthGetRoute,
@@ -61,6 +62,7 @@ Deno.test("stub verification uses configured provider when present", () => {
     teamupCustomerId: "TEST-CUSTOMER-001",
     providerId: "999",
     mode: "customer",
+    displayName: null,
   });
 });
 
@@ -152,11 +154,11 @@ Deno.test("buildTeamUpAuthorizeUrl includes required OAuth parameters", () => {
   assertEquals(url.searchParams.get("login_hint"), "member@example.com");
 });
 
-Deno.test("decodeTeamUpAccessToken extracts sub and provider from JWT claims", () => {
+Deno.test("decodeTeamUpAccessToken extracts sub, provider, and display name from JWT claims", () => {
   const token = makeFakeTeamUpJwt({
     sub: "customer-123",
     email: "member@example.com",
-    name: "Member",
+    name: "John Doe",
     scope: "read_write provider:5404319",
   });
 
@@ -164,7 +166,28 @@ Deno.test("decodeTeamUpAccessToken extracts sub and provider from JWT claims", (
     teamupCustomerId: "customer-123",
     providerId: "5404319",
     mode: "customer",
+    displayName: "John Doe",
   });
+});
+
+Deno.test("decodeTeamUpAccessToken still ignores email and missing name", () => {
+  const token = makeFakeTeamUpJwt({
+    sub: "customer-123",
+    email: "member@example.com",
+    scope: "read_write provider:5404319",
+  });
+  const decoded = decodeTeamUpAccessToken(token);
+  assertEquals(decoded.displayName, null);
+  assertEquals("email" in decoded, false);
+});
+
+Deno.test("teamUpDisplayNameFromClaims keeps a single string and ignores blanks", () => {
+  assertEquals(teamUpDisplayNameFromClaims({ name: "Lee Ball" }), "Lee Ball");
+  assertEquals(teamUpDisplayNameFromClaims({ name: "  Ada  " }), "Ada");
+  assertEquals(teamUpDisplayNameFromClaims({ name: "   " }), null);
+  assertEquals(teamUpDisplayNameFromClaims({}), null);
+  assertEquals(teamUpDisplayNameFromClaims({ first_name: "Lee", last_name: "Ball" }), null);
+  assertEquals(teamUpDisplayNameFromClaims({ name: 123 }), null);
 });
 
 Deno.test("parseProviderIdFromScope handles multiple scope tokens", () => {

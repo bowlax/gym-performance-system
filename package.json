@@ -8,7 +8,7 @@
     "pb-evaluation:test": "cd supabase/functions && deno test --allow-read=../../tests/vectors _shared/pb-evaluation_test.ts",
     "pb-derivation:test": "cd supabase/functions && deno test --allow-read=../../tests/vectors _shared/pb-derivation_test.ts",
     "teamup-oauth:test": "cd supabase/functions && deno test _shared/teamup-oauth_test.ts",
-    "token-broker:http-test": "cd supabase/functions && deno test token-broker/handler_http_test.ts",
+    "token-broker:http-test": "cd supabase/functions && deno test --allow-env --allow-net token-broker/handler_http_test.ts",
     "owner-current-pbs:test": "cd supabase/functions && deno test --allow-read=../migrations --allow-env --allow-net owner-current-pbs/handler_http_test.ts _shared/owner_surface_grants_rls_policy_test.ts",
     "owner-pb-frequency:test": "cd supabase/functions && deno test --allow-env --allow-net owner-pb-frequency/handler_http_test.ts _shared/edge-pb-reads_frequency_test.ts",
     "owner-member-names:test": "cd supabase/functions && deno test --allow-env --allow-net owner-member-names/handler_http_test.ts",

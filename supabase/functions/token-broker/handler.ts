@@ -341,6 +341,7 @@ async function createOrAdoptMember(
   gymId: string,
   teamupCustomerId: string,
   deviceMemberId: string,
+  displayName: string | null,
 ): Promise<MemberRow> {
   const { data: existing, error: lookupError } = await supabase
     .from("members")
@@ -357,19 +358,33 @@ async function createOrAdoptMember(
 
   const existingMember = existing as MemberRow | null;
   if (existingMember?.id) {
+    if (displayName) {
+      const { error: updateError } = await supabase
+        .from("members")
+        .update({ display_name: displayName })
+        .eq("id", existingMember.id)
+        .eq("gym_id", gymId);
+      if (updateError) {
+        logSupabaseError("createOrAdoptMember.updateName", updateError);
+        throw updateError;
+      }
+    }
     return {
       id: existingMember.id,
       auth_user_id: existingMember.auth_user_id ?? null,
     };
   }
 
+  const insertRow: Record<string, unknown> = {
+    id: deviceMemberId,
+    gym_id: gymId,
+    teamup_customer_id: teamupCustomerId,
+  };
+  if (displayName) insertRow.display_name = displayName;
+
   const { data: created, error: insertError } = await supabase
     .from("members")
-    .insert({
-      id: deviceMemberId,
-      gym_id: gymId,
-      teamup_customer_id: teamupCustomerId,
-    })
+    .insert(insertRow)
     .select("id, auth_user_id")
     .single();
 
@@ -676,6 +691,7 @@ async function issueMemberSession(
     gymId,
     verification.teamupCustomerId,
     deviceMemberId,
+    verification.displayName,
   );
 
   // Stub / OAuth-unconfigured: hand-mint HS256 (local/dev only).

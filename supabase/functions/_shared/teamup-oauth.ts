@@ -13,6 +13,8 @@ export interface TeamUpVerificationResult {
   teamupCustomerId: string;
   providerId: string;
   mode: TeamUpMode;
+  /** JWT `name` claim, trimmed. Null when missing or blank. */
+  displayName: string | null;
 }
 
 export interface TeamUpOAuthConfig {
@@ -59,6 +61,7 @@ export function stubTeamUpVerification(
     teamupCustomerId: "TEST-CUSTOMER-001",
     providerId,
     mode: "customer",
+    displayName: null,
   };
 }
 
@@ -226,6 +229,19 @@ function decodeBase64UrlJson(segment: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
+/**
+ * TeamUp's documented JWT `name` is a single display string (e.g. "John Doe"),
+ * not first/last fields. Blank or non-string values are ignored.
+ */
+export function teamUpDisplayNameFromClaims(
+  claims: Record<string, unknown>,
+): string | null {
+  const name = claims.name;
+  if (typeof name !== "string") return null;
+  const trimmed = name.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export function decodeTeamUpAccessToken(
   accessToken: string,
 ): TeamUpVerificationResult {
@@ -250,6 +266,7 @@ export function decodeTeamUpAccessToken(
     teamupCustomerId: String(sub),
     providerId,
     mode: inferTeamUpModeFromScope(scope),
+    displayName: teamUpDisplayNameFromClaims(claims),
   };
 }
 
