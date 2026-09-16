@@ -105,7 +105,8 @@ enum SyncPayloadMapper {
     }
 
     /// Settings-only PATCH body for `members`. Must not include broker-owned
-    /// identity fields (`id`, `gym_id`, `teamup_customer_id`, `auth_user_id`);
+    /// identity fields (`id`, `gym_id`, `teamup_customer_id`, `auth_user_id`,
+    /// `teamup_email`);
     /// filter is `id=eq.{jwt member_id}`. Devices never establish Auth users.
     static func memberSettingsPatch(
         _ member: UserIdentityModel,

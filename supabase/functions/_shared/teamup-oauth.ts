@@ -13,8 +13,10 @@ export interface TeamUpVerificationResult {
   teamupCustomerId: string;
   providerId: string;
   mode: TeamUpMode;
-  /** JWT `name` claim, trimmed. Null when missing or blank. */
+  /** JWT `name` claim, trimmed. Null when missing or blank. Live iOS tokens omit this. */
   displayName: string | null;
+  /** JWT `email` claim, trimmed. Null when missing or blank. */
+  teamupEmail: string | null;
 }
 
 export interface TeamUpOAuthConfig {
@@ -62,6 +64,7 @@ export function stubTeamUpVerification(
     providerId,
     mode: "customer",
     displayName: null,
+    teamupEmail: null,
   };
 }
 
@@ -242,6 +245,15 @@ export function teamUpDisplayNameFromClaims(
   return trimmed.length > 0 ? trimmed : null;
 }
 
+export function teamUpEmailFromClaims(
+  claims: Record<string, unknown>,
+): string | null {
+  const email = claims.email;
+  if (typeof email !== "string") return null;
+  const trimmed = email.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export function decodeTeamUpAccessToken(
   accessToken: string,
 ): TeamUpVerificationResult {
@@ -267,6 +279,7 @@ export function decodeTeamUpAccessToken(
     providerId,
     mode: inferTeamUpModeFromScope(scope),
     displayName: teamUpDisplayNameFromClaims(claims),
+    teamupEmail: teamUpEmailFromClaims(claims),
   };
 }
 

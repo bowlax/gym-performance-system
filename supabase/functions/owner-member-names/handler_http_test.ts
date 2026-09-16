@@ -198,3 +198,123 @@ Deno.test({
     }
   },
 });
+
+Deno.test({
+  name: "HTTP POST refresh matches roster names by teamup_email and leaves unmatched Members",
+  ignore: liveEnv() == null,
+  sanitizeResources: false,
+  sanitizeOps: false,
+  async fn() {
+    const env = liveEnv();
+    if (!env) throw new Error("live env disappeared");
+
+    const originalGet = Deno.env.get.bind(Deno.env);
+    const originalFetch = globalThis.fetch;
+    Deno.env.get = (name: string) => {
+      if (name === "SUPABASE_URL") return env.url;
+      if (name === "SUPABASE_ANON_KEY") return env.anonKey;
+      if (name === "SUPABASE_PUBLISHABLE_KEY") return env.anonKey;
+      if (name === "SERVICE_ROLE_KEY") return env.serviceRoleKey;
+      if (name === "JWT_SIGNING_SECRET") return env.jwtSecret;
+      if (name === "TEAMUP_M2M_TOKEN") return "test-m2m-token";
+      if (name === "TEAMUP_OAUTH_PROVIDER_ID") return "5404319";
+      return originalGet(name);
+    };
+
+    globalThis.fetch = async (input, init) => {
+      const url = new URL(String(input));
+      if (url.origin === "https://goteamup.com") {
+        const query = url.searchParams.get("query");
+        if (query === "match@example.com") {
+          return new Response(
+            JSON.stringify({
+              count: 1,
+              next: null,
+              results: [{
+                id: 6714431,
+                first_name: "Ada",
+                last_name: "Lovelace",
+                email: "match@example.com",
+                status: "converted",
+              }],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response(
+          JSON.stringify({ count: 0, next: null, results: [] }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return await originalFetch(input, init);
+    };
+
+    const admin = createClient(env.url, env.serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const gymId = crypto.randomUUID();
+    const matched = crypto.randomUUID();
+    const unmatched = crypto.randomUUID();
+    const noEmail = crypto.randomUUID();
+    const ownerCaller = crypto.randomUUID();
+    const providerId = `email-names-${gymId.slice(0, 8)}`;
+
+    try {
+      const gymInsert = await admin.from("gyms").insert({
+        id: gymId,
+        teamup_provider_id: providerId,
+        name: "Email Names Test Gym",
+      });
+      if (gymInsert.error) throw gymInsert.error;
+
+      const membersInsert = await admin.from("members").insert([
+        {
+          id: matched,
+          gym_id: gymId,
+          teamup_customer_id: "EMAIL-MATCH",
+          display_name: "Member",
+          teamup_email: "match@example.com",
+        },
+        {
+          id: unmatched,
+          gym_id: gymId,
+          teamup_customer_id: "EMAIL-MISS",
+          display_name: "Member",
+          teamup_email: "missing@example.com",
+        },
+        {
+          id: noEmail,
+          gym_id: gymId,
+          teamup_customer_id: "EMAIL-NONE",
+          display_name: "Member",
+        },
+      ]);
+      if (membersInsert.error) throw membersInsert.error;
+
+      const ownerToken = await mintJwt(env.jwtSecret, {
+        memberId: ownerCaller,
+        gymId,
+        appRole: "owner",
+      });
+      const res = await handleOwnerMemberNamesRequest(
+        postWithToken(ownerToken, { refresh: true }),
+      );
+      assertEquals(res.status, 200);
+      const body = await res.json() as {
+        members: Array<{ member_id: string; display_name: string }>;
+      };
+      const byId = new Map(body.members.map((row) => [row.member_id, row]));
+      assertEquals(byId.get(matched)?.display_name, "Ada Lovelace");
+      assertEquals(byId.get(unmatched)?.display_name, "Member");
+      assertEquals(byId.get(noEmail)?.display_name, "Member");
+    } finally {
+      globalThis.fetch = originalFetch;
+      try {
+        await tombstoneIsolatedGymTree(admin, [gymId]);
+      } finally {
+        Deno.env.get = originalGet;
+      }
+    }
+  },
+});

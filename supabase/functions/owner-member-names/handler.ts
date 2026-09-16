@@ -1,9 +1,14 @@
 /**
  * Owner member names — cache TeamUp roster names onto members.display_name.
  *
- * Access is owner_surface_grants (same gate as other owner functions).
- * TeamUp is contacted only on refresh, never on a plain list.
- * Writes use the service role because members_update_own is self-only.
+ * Join is GET /customers?query=<members.teamup_email> (M2M), not roster id.
+ * JWT `sub` and ProviderCustomerProfile id are different namespaces.
+ * TeamUp is contacted only on refresh. Writes use the service role because
+ * members_update_own is self-only.
+ *
+ * Members with no teamup_email (never connected after email capture, JWT
+ * omitted email, or family dependants without email) keep display_name
+ * 'Member'.
  */
 
 import {
@@ -11,12 +16,20 @@ import {
   createServiceRoleClient,
   createUserClient,
   jsonResponse,
-  optionalString,
 } from "../_shared/member-edge.ts";
 import { fetchOwnerSurfaceGrant } from "../_shared/edge-pb-reads.ts";
+import {
+  customerDisplayName,
+  detectTeamUpAuthPrefix,
+  lookupCustomerByEmail,
+} from "../_shared/teamup-customers.ts";
 
-const TEAMUP_CUSTOMERS_URL = "https://goteamup.com/api/v2/customers";
-const AUTH_PREFIXES = ["Bearer", "Token", "JWT"] as const;
+export {
+  customerDisplayName,
+  customerEmail,
+  emailsMatch,
+  pickCustomerByEmail,
+} from "../_shared/teamup-customers.ts";
 
 export interface OwnerMemberNameRow {
   member_id: string;
@@ -24,115 +37,27 @@ export interface OwnerMemberNameRow {
   display_name: string;
 }
 
-interface TeamUpCustomerPage {
-  count?: number;
-  next?: string | null;
-  results?: unknown[];
+interface MemberSyncRow extends OwnerMemberNameRow {
+  teamup_email: string | null;
 }
 
-function customerDisplayName(record: Record<string, unknown>): string | null {
-  const combined = optionalString(record.name);
-  if (combined && combined.trim().length > 0) return combined.trim();
-
-  const first =
-    optionalString(record.first_name) ?? optionalString(record.firstName);
-  const last =
-    optionalString(record.last_name) ?? optionalString(record.lastName);
-  const joined = [first, last].filter((part) => part && part.trim().length > 0)
-    .join(" ")
-    .trim();
-  return joined.length > 0 ? joined : null;
-}
-
-function customerId(record: Record<string, unknown>): string | null {
-  const id = record.id;
-  if (typeof id === "number" && Number.isFinite(id)) return String(id);
-  if (typeof id === "string" && id.length > 0) return id;
-  return null;
-}
-
-async function teamUpGetCustomers(
-  token: string,
-  providerId: string,
-  prefix: string,
-  page: number,
-): Promise<{ ok: true; json: TeamUpCustomerPage } | { ok: false; status: number }> {
-  const url = new URL(TEAMUP_CUSTOMERS_URL);
-  url.searchParams.set("page", String(page));
-  url.searchParams.set("page_size", "100");
-
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `${prefix} ${token}`,
-      "TeamUp-Provider-ID": providerId,
-      Accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    return { ok: false, status: response.status };
-  }
-
-  const json = await response.json() as TeamUpCustomerPage;
-  return { ok: true, json };
-}
-
-export async function detectTeamUpAuthPrefix(
-  token: string,
-  providerId: string,
-): Promise<string> {
-  for (const prefix of AUTH_PREFIXES) {
-    const result = await teamUpGetCustomers(token, providerId, prefix, 1);
-    if (result.ok) return prefix;
-  }
-  throw new Error("TeamUp customers list rejected every auth prefix");
-}
-
-export async function fetchAllTeamUpCustomerNames(
-  token: string,
-  providerId: string,
-  prefix: string,
-): Promise<Map<string, string>> {
-  const names = new Map<string, string>();
-  let page = 1;
-  while (true) {
-    const result = await teamUpGetCustomers(token, providerId, prefix, page);
-    if (!result.ok) {
-      throw new Error(`TeamUp customers page ${page} failed`);
-    }
-    const rows = Array.isArray(result.json.results) ? result.json.results : [];
-    for (const row of rows) {
-      if (typeof row !== "object" || row === null) continue;
-      const record = row as Record<string, unknown>;
-      const id = customerId(record);
-      const name = customerDisplayName(record);
-      if (id && name) names.set(id, name);
-    }
-    if (!result.json.next || rows.length === 0) break;
-    page += 1;
-    if (page > 50) break;
-  }
-  return names;
-}
-
-async function listMemberNames(
-  grantGymId: string,
-): Promise<OwnerMemberNameRow[]> {
+async function listMembersForSync(grantGymId: string): Promise<MemberSyncRow[]> {
   const service = createServiceRoleClient();
   const { data, error } = await service
     .from("members")
-    .select("id, teamup_customer_id, display_name")
+    .select("id, teamup_customer_id, display_name, teamup_email")
     .eq("gym_id", grantGymId)
     .is("deleted_at", null);
 
   if (error) throw error;
 
-  const rows: OwnerMemberNameRow[] = [];
+  const rows: MemberSyncRow[] = [];
   for (const row of data ?? []) {
     const record = row as {
       id?: unknown;
       teamup_customer_id?: unknown;
       display_name?: unknown;
+      teamup_email?: unknown;
     };
     if (typeof record.id !== "string") continue;
     rows.push({
@@ -143,12 +68,22 @@ async function listMemberNames(
           : null,
       display_name:
         typeof record.display_name === "string" ? record.display_name : "Member",
+      teamup_email:
+        typeof record.teamup_email === "string" ? record.teamup_email : null,
     });
   }
   return rows;
 }
 
-async function syncNamesFromTeamUp(grantGymId: string): Promise<number> {
+function toPublicRows(rows: MemberSyncRow[]): OwnerMemberNameRow[] {
+  return rows.map((row) => ({
+    member_id: row.member_id,
+    teamup_customer_id: row.teamup_customer_id,
+    display_name: row.display_name,
+  }));
+}
+
+export async function syncNamesFromTeamUp(grantGymId: string): Promise<number> {
   const token = Deno.env.get("TEAMUP_M2M_TOKEN")?.trim();
   const providerId = Deno.env.get("TEAMUP_OAUTH_PROVIDER_ID")?.trim();
   if (!token || !providerId) {
@@ -156,14 +91,19 @@ async function syncNamesFromTeamUp(grantGymId: string): Promise<number> {
   }
 
   const prefix = await detectTeamUpAuthPrefix(token, providerId);
-  const names = await fetchAllTeamUpCustomerNames(token, providerId, prefix);
-  const members = await listMemberNames(grantGymId);
+  const members = await listMembersForSync(grantGymId);
   const service = createServiceRoleClient();
   let updated = 0;
 
   for (const member of members) {
-    if (!member.teamup_customer_id) continue;
-    const name = names.get(member.teamup_customer_id);
+    if (!member.teamup_email) continue;
+    const record = await lookupCustomerByEmail(
+      token,
+      providerId,
+      prefix,
+      member.teamup_email,
+    );
+    const name = record ? customerDisplayName(record) : null;
     if (!name || name === member.display_name) continue;
     const { error } = await service
       .from("members")
@@ -213,7 +153,7 @@ export const handleOwnerMemberNamesRequest = createEdgeRequestHandler(
       }
     }
 
-    const members = await listMemberNames(grantGymId);
+    const members = toPublicRows(await listMembersForSync(grantGymId));
     return jsonResponse({ members }, 200);
   },
 );

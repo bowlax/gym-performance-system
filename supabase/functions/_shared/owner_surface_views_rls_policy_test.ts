@@ -75,9 +75,9 @@ Deno.test("owner raw-fact views are security_invoker and owner-gated via grants"
       `${viewName} must be owner-only, not coach+owner`,
     );
     assertEquals(
-      /display_name/i.test(view),
+      /display_name|teamup_email/i.test(view),
       false,
-      `${viewName} must not expose display_name`,
+      `${viewName} must not expose display_name or teamup_email`,
     );
     assertEquals(
       /goteamup|teamup_m2m|teamup-oauth/i.test(view),

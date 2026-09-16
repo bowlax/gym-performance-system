@@ -380,7 +380,7 @@ Deno.test({
 
       const firstToken = makeFakeTeamUpJwt({
         sub: teamupCustomerId,
-        email: "ignored@example.com",
+        email: "jwt-email-test@example.com",
         name: "Lee Ball",
         scope: `read_write provider:${providerId}`,
       });
@@ -389,13 +389,14 @@ Deno.test({
 
       const firstRow = await admin
         .from("members")
-        .select("id, display_name, auth_user_id, teamup_customer_id")
+        .select("id, display_name, auth_user_id, teamup_customer_id, teamup_email")
         .eq("gym_id", gymId)
         .eq("teamup_customer_id", teamupCustomerId)
         .is("deleted_at", null)
         .single();
       if (firstRow.error) throw firstRow.error;
       assertEquals(firstRow.data.display_name, "Lee Ball");
+      assertEquals(firstRow.data.teamup_email, "jwt-email-test@example.com");
       assertEquals(firstRow.data.id, deviceMemberId);
       authUserId = typeof firstRow.data.auth_user_id === "string"
         ? firstRow.data.auth_user_id
@@ -421,6 +422,7 @@ Deno.test({
 
       const reconnectToken = makeFakeTeamUpJwt({
         sub: teamupCustomerId,
+        email: "ada@example.com",
         name: "Ada Lovelace",
         scope: `read_write provider:${providerId}`,
       });
@@ -432,7 +434,7 @@ Deno.test({
 
       const secondRow = await admin
         .from("members")
-        .select("id, display_name")
+        .select("id, display_name, teamup_email")
         .eq("gym_id", gymId)
         .eq("teamup_customer_id", teamupCustomerId)
         .is("deleted_at", null)
@@ -440,6 +442,7 @@ Deno.test({
       if (secondRow.error) throw secondRow.error;
       assertEquals(secondRow.data.id, deviceMemberId);
       assertEquals(secondRow.data.display_name, "Ada Lovelace");
+      assertEquals(secondRow.data.teamup_email, "ada@example.com");
 
       const namelessToken = makeFakeTeamUpJwt({
         sub: teamupCustomerId,
@@ -453,11 +456,12 @@ Deno.test({
 
       const thirdRow = await admin
         .from("members")
-        .select("display_name")
+        .select("display_name, teamup_email")
         .eq("id", deviceMemberId)
         .single();
       if (thirdRow.error) throw thirdRow.error;
       assertEquals(thirdRow.data.display_name, "Ada Lovelace");
+      assertEquals(thirdRow.data.teamup_email, "ada@example.com");
     } catch (error) {
       testError = error;
     } finally {

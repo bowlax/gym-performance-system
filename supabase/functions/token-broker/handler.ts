@@ -72,6 +72,7 @@ import {
   verifyOAuthState,
   type TeamUpVerificationResult,
 } from "../_shared/teamup-oauth.ts";
+import { lookupDisplayNameByEmailBestEffort } from "../_shared/teamup-customers.ts";
 
 // Minimal schema types for compile-time checking without a generated Database type.
 interface GymRow {
@@ -342,6 +343,7 @@ async function createOrAdoptMember(
   teamupCustomerId: string,
   deviceMemberId: string,
   displayName: string | null,
+  teamupEmail: string | null,
 ): Promise<MemberRow> {
   const { data: existing, error: lookupError } = await supabase
     .from("members")
@@ -358,14 +360,17 @@ async function createOrAdoptMember(
 
   const existingMember = existing as MemberRow | null;
   if (existingMember?.id) {
-    if (displayName) {
+    const patch: Record<string, unknown> = {};
+    if (displayName) patch.display_name = displayName;
+    if (teamupEmail) patch.teamup_email = teamupEmail;
+    if (Object.keys(patch).length > 0) {
       const { error: updateError } = await supabase
         .from("members")
-        .update({ display_name: displayName })
+        .update(patch)
         .eq("id", existingMember.id)
         .eq("gym_id", gymId);
       if (updateError) {
-        logSupabaseError("createOrAdoptMember.updateName", updateError);
+        logSupabaseError("createOrAdoptMember.updateIdentity", updateError);
         throw updateError;
       }
     }
@@ -381,6 +386,7 @@ async function createOrAdoptMember(
     teamup_customer_id: teamupCustomerId,
   };
   if (displayName) insertRow.display_name = displayName;
+  if (teamupEmail) insertRow.teamup_email = teamupEmail;
 
   const { data: created, error: insertError } = await supabase
     .from("members")
@@ -686,12 +692,21 @@ async function issueMemberSession(
     return { error: "Gym not found for TeamUp provider", status: 404 };
   }
 
+  let displayName = verification.displayName;
+  if (verification.teamupEmail) {
+    const rosterName = await lookupDisplayNameByEmailBestEffort(
+      verification.teamupEmail,
+    );
+    if (rosterName) displayName = rosterName;
+  }
+
   const member = await createOrAdoptMember(
     supabase,
     gymId,
     verification.teamupCustomerId,
     deviceMemberId,
-    verification.displayName,
+    displayName,
+    verification.teamupEmail,
   );
 
   // Stub / OAuth-unconfigured: hand-mint HS256 (local/dev only).

@@ -19,6 +19,7 @@ import {
   signOAuthState,
   stubTeamUpVerification,
   teamUpDisplayNameFromClaims,
+  teamUpEmailFromClaims,
   verifyOAuthState,
   isStubTokenRejectedWhenOAuthConfigured,
   type OAuthGetRoute,
@@ -63,6 +64,7 @@ Deno.test("stub verification uses configured provider when present", () => {
     providerId: "999",
     mode: "customer",
     displayName: null,
+    teamupEmail: null,
   });
 });
 
@@ -167,10 +169,11 @@ Deno.test("decodeTeamUpAccessToken extracts sub, provider, and display name from
     providerId: "5404319",
     mode: "customer",
     displayName: "John Doe",
+    teamupEmail: "member@example.com",
   });
 });
 
-Deno.test("decodeTeamUpAccessToken still ignores email and missing name", () => {
+Deno.test("decodeTeamUpAccessToken keeps email and still allows missing name", () => {
   const token = makeFakeTeamUpJwt({
     sub: "customer-123",
     email: "member@example.com",
@@ -178,7 +181,14 @@ Deno.test("decodeTeamUpAccessToken still ignores email and missing name", () => 
   });
   const decoded = decodeTeamUpAccessToken(token);
   assertEquals(decoded.displayName, null);
-  assertEquals("email" in decoded, false);
+  assertEquals(decoded.teamupEmail, "member@example.com");
+});
+
+Deno.test("teamUpEmailFromClaims trims and ignores blanks", () => {
+  assertEquals(teamUpEmailFromClaims({ email: "  a@b.co  " }), "a@b.co");
+  assertEquals(teamUpEmailFromClaims({ email: "   " }), null);
+  assertEquals(teamUpEmailFromClaims({}), null);
+  assertEquals(teamUpEmailFromClaims({ email: 123 }), null);
 });
 
 Deno.test("teamUpDisplayNameFromClaims keeps a single string and ignores blanks", () => {
