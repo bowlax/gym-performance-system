@@ -1,4 +1,4 @@
-import { LOG_SET_URL } from "./env";
+import { LOG_SESSION_URL, LOG_SET_URL } from "./env";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   deriveExerciseReadState,
@@ -46,6 +46,28 @@ export interface LogSessionInput {
   exercises: LogSessionExerciseInput[];
 }
 
+export interface LogSessionSetPayload {
+  id: string;
+  weight?: number;
+  reps?: number;
+  time_seconds?: number;
+  distance?: number;
+}
+
+export interface LogSessionPayload {
+  session: {
+    id: string;
+    date: string;
+    notes?: string | null;
+    calories_burned?: number | null;
+  };
+  exercises: {
+    exerciseId: string;
+    exerciseEntryId: string;
+    sets: LogSessionSetPayload[];
+  }[];
+}
+
 export interface LogSessionResult {
   sessionId: string;
   results: { exerciseId: string; result: LogSetResult }[];
@@ -58,11 +80,35 @@ export interface LogSetResult {
   raw: Record<string, unknown>;
 }
 
-export async function logSet(
-  token: string,
-  input: LogSetInput,
-): Promise<LogSetResult> {
-  const set: Record<string, number> = {};
+interface LogSessionApiSet {
+  id?: unknown;
+  weight?: unknown;
+  reps?: unknown;
+  time_seconds?: unknown;
+  distance?: unknown;
+}
+
+interface LogSessionApiExercise {
+  exerciseId?: unknown;
+  exerciseEntryId?: unknown;
+  sets?: LogSessionApiSet[];
+}
+
+interface LogSessionApiResponse {
+  session?: { id?: unknown };
+  exercises?: LogSessionApiExercise[];
+  error?: unknown;
+  message?: unknown;
+}
+
+function measurementFields(input: {
+  weight?: number;
+  reps?: number;
+  time_seconds?: number;
+  time?: number;
+  distance?: number;
+}): Omit<LogSessionSetPayload, "id"> {
+  const set: Omit<LogSessionSetPayload, "id"> = {};
   if (typeof input.weight === "number") set.weight = input.weight;
   if (typeof input.reps === "number") set.reps = input.reps;
   const timeSeconds =
@@ -73,6 +119,41 @@ export async function logSet(
         : undefined;
   if (typeof timeSeconds === "number") set.time_seconds = timeSeconds;
   if (typeof input.distance === "number") set.distance = input.distance;
+  return set;
+}
+
+export function buildLogSessionPayload(input: LogSessionInput): LogSessionPayload {
+  if (input.exercises.length === 0) {
+    throw new Error("At least one exercise is required to log a session.");
+  }
+
+  return {
+    session: {
+      id: crypto.randomUUID(),
+      date: input.sessionDate,
+      ...(input.notes != null ? { notes: input.notes } : {}),
+      ...(input.calories_burned != null
+        ? { calories_burned: input.calories_burned }
+        : {}),
+    },
+    exercises: input.exercises.map((ex) => ({
+      exerciseId: ex.exerciseId,
+      exerciseEntryId: crypto.randomUUID(),
+      sets: [
+        {
+          id: crypto.randomUUID(),
+          ...measurementFields(ex),
+        },
+      ],
+    })),
+  };
+}
+
+export async function logSet(
+  token: string,
+  input: LogSetInput,
+): Promise<LogSetResult> {
+  const set: Record<string, number> = measurementFields(input);
 
   const body: Record<string, unknown> = {
     exerciseId: input.exerciseId,
@@ -120,8 +201,9 @@ export async function logSet(
 }
 
 /**
- * Log multiple exercises into a single session. Derives PB celebration client-side
- * (before/after current PB comparison; strict improvement only).
+ * Log multiple exercises into a single session in one atomic request (#23).
+ * Derives PB celebration client-side (before/after current PB comparison;
+ * strict improvement only).
  */
 export async function logSession(
   supabase: SupabaseClient,
@@ -129,9 +211,7 @@ export async function logSession(
   input: LogSessionInput,
   exercisesById: Map<string, ExerciseRow>,
 ): Promise<LogSessionResult> {
-  if (input.exercises.length === 0) {
-    throw new Error("At least one exercise is required to log a session.");
-  }
+  const payload = buildLogSessionPayload(input);
 
   const bundleBefore = await fetchBoardDerivationBundle(supabase);
   const beforeCurrentByExercise = new Map<string, ReturnType<typeof deriveExerciseReadState>["currentPB"]>();
@@ -151,38 +231,54 @@ export async function logSession(
     beforeCurrentByExercise.set(ex.exerciseId, before.currentPB);
   }
 
-  const sessionId = crypto.randomUUID();
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.debug("[log-session] request body", payload);
+  }
+
+  const response = await fetch(LOG_SESSION_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const raw = (await response.json().catch(() => ({}))) as LogSessionApiResponse;
+  if (!response.ok) {
+    const msg =
+      (typeof raw.error === "string" && raw.error) ||
+      (typeof raw.message === "string" && raw.message) ||
+      `Log session failed (${response.status})`;
+    throw new Error(msg);
+  }
+
+  const sessionId =
+    typeof raw.session?.id === "string" ? raw.session.id : payload.session.id;
+  const apiExercises = Array.isArray(raw.exercises) ? raw.exercises : [];
   const results: LogSessionResult["results"] = [];
   const loggedSetIdsByExercise = new Map<string, Set<string>>();
 
   for (let i = 0; i < input.exercises.length; i++) {
     const ex = input.exercises[i]!;
-    const result = await logSet(token, {
-      ...ex,
-      sessionDate: input.sessionDate,
-      ...(i === 0
-        ? {
-            sessionClientId: sessionId,
-            notes: input.notes,
-            calories_burned: input.calories_burned,
-          }
-        : { sessionId }),
-    });
-
-    const setId =
-      typeof result.raw.set === "object" &&
-      result.raw.set !== null &&
-      typeof (result.raw.set as Record<string, unknown>).id === "string"
-        ? ((result.raw.set as Record<string, unknown>).id as string)
-        : undefined;
-
-    if (setId) {
-      const ids = loggedSetIdsByExercise.get(ex.exerciseId) ?? new Set<string>();
-      ids.add(setId);
-      loggedSetIdsByExercise.set(ex.exerciseId, ids);
+    const apiExercise = apiExercises[i];
+    const apiSets = Array.isArray(apiExercise?.sets) ? apiExercise.sets : [];
+    const ids = loggedSetIdsByExercise.get(ex.exerciseId) ?? new Set<string>();
+    for (const set of apiSets) {
+      if (typeof set.id === "string") ids.add(set.id);
     }
-
-    results.push({ exerciseId: ex.exerciseId, result });
+    for (const set of payload.exercises[i]?.sets ?? []) {
+      ids.add(set.id);
+    }
+    loggedSetIdsByExercise.set(ex.exerciseId, ids);
+    results.push({
+      exerciseId: ex.exerciseId,
+      result: {
+        isPersonalBest: false,
+        raw: (apiExercise as Record<string, unknown> | undefined) ?? {},
+      },
+    });
   }
 
   const bundleAfter = await fetchBoardDerivationBundle(supabase);

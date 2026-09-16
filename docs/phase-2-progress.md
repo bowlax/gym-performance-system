@@ -21,7 +21,7 @@ The genuinely hard, uncertain, foundational work is behind you: central store + 
 - **Token broker Edge Function** - create-or-adopt end to end against the cloud; **real TeamUp OAuth** + **Supabase Auth ES256 sessions** live in production. Custom access token hook promotes `member_id` / `gym_id` / `app_role`. GitHub issue [#17](https://github.com/bowlax/gym-performance-system/issues/17) (HS256 → Auth-session ES256) **closed 21 Jul 2026**. `JWT_SIGNING_SECRET` is local/stub-only and removed from deployed secrets; OAuth `state` uses `OAUTH_STATE_SECRET`
 - **Shared JSON test vectors** - 19 vectors covering every PB rule, proven against the Swift implementation
 - **TypeScript PB evaluation logic** - pure server-side module passing all 19 vectors, matching Swift semantics exactly
-- **log-set and related Edge Functions** - server-side write paths for web members (`log-set`, `add-manual-pb`, `update-manual-pb`, `reset-current-pb`, `delete-personal-best`, `delete-session`)
+- **log-set and related Edge Functions** - server-side write paths for web members (`log-session` for atomic multi-exercise saves, plus `log-set`, `add-manual-pb`, `update-manual-pb`, `reset-current-pb`, `delete-personal-best`, `delete-session`)
 - **Member web surface** - **deployed** on Cloudflare Workers SSR (`gymperf-member-web`, TanStack Start). Real OAuth; session sealed in httpOnly cookie (`SESSION_SECRET`). Live URL linked from the landing page
 - **iOS Sync Manager** - first-connect / full pull-merge-push cycle built and live-validated (retag → PULL → MERGE → PUSH on connect; discard-cloud-wins for anonymous-local-then-adopt #33)
 

@@ -162,6 +162,12 @@ create table sessions (
 );
 ```
 
+Web members write a whole session through `public.log_session_atomic(payload jsonb)`
+(migration `20260916092322`, Edge Function `log-session`). The function is
+`SECURITY INVOKER` (RLS applies) and inserts the session, exercise entries, and
+sets in one transaction. Session PBs are still derived at read time — it does
+not insert `personal_bests`.
+
 ---
 
 ### exercise_entries

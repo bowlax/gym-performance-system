@@ -12,7 +12,7 @@ The web experience for gym members. Covers session logging, PB tracking, progres
 ## Backend integration
 
 - **Reads and simple writes** — direct Supabase client calls under RLS (Auth-session JWT from the broker)
-- **PB logging** — `log-set` Edge Function (`/functions/v1/log-set`)
+- **Session logging** — `log-session` Edge Function (`/functions/v1/log-session`); one request writes the session, entries, and sets in a single database transaction
 - **Progression actions** — `add-manual-pb`, `update-manual-pb`, `reset-current-pb`, `delete-personal-best`
 - **Session delete** — `delete-session` Edge Function (cascade tombstone of the session and every child entry/set)
 - **Authentication** — real TeamUp OAuth via `token-broker` (`/functions/v1/token-broker?oauth=authorize` …). Callback returns Auth session tokens; the Worker seals them into an **httpOnly** cookie (`gp_auth`, sealed with `SESSION_SECRET`). The browser does **not** hold the JWT in the clear. The client obtains a short-lived access token via `GET /api/auth/session`; `POST /api/auth/signout` clears the cookie
@@ -33,7 +33,7 @@ Copy `.env.example` → `.env.local` and `.dev.vars.example` → `.dev.vars`. Do
 Edge function URLs are derived from `GYMPERF_SUPABASE_URL`:
 
 - `{SUPABASE_URL}/functions/v1/token-broker`
-- `{SUPABASE_URL}/functions/v1/log-set`
+- `{SUPABASE_URL}/functions/v1/log-session`
 - `{SUPABASE_URL}/functions/v1/add-manual-pb`
 - `{SUPABASE_URL}/functions/v1/update-manual-pb`
 - `{SUPABASE_URL}/functions/v1/reset-current-pb`

@@ -54,7 +54,8 @@ sessions if a clean slate is needed (see Cleanup at the end).
 - [ ] Input fields match the exercise's measurement type (weight+reps, weight+time,
       time only, distance only, reps only).
 - [ ] Logging a set for a new exercise creates the session, entry, and set, and the set
-      appears.
+      appears. Saving several exercises in one session is a single request; a mid-save
+      failure must not leave a partial session.
 - [ ] Logging a set that beats the current PB celebrates the new PB (yellow treatment)
       and updates the Board.
 - [ ] Logging a set equal to the current PB does NOT create a new PB (equal is not a PB).
