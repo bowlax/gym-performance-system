@@ -90,7 +90,7 @@ const lifetimeVisibilityFile = JSON.parse(
 
 Deno.test("PB reshape vector counts", () => {
   assertEquals(expiryFile.vectors.length, 24);
-  assertEquals(derivationFile.vectors.length, 22);
+  assertEquals(derivationFile.vectors.length, 25);
   assertEquals(badgeFile.vectors.length, 8);
   assertEquals(lifetimeVisibilityFile.vectors.length, 8);
 });

@@ -21,6 +21,8 @@ export const TEST_DEVICE_MEMBER_ID =
 export const TOKEN_BROKER_URL = `${SUPABASE_URL}/functions/v1/token-broker`;
 export const LOG_SET_URL = `${SUPABASE_URL}/functions/v1/log-set`;
 export const LOG_SESSION_URL = `${SUPABASE_URL}/functions/v1/log-session`;
+export const ADD_EXERCISES_TO_SESSION_URL =
+  `${SUPABASE_URL}/functions/v1/add-exercises-to-session`;
 export const ADD_MANUAL_PB_URL = `${SUPABASE_URL}/functions/v1/add-manual-pb`;
 export const RESET_CURRENT_PB_URL = `${SUPABASE_URL}/functions/v1/reset-current-pb`;
 export const DELETE_PERSONAL_BEST_URL = `${SUPABASE_URL}/functions/v1/delete-personal-best`;

@@ -6,11 +6,26 @@ struct SessionDetailView: View {
     @Environment(AppDependencies.self) private var dependencies
 
     @State private var entries: [SessionEntryDetail] = []
+    @State private var isLoading = true
+    @State private var loadFailed = false
+    @State private var showAddSheet = false
+    @State private var celebrationPBs: [PersonalBestModel] = []
+    @State private var showCelebration = false
+    @State private var addError: String?
+
+    private var alreadyAddedIds: Set<UUID> {
+        Set(entries.map(\.exercise.id))
+    }
 
     var body: some View {
         Group {
-            if entries.isEmpty {
+            if isLoading {
                 ProgressView()
+            } else if loadFailed {
+                ContentUnavailableView(
+                    "Couldn't load session",
+                    systemImage: "exclamationmark.triangle"
+                )
             } else {
                 List {
                     if session.notes != nil || session.caloriesBurned != nil {
@@ -37,6 +52,15 @@ struct SessionDetailView: View {
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    }
+
+                    if entries.isEmpty {
+                        Section {
+                            Text("No exercises logged in this session.")
+                                .captionLabelStyle()
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                        }
                     }
 
                     ForEach(entries) { entry in
@@ -76,6 +100,14 @@ struct SessionDetailView: View {
                         .background(Color(.secondarySystemBackground))
                         .clipShape(RoundedRectangle(cornerRadius: .cardRadius, style: .continuous))
                     }
+
+                    if let addError {
+                        Section {
+                            Text(addError)
+                                .foregroundStyle(.red)
+                                .listRowBackground(Color.clear)
+                        }
+                    }
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
@@ -83,8 +115,43 @@ struct SessionDetailView: View {
         }
         .navigationTitle(session.date.formatted(date: .abbreviated, time: .omitted))
         .navigationBarTitleDisplayMode(.inline)
-        .task {
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Add Exercise") { showAddSheet = true }
+                    .foregroundStyle(Color.wolfBlue)
+                    .disabled(isLoading || loadFailed)
+            }
+        }
+        .sheet(isPresented: $showAddSheet) {
+            AddExercisesToSessionSheet(
+                session: session,
+                alreadyAddedIds: alreadyAddedIds
+            ) { result in
+                handleAddResult(result)
+            }
+        }
+        .sheet(isPresented: $showCelebration, onDismiss: {
+            dependencies.refresh()
+        }) {
+            PBCelebrationSheet(newPBs: celebrationPBs)
+        }
+        .sensoryFeedback(.success, trigger: showCelebration)
+        .task(id: dependencies.refreshID) {
             await loadDetail()
+        }
+    }
+
+    private func handleAddResult(_ result: SessionResult) {
+        addError = nil
+        dependencies.syncCoordinator.syncAfterSessionSaved()
+        Task {
+            await loadDetail()
+        }
+        if result.newPBs.isEmpty {
+            dependencies.refresh()
+        } else {
+            celebrationPBs = result.newPBs
+            showCelebration = true
         }
     }
 
@@ -92,6 +159,7 @@ struct SessionDetailView: View {
     private func loadDetail() async {
         do {
             let fetchedEntries = try dependencies.performanceDataAccess.fetchExerciseEntries(sessionId: session.id)
+                .filter { $0.deletedAt == nil }
             var details: [SessionEntryDetail] = []
 
             for entry in fetchedEntries {
@@ -100,6 +168,7 @@ struct SessionDetailView: View {
                 }
 
                 let sets = try dependencies.performanceDataAccess.fetchSets(exerciseEntryId: entry.id)
+                    .filter { $0.deletedAt == nil }
                 let derived = try dependencies.memberPerformance.deriveExerciseReadState(
                     memberId: dependencies.memberId,
                     exerciseId: entry.exerciseId
@@ -119,8 +188,150 @@ struct SessionDetailView: View {
             }
 
             entries = details
+            loadFailed = false
+            isLoading = false
         } catch {
             entries = []
+            loadFailed = true
+            isLoading = false
+        }
+    }
+}
+
+private struct AddExercisesToSessionSheet: View {
+    let session: SessionModel
+    let alreadyAddedIds: Set<UUID>
+    let onSaved: (SessionResult) -> Void
+
+    @Environment(AppDependencies.self) private var dependencies
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var draftExercises: [DraftExercise] = []
+    @State private var showPicker = false
+    @State private var saveError: String?
+    @State private var pbByExerciseId: [UUID: PersonalBestModel] = [:]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("Exercises")
+                        .sectionLabelStyle()
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+
+                    if draftExercises.isEmpty {
+                        Text("Tap Add Exercise to attach sets to this session.")
+                            .captionLabelStyle()
+                            .listRowBackground(Color.clear)
+                    } else {
+                        ForEach($draftExercises) { $draft in
+                            ExerciseCard(
+                                draft: $draft,
+                                currentPB: pbByExerciseId[draft.exercise.id]
+                            ) {
+                                draftExercises.removeAll { $0.id == draft.id }
+                            }
+                            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                        }
+                    }
+
+                    Button {
+                        showPicker = true
+                    } label: {
+                        Label("Add Exercise", systemImage: "plus.circle.fill")
+                            .foregroundStyle(Color.wolfBlue)
+                    }
+                    .listRowBackground(Color.clear)
+                }
+
+                if let saveError {
+                    Section {
+                        Text(saveError)
+                            .foregroundStyle(.red)
+                            .listRowBackground(Color.clear)
+                    }
+                }
+
+                Section {
+                    Button(action: save) {
+                        Text("Save")
+                            .primaryButtonStyle(isEnabled: !draftExercises.isEmpty)
+                    }
+                    .disabled(draftExercises.isEmpty)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .selectAllOnFocus()
+            .keyboardDismissible()
+            .navigationTitle("Add Exercises")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundStyle(Color.wolfBlue)
+                }
+            }
+            .sheet(isPresented: $showPicker) {
+                ExercisePickerSheet(
+                    alreadyAddedIds: alreadyAddedIds.union(Set(draftExercises.map { $0.exercise.id }))
+                ) { selected in
+                    for exercise in selected {
+                        draftExercises.append(DraftExercise(exercise: exercise))
+                    }
+                }
+            }
+            .task {
+                await loadCurrentPBs()
+            }
+        }
+        .tint(.wolfBlue)
+    }
+
+    @MainActor
+    private func loadCurrentPBs() async {
+        do {
+            let pbs = try dependencies.memberPerformance.currentPBs(memberId: dependencies.memberId)
+            pbByExerciseId = Dictionary(uniqueKeysWithValues: pbs.map { ($0.exerciseId, $0) })
+        } catch {
+            pbByExerciseId = [:]
+        }
+    }
+
+    private func save() {
+        saveError = nil
+
+        var entries: [ExerciseEntryModel] = []
+        var setsByEntryId: [UUID: [ModelSet]] = [:]
+
+        for draft in draftExercises {
+            let entry = ExerciseEntryModel(sessionId: session.id, exerciseId: draft.exercise.id)
+            let sets = draft.sets.compactMap { $0.toModelSet(exerciseEntryId: entry.id, exercise: draft.exercise) }
+            guard !sets.isEmpty else { continue }
+            entries.append(entry)
+            setsByEntryId[entry.id] = sets
+        }
+
+        guard !entries.isEmpty else {
+            saveError = "Add at least one set before saving."
+            return
+        }
+
+        do {
+            let result = try dependencies.memberPerformance.addExercisesToSession(
+                sessionId: session.id,
+                memberId: dependencies.memberId,
+                entries: entries,
+                sets: setsByEntryId
+            )
+            onSaved(result)
+            dismiss()
+        } catch {
+            saveError = error.localizedDescription
         }
     }
 }

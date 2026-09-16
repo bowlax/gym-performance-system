@@ -1,4 +1,4 @@
-import { LOG_SESSION_URL, LOG_SET_URL } from "./env";
+import { ADD_EXERCISES_TO_SESSION_URL, LOG_SESSION_URL, LOG_SET_URL } from "./env";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   deriveExerciseReadState,
@@ -136,17 +136,36 @@ export function buildLogSessionPayload(input: LogSessionInput): LogSessionPayloa
         ? { calories_burned: input.calories_burned }
         : {}),
     },
-    exercises: input.exercises.map((ex) => ({
-      exerciseId: ex.exerciseId,
-      exerciseEntryId: crypto.randomUUID(),
-      sets: [
-        {
-          id: crypto.randomUUID(),
-          ...measurementFields(ex),
-        },
-      ],
-    })),
+    exercises: buildExercisePayloads(input.exercises),
   };
+}
+
+export function buildAddExercisesPayload(
+  sessionId: string,
+  exercises: LogSessionExerciseInput[],
+): { sessionId: string; exercises: LogSessionPayload["exercises"] } {
+  if (exercises.length === 0) {
+    throw new Error("At least one exercise is required to log a session.");
+  }
+  return {
+    sessionId,
+    exercises: buildExercisePayloads(exercises),
+  };
+}
+
+function buildExercisePayloads(
+  exercises: LogSessionExerciseInput[],
+): LogSessionPayload["exercises"] {
+  return exercises.map((ex) => ({
+    exerciseId: ex.exerciseId,
+    exerciseEntryId: crypto.randomUUID(),
+    sets: [
+      {
+        id: crypto.randomUUID(),
+        ...measurementFields(ex),
+      },
+    ],
+  }));
 }
 
 export async function logSet(
@@ -310,6 +329,119 @@ export async function logSession(
   }
 
   return { sessionId, results };
+}
+
+/**
+ * Add exercises to an existing session in one atomic request (#27).
+ * Session date is unchanged; PBs are derived at read time from that date.
+ */
+export async function addExercisesToSession(
+  supabase: SupabaseClient,
+  token: string,
+  sessionId: string,
+  exercises: LogSessionExerciseInput[],
+  exercisesById: Map<string, ExerciseRow>,
+): Promise<LogSessionResult> {
+  const payload = buildAddExercisesPayload(sessionId, exercises);
+
+  const bundleBefore = await fetchBoardDerivationBundle(supabase);
+  const beforeCurrentByExercise = new Map<string, ReturnType<typeof deriveExerciseReadState>["currentPB"]>();
+
+  for (const ex of exercises) {
+    const exercise = exercisesById.get(ex.exerciseId);
+    if (!exercise?.pb_rule) continue;
+    const before = deriveExerciseReadState({
+      pbRule: exercise.pb_rule,
+      measurementType: exercise.measurement_type,
+      sets: bundleBefore.setsByExercise.get(ex.exerciseId) ?? [],
+      manualPBs: bundleBefore.manualPBsByExercise.get(ex.exerciseId) ?? [],
+      staleness: bundleBefore.staleness,
+      resetAt: bundleBefore.resetAtByExercise.get(ex.exerciseId) ?? null,
+      resetOccurredAt: bundleBefore.resetOccurredAtByExercise.get(ex.exerciseId) ?? null,
+    });
+    beforeCurrentByExercise.set(ex.exerciseId, before.currentPB);
+  }
+
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.debug("[add-exercises-to-session] request body", payload);
+  }
+
+  const response = await fetch(ADD_EXERCISES_TO_SESSION_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const raw = (await response.json().catch(() => ({}))) as LogSessionApiResponse;
+  if (!response.ok) {
+    const msg =
+      (typeof raw.error === "string" && raw.error) ||
+      (typeof raw.message === "string" && raw.message) ||
+      `Add exercises failed (${response.status})`;
+    throw new Error(msg);
+  }
+
+  const apiExercises = Array.isArray(raw.exercises) ? raw.exercises : [];
+  const results: LogSessionResult["results"] = [];
+  const loggedSetIdsByExercise = new Map<string, Set<string>>();
+
+  for (let i = 0; i < exercises.length; i++) {
+    const ex = exercises[i]!;
+    const apiExercise = apiExercises[i];
+    const apiSets = Array.isArray(apiExercise?.sets) ? apiExercise.sets : [];
+    const ids = loggedSetIdsByExercise.get(ex.exerciseId) ?? new Set<string>();
+    for (const set of apiSets) {
+      if (typeof set.id === "string") ids.add(set.id);
+    }
+    for (const set of payload.exercises[i]?.sets ?? []) {
+      ids.add(set.id);
+    }
+    loggedSetIdsByExercise.set(ex.exerciseId, ids);
+    results.push({
+      exerciseId: ex.exerciseId,
+      result: {
+        isPersonalBest: false,
+        raw: (apiExercise as Record<string, unknown> | undefined) ?? {},
+      },
+    });
+  }
+
+  const bundleAfter = await fetchBoardDerivationBundle(supabase);
+
+  for (const entry of results) {
+    const exercise = exercisesById.get(entry.exerciseId);
+    if (!exercise?.pb_rule) continue;
+
+    const after = deriveExerciseReadState({
+      pbRule: exercise.pb_rule,
+      measurementType: exercise.measurement_type,
+      sets: bundleAfter.setsByExercise.get(entry.exerciseId) ?? [],
+      manualPBs: bundleAfter.manualPBsByExercise.get(entry.exerciseId) ?? [],
+      staleness: bundleAfter.staleness,
+      resetAt: bundleAfter.resetAtByExercise.get(entry.exerciseId) ?? null,
+      resetOccurredAt: bundleAfter.resetOccurredAtByExercise.get(entry.exerciseId) ?? null,
+    });
+
+    const logged = exercises.find((ex) => ex.exerciseId === entry.exerciseId);
+    if (!logged) continue;
+
+    entry.result.isPersonalBest = sessionSetEarnedCelebration({
+      rule: exercise.pb_rule as PBRule,
+      beforeCurrent: beforeCurrentByExercise.get(entry.exerciseId) ?? null,
+      afterCurrent: after.currentPB,
+      loggedSetIds: loggedSetIdsByExercise.get(entry.exerciseId) ?? new Set(),
+      loggedSet: measurementAsSetState(logged),
+    });
+  }
+
+  return {
+    sessionId: typeof raw.session?.id === "string" ? raw.session.id : sessionId,
+    results,
+  };
 }
 
 export function todayISO(): string {

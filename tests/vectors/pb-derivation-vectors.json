@@ -391,6 +391,63 @@
       "expectedCurrentId": null,
       "expectedLifetimeId": "rec-same-day-before",
       "notes": "Same-day timestamp tie-break reverse: calendar dates equal, record created_at < reset updated_at → excluded from current. Lifetime ignores reset."
+    },
+    {
+      "id": "TC-D23",
+      "description": "Heavier set added today to a session dated before reset: not current (session date is achievedAt)",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": false, "periods": 2, "unit": "quarters" },
+      "resetAt": "2026-09-10",
+      "resetOccurredAt": "2026-09-10T08:00:00Z",
+      "evaluatedAt": "2026-09-16",
+      "records": [
+        { "id": "rec-pre", "achievedAt": "2026-08-01", "weight": 100, "reps": 5, "entryKind": "session" },
+        { "id": "rec-added-to-old-session", "achievedAt": "2026-09-01", "occurredAt": "2026-09-16T12:00:00Z", "weight": 130, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedCurrentId": null,
+      "expectedLifetimeId": "rec-added-to-old-session",
+      "notes": "#27: adding a set to an existing session uses the original session.date as achievedAt. Dates differ from resetAt so occurredAt (created_at=now) is ignored. Session date before reset → not current. Lifetime ignores reset."
+    },
+    {
+      "id": "TC-D24",
+      "description": "Heavier set added today to a session dated the same day as reset, insert after reset: current",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": false, "periods": 2, "unit": "quarters" },
+      "resetAt": "2026-09-16",
+      "resetOccurredAt": "2026-09-16T08:00:00Z",
+      "evaluatedAt": "2026-09-16",
+      "records": [
+        { "id": "rec-pre", "achievedAt": "2026-08-01", "weight": 100, "reps": 5, "entryKind": "session" },
+        { "id": "rec-added-same-day-after", "achievedAt": "2026-09-16", "occurredAt": "2026-09-16T12:00:00Z", "weight": 130, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedCurrentId": "rec-added-same-day-after",
+      "expectedLifetimeId": "rec-added-same-day-after",
+      "notes": "#27 same-day add: session.date == resetAt so occurredAt is consulted. created_at (now) after reset updated_at → the added set is current. This is the case timestamps exist to decide."
+    },
+    {
+      "id": "TC-D25",
+      "description": "Heavier set added today to a session dated the same day as reset, insert before reset: not current",
+      "rule": "heaviestWeightAtReps",
+      "exerciseName": "Free Squat",
+      "targetReps": 5,
+      "minimumReps": null,
+      "staleness": { "enabled": false, "periods": 2, "unit": "quarters" },
+      "resetAt": "2026-09-16",
+      "resetOccurredAt": "2026-09-16T14:00:00Z",
+      "evaluatedAt": "2026-09-16",
+      "records": [
+        { "id": "rec-pre", "achievedAt": "2026-08-01", "weight": 100, "reps": 5, "entryKind": "session" },
+        { "id": "rec-added-same-day-before", "achievedAt": "2026-09-16", "occurredAt": "2026-09-16T10:00:00Z", "weight": 130, "reps": 5, "entryKind": "session" }
+      ],
+      "expectedCurrentId": null,
+      "expectedLifetimeId": "rec-added-same-day-before",
+      "notes": "#27 same-day add reverse: session.date == resetAt, created_at before reset updated_at → excluded from current. Lifetime ignores reset. Pair with TC-D24: insert time vs reset occurredAt decides."
     }
   ]
 }

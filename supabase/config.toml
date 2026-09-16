@@ -42,6 +42,9 @@ verify_jwt = true
 [functions.log-session]
 verify_jwt = true
 
+[functions.add-exercises-to-session]
+verify_jwt = true
+
 [functions.add-manual-pb]
 verify_jwt = true
 

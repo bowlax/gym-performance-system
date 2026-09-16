@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildLogSessionPayload } from "./log-set";
+import { buildAddExercisesPayload, buildLogSessionPayload } from "./log-set";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -44,6 +44,27 @@ describe("buildLogSessionPayload", () => {
         sessionDate: "2026-09-16",
         exercises: [],
       }),
+    ).toThrow("At least one exercise is required to log a session.");
+  });
+});
+
+describe("buildAddExercisesPayload", () => {
+  test("attaches exercises to an existing session id without a session create object", () => {
+    const sessionId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const payload = buildAddExercisesPayload(sessionId, [
+      { exerciseId: "11111111-1111-4111-8111-111111111111", weight: 100, reps: 5 },
+    ]);
+
+    expect(payload.sessionId).toBe(sessionId);
+    expect(payload.exercises).toHaveLength(1);
+    expect(payload.exercises[0]?.exerciseEntryId).toMatch(UUID_PATTERN);
+    expect(payload.exercises[0]?.sets[0]).toMatchObject({ weight: 100, reps: 5 });
+    expect("session" in payload).toBe(false);
+  });
+
+  test("rejects an empty exercise list before any network call", () => {
+    expect(() =>
+      buildAddExercisesPayload("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", []),
     ).toThrow("At least one exercise is required to log a session.");
   });
 });

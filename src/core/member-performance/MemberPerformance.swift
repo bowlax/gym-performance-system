@@ -12,6 +12,16 @@ protocol MemberPerformance {
         sets: [UUID: [ModelSet]]
     ) throws -> SessionResult
 
+    /// Attaches new entries and sets to an existing live session.
+    /// Does not create a session or change its date, notes, or calories.
+    /// Tombstoned or foreign sessions throw `sessionNotFound`.
+    func addExercisesToSession(
+        sessionId: UUID,
+        memberId: UUID,
+        entries: [ExerciseEntryModel],
+        sets: [UUID: [ModelSet]]
+    ) throws -> SessionResult
+
     func updateSession(_ session: SessionModel) throws
 
     func updateSet(_ set: ModelSet) throws

@@ -331,6 +331,183 @@ struct MemberPerformanceTests {
         #expect(pbAfterUpdate?.reps == pbBeforeUpdate?.reps)
     }
 
+    @Test
+    func testAddExercisesToExistingSessionPersistsEntriesWithoutTouchingSession() throws {
+        let test = try makeMemberPerformance()
+        let squatId = seedExerciseId(named: "Free Squat")
+        let benchId = seedExerciseId(named: "Bench Press 3x5")
+
+        let sessionDate = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
+        let session = makeSession(date: sessionDate)
+        let originalEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [originalEntry],
+            sets: [originalEntry.id: [makeSet(exerciseEntryId: originalEntry.id, weight: 80.0, reps: 5)]]
+        )
+
+        let synced = Date().addingTimeInterval(-120)
+        session.updatedAt = synced
+        session.syncedAt = synced
+        try test.performanceDataAccess.persistChanges()
+        let originalUpdatedAt = session.updatedAt
+
+        let addedEntry = makeEntry(sessionId: session.id, exerciseId: benchId)
+        let addedSet = makeSet(exerciseEntryId: addedEntry.id, weight: 60.0, reps: 5)
+        let result = try test.memberPerformance.addExercisesToSession(
+            sessionId: session.id,
+            memberId: testMemberId,
+            entries: [addedEntry],
+            sets: [addedEntry.id: [addedSet]]
+        )
+
+        let storedEntries = try test.performanceDataAccess.fetchExerciseEntries(sessionId: session.id)
+        #expect(storedEntries.count == 2)
+        #expect(try test.performanceDataAccess.fetchSets(exerciseEntryId: addedEntry.id).count == 1)
+        #expect(session.date == sessionDate)
+        #expect(session.updatedAt == originalUpdatedAt)
+        #expect(session.notes == nil)
+        #expect(SyncDirtiness.isDirty(updatedAt: session.updatedAt, syncedAt: session.syncedAt) == false)
+        #expect(SyncDirtiness.isDirty(updatedAt: addedEntry.updatedAt, syncedAt: addedEntry.syncedAt))
+        #expect(SyncDirtiness.isDirty(updatedAt: addedSet.updatedAt, syncedAt: addedSet.syncedAt))
+        #expect(result.newPBs.contains(where: { $0.exerciseId == benchId }))
+    }
+
+    @Test
+    func testAddExercisesRefusesTombstonedAndForeignSessions() throws {
+        let test = try makeMemberPerformance()
+        let squatId = seedExerciseId(named: "Free Squat")
+
+        let session = makeSession()
+        _ = try test.memberPerformance.saveSession(session, entries: [], sets: [:])
+
+        let liveEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        let liveSet = makeSet(exerciseEntryId: liveEntry.id, weight: 90.0, reps: 5)
+        #expect(throws: MemberPerformanceError.sessionNotFound(session.id)) {
+            _ = try test.memberPerformance.addExercisesToSession(
+                sessionId: session.id,
+                memberId: UUID(),
+                entries: [liveEntry],
+                sets: [liveEntry.id: [liveSet]]
+            )
+        }
+
+        session.deletedAt = Date()
+        try test.performanceDataAccess.persistChanges()
+
+        let tombstoneEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        #expect(throws: MemberPerformanceError.sessionNotFound(session.id)) {
+            _ = try test.memberPerformance.addExercisesToSession(
+                sessionId: session.id,
+                memberId: testMemberId,
+                entries: [tombstoneEntry],
+                sets: [tombstoneEntry.id: [makeSet(exerciseEntryId: tombstoneEntry.id, weight: 90.0, reps: 5)]]
+            )
+        }
+        #expect(try test.performanceDataAccess.fetchExerciseEntries(sessionId: session.id).isEmpty)
+    }
+
+    @Test
+    func testAddExercisesBeforeResetDoesNotBecomeCurrentPB() throws {
+        let test = try makeMemberPerformance()
+        let squatId = seedExerciseId(named: "Free Squat")
+        let calendar = Calendar.current
+        let oldDate = calendar.date(byAdding: .day, value: -10, to: Date())!
+
+        let session = makeSession(date: oldDate)
+        let originalEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [originalEntry],
+            sets: [originalEntry.id: [makeSet(exerciseEntryId: originalEntry.id, weight: 80.0, reps: 5)]]
+        )
+
+        try test.memberPerformance.resetCurrentPB(memberId: testMemberId, exerciseId: squatId)
+
+        let addedEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        let result = try test.memberPerformance.addExercisesToSession(
+            sessionId: session.id,
+            memberId: testMemberId,
+            entries: [addedEntry],
+            sets: [addedEntry.id: [makeSet(exerciseEntryId: addedEntry.id, weight: 130.0, reps: 5)]]
+        )
+
+        #expect(result.newPBs.isEmpty)
+        let derived = try test.memberPerformance.deriveExerciseReadState(
+            memberId: testMemberId,
+            exerciseId: squatId
+        )
+        #expect(derived.currentPB == nil)
+        #expect(derived.lifetimePB?.weight == 130)
+    }
+
+    @Test
+    func testAddExercisesSameDayAfterResetBecomesCurrentPB() throws {
+        let test = try makeMemberPerformance()
+        let squatId = seedExerciseId(named: "Free Squat")
+        let session = makeSession()
+        let originalEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [originalEntry],
+            sets: [originalEntry.id: [makeSet(exerciseEntryId: originalEntry.id, weight: 80.0, reps: 5)]]
+        )
+
+        try test.memberPerformance.resetCurrentPB(memberId: testMemberId, exerciseId: squatId)
+        let reset = try test.performanceDataAccess.fetchExerciseReset(
+            memberId: testMemberId,
+            exerciseId: squatId
+        )
+        reset?.updatedAt = Date().addingTimeInterval(-2)
+        try test.performanceDataAccess.persistChanges()
+
+        let addedEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        let result = try test.memberPerformance.addExercisesToSession(
+            sessionId: session.id,
+            memberId: testMemberId,
+            entries: [addedEntry],
+            sets: [addedEntry.id: [makeSet(exerciseEntryId: addedEntry.id, weight: 130.0, reps: 5)]]
+        )
+
+        #expect(result.newPBs.contains(where: { $0.weight == 130 }))
+        let derived = try test.memberPerformance.deriveExerciseReadState(
+            memberId: testMemberId,
+            exerciseId: squatId
+        )
+        #expect(derived.currentPB?.weight == 130)
+        #expect(derived.lifetimePB?.weight == 130)
+    }
+
+    @Test
+    func testAddExercisesSameDayBeforeResetDoesNotBecomeCurrentPB() throws {
+        let test = try makeMemberPerformance()
+        let squatId = seedExerciseId(named: "Free Squat")
+        let session = makeSession()
+        let originalEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [originalEntry],
+            sets: [originalEntry.id: [makeSet(exerciseEntryId: originalEntry.id, weight: 80.0, reps: 5)]]
+        )
+
+        let addedEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        _ = try test.memberPerformance.addExercisesToSession(
+            sessionId: session.id,
+            memberId: testMemberId,
+            entries: [addedEntry],
+            sets: [addedEntry.id: [makeSet(exerciseEntryId: addedEntry.id, weight: 130.0, reps: 5)]]
+        )
+
+        try test.memberPerformance.resetCurrentPB(memberId: testMemberId, exerciseId: squatId)
+
+        let derived = try test.memberPerformance.deriveExerciseReadState(
+            memberId: testMemberId,
+            exerciseId: squatId
+        )
+        #expect(derived.currentPB == nil)
+        #expect(derived.lifetimePB?.weight == 130)
+    }
+
     // MARK: -- Manual PB Entry
 
     @Test
@@ -1897,6 +2074,154 @@ final class MemberPerformanceTests: XCTestCase {
         try test.memberPerformance.updateSession(session)
         let pbAfter = try derivedCurrentPB(memberPerformance: test.memberPerformance, exerciseId: freeSquatId)
         XCTAssertEqual(pbAfter?.setId, pbBefore?.setId)
+    }
+
+    func testAddExercisesToExistingSessionPersistsEntriesWithoutTouchingSession() throws {
+        let test = try makeMemberPerformance()
+        let squatId = seedExerciseId(named: "Free Squat")
+        let benchId = seedExerciseId(named: "Bench Press 3x5")
+        let sessionDate = Calendar.current.date(byAdding: .day, value: -3, to: Date())!
+        let session = makeSession(date: sessionDate)
+        let originalEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [originalEntry],
+            sets: [originalEntry.id: [makeSet(exerciseEntryId: originalEntry.id, weight: 80.0, reps: 5)]]
+        )
+        let synced = Date().addingTimeInterval(-120)
+        session.updatedAt = synced
+        session.syncedAt = synced
+        try test.performanceDataAccess.persistChanges()
+        let originalUpdatedAt = session.updatedAt
+        let addedEntry = makeEntry(sessionId: session.id, exerciseId: benchId)
+        let addedSet = makeSet(exerciseEntryId: addedEntry.id, weight: 60.0, reps: 5)
+        let result = try test.memberPerformance.addExercisesToSession(
+            sessionId: session.id,
+            memberId: testMemberId,
+            entries: [addedEntry],
+            sets: [addedEntry.id: [addedSet]]
+        )
+        XCTAssertEqual(try test.performanceDataAccess.fetchExerciseEntries(sessionId: session.id).count, 2)
+        XCTAssertEqual(session.date, sessionDate)
+        XCTAssertEqual(session.updatedAt, originalUpdatedAt)
+        XCTAssertFalse(SyncDirtiness.isDirty(updatedAt: session.updatedAt, syncedAt: session.syncedAt))
+        XCTAssertTrue(SyncDirtiness.isDirty(updatedAt: addedEntry.updatedAt, syncedAt: addedEntry.syncedAt))
+        XCTAssertTrue(result.newPBs.contains(where: { $0.exerciseId == benchId }))
+    }
+
+    func testAddExercisesRefusesTombstonedAndForeignSessions() throws {
+        let test = try makeMemberPerformance()
+        let squatId = seedExerciseId(named: "Free Squat")
+        let session = makeSession()
+        _ = try test.memberPerformance.saveSession(session, entries: [], sets: [:])
+        let liveEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        XCTAssertThrowsError(
+            try test.memberPerformance.addExercisesToSession(
+                sessionId: session.id,
+                memberId: UUID(),
+                entries: [liveEntry],
+                sets: [liveEntry.id: [makeSet(exerciseEntryId: liveEntry.id, weight: 90.0, reps: 5)]]
+            )
+        )
+        session.deletedAt = Date()
+        try test.performanceDataAccess.persistChanges()
+        let tombstoneEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        XCTAssertThrowsError(
+            try test.memberPerformance.addExercisesToSession(
+                sessionId: session.id,
+                memberId: testMemberId,
+                entries: [tombstoneEntry],
+                sets: [tombstoneEntry.id: [makeSet(exerciseEntryId: tombstoneEntry.id, weight: 90.0, reps: 5)]]
+            )
+        )
+        XCTAssertTrue(try test.performanceDataAccess.fetchExerciseEntries(sessionId: session.id).isEmpty)
+    }
+
+    func testAddExercisesBeforeResetDoesNotBecomeCurrentPB() throws {
+        let test = try makeMemberPerformance()
+        let squatId = seedExerciseId(named: "Free Squat")
+        let oldDate = Calendar.current.date(byAdding: .day, value: -10, to: Date())!
+        let session = makeSession(date: oldDate)
+        let originalEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [originalEntry],
+            sets: [originalEntry.id: [makeSet(exerciseEntryId: originalEntry.id, weight: 80.0, reps: 5)]]
+        )
+        try test.memberPerformance.resetCurrentPB(memberId: testMemberId, exerciseId: squatId)
+        let addedEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        let result = try test.memberPerformance.addExercisesToSession(
+            sessionId: session.id,
+            memberId: testMemberId,
+            entries: [addedEntry],
+            sets: [addedEntry.id: [makeSet(exerciseEntryId: addedEntry.id, weight: 130.0, reps: 5)]]
+        )
+        XCTAssertTrue(result.newPBs.isEmpty)
+        let derived = try test.memberPerformance.deriveExerciseReadState(
+            memberId: testMemberId,
+            exerciseId: squatId
+        )
+        XCTAssertNil(derived.currentPB)
+        XCTAssertEqual(derived.lifetimePB?.weight, 130)
+    }
+
+    func testAddExercisesSameDayAfterResetBecomesCurrentPB() throws {
+        let test = try makeMemberPerformance()
+        let squatId = seedExerciseId(named: "Free Squat")
+        let session = makeSession()
+        let originalEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [originalEntry],
+            sets: [originalEntry.id: [makeSet(exerciseEntryId: originalEntry.id, weight: 80.0, reps: 5)]]
+        )
+        try test.memberPerformance.resetCurrentPB(memberId: testMemberId, exerciseId: squatId)
+        let reset = try test.performanceDataAccess.fetchExerciseReset(
+            memberId: testMemberId,
+            exerciseId: squatId
+        )
+        reset?.updatedAt = Date().addingTimeInterval(-2)
+        try test.performanceDataAccess.persistChanges()
+        let addedEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        let result = try test.memberPerformance.addExercisesToSession(
+            sessionId: session.id,
+            memberId: testMemberId,
+            entries: [addedEntry],
+            sets: [addedEntry.id: [makeSet(exerciseEntryId: addedEntry.id, weight: 130.0, reps: 5)]]
+        )
+        XCTAssertTrue(result.newPBs.contains(where: { $0.weight == 130 }))
+        let derived = try test.memberPerformance.deriveExerciseReadState(
+            memberId: testMemberId,
+            exerciseId: squatId
+        )
+        XCTAssertEqual(derived.currentPB?.weight, 130)
+        XCTAssertEqual(derived.lifetimePB?.weight, 130)
+    }
+
+    func testAddExercisesSameDayBeforeResetDoesNotBecomeCurrentPB() throws {
+        let test = try makeMemberPerformance()
+        let squatId = seedExerciseId(named: "Free Squat")
+        let session = makeSession()
+        let originalEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        _ = try test.memberPerformance.saveSession(
+            session,
+            entries: [originalEntry],
+            sets: [originalEntry.id: [makeSet(exerciseEntryId: originalEntry.id, weight: 80.0, reps: 5)]]
+        )
+        let addedEntry = makeEntry(sessionId: session.id, exerciseId: squatId)
+        _ = try test.memberPerformance.addExercisesToSession(
+            sessionId: session.id,
+            memberId: testMemberId,
+            entries: [addedEntry],
+            sets: [addedEntry.id: [makeSet(exerciseEntryId: addedEntry.id, weight: 130.0, reps: 5)]]
+        )
+        try test.memberPerformance.resetCurrentPB(memberId: testMemberId, exerciseId: squatId)
+        let derived = try test.memberPerformance.deriveExerciseReadState(
+            memberId: testMemberId,
+            exerciseId: squatId
+        )
+        XCTAssertNil(derived.currentPB)
+        XCTAssertEqual(derived.lifetimePB?.weight, 130)
     }
 
     func testTC_MP9_RecordAManualPBWithNoExistingPB() throws {

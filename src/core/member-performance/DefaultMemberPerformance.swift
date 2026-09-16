@@ -36,84 +36,65 @@ final class DefaultMemberPerformance: MemberPerformance {
             return SessionResult(session: session, newPBs: [])
         }
 
-        var exercisesByEntryId: [UUID: ExerciseModel] = [:]
-
-        for entry in entries {
-            guard let exerciseSets = sets[entry.id], !exerciseSets.isEmpty else {
-                throw MemberPerformanceError.exerciseEntryMissingSets(entry.id)
-            }
-
-            guard let exercise = try exerciseRegistry.exercise(id: entry.exerciseId) else {
-                throw MemberPerformanceError.invalidExercise(entry.exerciseId)
-            }
-
-            guard exercise.isActive else {
-                throw MemberPerformanceError.inactiveExercise(entry.exerciseId)
-            }
-
-            exercisesByEntryId[entry.id] = exercise
-
-            for set in exerciseSets {
-                try validateMeasurementFields(
-                    measurementType: exercise.measurementType,
-                    weight: set.weight,
-                    reps: set.reps,
-                    time: set.time,
-                    distance: set.distance
-                )
-            }
-        }
-
-        var beforeByExercise: [UUID: PBReadDerivation.ExerciseResult] = [:]
-        for entry in entries {
-            guard let exercise = exercisesByEntryId[entry.id] else { continue }
-            beforeByExercise[entry.exerciseId] = try PBReadDerivation.derive(
-                memberId: session.memberId,
-                exercise: exercise,
-                performanceDataAccess: performanceDataAccess,
-                modelContext: modelContext
-            )
-        }
+        let exercisesByEntryId = try validatedExercisesByEntryId(entries: entries, sets: sets)
+        let beforeByExercise = try deriveBeforeState(
+            memberId: session.memberId,
+            entries: entries,
+            exercisesByEntryId: exercisesByEntryId
+        )
 
         try performanceDataAccess.saveSession(session)
+        try persistEntriesAndSets(entries: entries, sets: sets)
+
+        let newPBs = try celebrateNewPBs(
+            memberId: session.memberId,
+            entries: entries,
+            sets: sets,
+            exercisesByEntryId: exercisesByEntryId,
+            beforeByExercise: beforeByExercise
+        )
+
+        return SessionResult(session: session, newPBs: newPBs)
+    }
+
+    func addExercisesToSession(
+        sessionId: UUID,
+        memberId: UUID,
+        entries: [ExerciseEntryModel],
+        sets: [UUID: [ModelSet]]
+    ) throws -> SessionResult {
+        guard let session = try performanceDataAccess.fetchSession(id: sessionId),
+              session.memberId == memberId,
+              session.deletedAt == nil else {
+            throw MemberPerformanceError.sessionNotFound(sessionId)
+        }
+
+        guard !entries.isEmpty else {
+            throw MemberPerformanceError.emptySession
+        }
 
         for entry in entries {
-            try performanceDataAccess.saveExerciseEntry(entry)
-            for set in sets[entry.id] ?? [] {
-                try performanceDataAccess.saveSet(set)
+            guard entry.sessionId == sessionId else {
+                throw MemberPerformanceError.sessionNotFound(sessionId)
             }
         }
 
-        var newPBs: [PersonalBestModel] = []
+        let exercisesByEntryId = try validatedExercisesByEntryId(entries: entries, sets: sets)
+        let beforeByExercise = try deriveBeforeState(
+            memberId: session.memberId,
+            entries: entries,
+            exercisesByEntryId: exercisesByEntryId
+        )
 
-        for entry in entries {
-            guard let exercise = exercisesByEntryId[entry.id] else { continue }
-            let before = beforeByExercise[entry.exerciseId]
+        try persistEntriesAndSets(entries: entries, sets: sets)
 
-            let after = try PBReadDerivation.derive(
-                memberId: session.memberId,
-                exercise: exercise,
-                performanceDataAccess: performanceDataAccess,
-                modelContext: modelContext
-            )
-
-            var sessionSetIds = Set<UUID>()
-            var sessionSets: [ModelSet] = []
-            for set in sets[entry.id] ?? [] {
-                sessionSetIds.insert(set.id)
-                sessionSets.append(set)
-            }
-
-            if let celebrated = SessionPBCelebration.earnedNewPB(
-                exercise: exercise,
-                before: before,
-                after: after,
-                sessionSetIds: sessionSetIds,
-                sessionSets: sessionSets
-            ) {
-                newPBs.append(celebrated)
-            }
-        }
+        let newPBs = try celebrateNewPBs(
+            memberId: session.memberId,
+            entries: entries,
+            sets: sets,
+            exercisesByEntryId: exercisesByEntryId,
+            beforeByExercise: beforeByExercise
+        )
 
         return SessionResult(session: session, newPBs: newPBs)
     }
@@ -543,6 +524,112 @@ final class DefaultMemberPerformance: MemberPerformance {
     private func bestSet(from sets: [ModelSet], exercise: ExerciseModel) -> ModelSet? {
         guard let pbRule = exercise.pbRule else { return nil }
         return PBRuleEvaluator.bestSet(among: sets, rule: pbRule)
+    }
+
+    private func validatedExercisesByEntryId(
+        entries: [ExerciseEntryModel],
+        sets: [UUID: [ModelSet]]
+    ) throws -> [UUID: ExerciseModel] {
+        var exercisesByEntryId: [UUID: ExerciseModel] = [:]
+
+        for entry in entries {
+            guard let exerciseSets = sets[entry.id], !exerciseSets.isEmpty else {
+                throw MemberPerformanceError.exerciseEntryMissingSets(entry.id)
+            }
+
+            guard let exercise = try exerciseRegistry.exercise(id: entry.exerciseId) else {
+                throw MemberPerformanceError.invalidExercise(entry.exerciseId)
+            }
+
+            guard exercise.isActive else {
+                throw MemberPerformanceError.inactiveExercise(entry.exerciseId)
+            }
+
+            exercisesByEntryId[entry.id] = exercise
+
+            for set in exerciseSets {
+                try validateMeasurementFields(
+                    measurementType: exercise.measurementType,
+                    weight: set.weight,
+                    reps: set.reps,
+                    time: set.time,
+                    distance: set.distance
+                )
+            }
+        }
+
+        return exercisesByEntryId
+    }
+
+    private func deriveBeforeState(
+        memberId: UUID,
+        entries: [ExerciseEntryModel],
+        exercisesByEntryId: [UUID: ExerciseModel]
+    ) throws -> [UUID: PBReadDerivation.ExerciseResult] {
+        var beforeByExercise: [UUID: PBReadDerivation.ExerciseResult] = [:]
+        for entry in entries {
+            guard let exercise = exercisesByEntryId[entry.id] else { continue }
+            beforeByExercise[entry.exerciseId] = try PBReadDerivation.derive(
+                memberId: memberId,
+                exercise: exercise,
+                performanceDataAccess: performanceDataAccess,
+                modelContext: modelContext
+            )
+        }
+        return beforeByExercise
+    }
+
+    private func persistEntriesAndSets(
+        entries: [ExerciseEntryModel],
+        sets: [UUID: [ModelSet]]
+    ) throws {
+        for entry in entries {
+            try performanceDataAccess.saveExerciseEntry(entry)
+            for set in sets[entry.id] ?? [] {
+                try performanceDataAccess.saveSet(set)
+            }
+        }
+    }
+
+    private func celebrateNewPBs(
+        memberId: UUID,
+        entries: [ExerciseEntryModel],
+        sets: [UUID: [ModelSet]],
+        exercisesByEntryId: [UUID: ExerciseModel],
+        beforeByExercise: [UUID: PBReadDerivation.ExerciseResult]
+    ) throws -> [PersonalBestModel] {
+        var newPBs: [PersonalBestModel] = []
+
+        for entry in entries {
+            guard let exercise = exercisesByEntryId[entry.id] else { continue }
+            let before = beforeByExercise[entry.exerciseId]
+
+            let after = try PBReadDerivation.derive(
+                memberId: memberId,
+                exercise: exercise,
+                performanceDataAccess: performanceDataAccess,
+                modelContext: modelContext
+            )
+
+            var sessionSetIds = Set<UUID>()
+            var sessionSets: [ModelSet] = []
+            for set in sets[entry.id] ?? [] {
+                sessionSetIds.insert(set.id)
+                sessionSets.append(set)
+            }
+
+            if let celebrated = SessionPBCelebration.earnedNewPB(
+                exercise: exercise,
+                before: before,
+                after: after,
+                sessionSetIds: sessionSetIds,
+                sessionSets: sessionSets
+            ) {
+                newPBs.append(celebrated)
+            }
+        }
+
+        return newPBs
     }
 
     private func validateMeasurementFields(

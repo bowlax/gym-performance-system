@@ -168,6 +168,13 @@ Web members write a whole session through `public.log_session_atomic(payload jso
 sets in one transaction. Session PBs are still derived at read time — it does
 not insert `personal_bests`.
 
+Adding exercises to an already-logged live session uses
+`public.add_exercises_to_session_atomic(payload jsonb)` (migration
+`20260916123910`, Edge Function `add-exercises-to-session`). It does not create
+a session or change date / notes / calories. Missing, tombstoned, or foreign
+sessions return 404. New entry/set rows stamp `synced_at` so iOS incremental
+pull sees them. The parent session `updated_at` is left unchanged.
+
 ---
 
 ### exercise_entries

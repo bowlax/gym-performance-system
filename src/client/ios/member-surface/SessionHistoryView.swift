@@ -118,13 +118,14 @@ struct SessionHistoryView: View {
                 var exerciseNames: [String] = []
                 var sessionContainsPB = false
 
-                for entry in entries {
+                for entry in entries where entry.deletedAt == nil {
                     guard let exercise = try dependencies.exerciseRegistry.exercise(id: entry.exerciseId) else {
                         continue
                     }
                     exerciseNames.append(exercise.name)
 
                     let sets = try dependencies.performanceDataAccess.fetchSets(exerciseEntryId: entry.id)
+                        .filter { $0.deletedAt == nil }
                     let derived = try dependencies.memberPerformance.deriveExerciseReadState(
                         memberId: dependencies.memberId,
                         exerciseId: entry.exerciseId

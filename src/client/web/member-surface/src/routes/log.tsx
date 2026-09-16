@@ -38,7 +38,12 @@ import {
   formatSetValues,
   isCableRow,
 } from "@/lib/gp/format";
-import { logSession, todayISO } from "@/lib/gp/log-set";
+import {
+  addExercisesToSession,
+  logSession,
+  todayISO,
+  type LogSessionExerciseInput,
+} from "@/lib/gp/log-set";
 import { deleteSession } from "@/lib/gp/pb-actions";
 import {
   stashSessionSaveSummary,
@@ -189,46 +194,7 @@ function LogSessionForm() {
         caloriesBurned = n;
       }
 
-      const exercisesToLog: {
-        exerciseId: string;
-        weight?: number;
-        reps?: number;
-        time?: number;
-        distance?: number;
-      }[] = [];
-
-      for (const ex of selectedExercises) {
-        const fields = fieldsForMeasurement(ex.measurement_type);
-        const entry: (typeof exercisesToLog)[number] = { exerciseId: ex.id };
-        for (const f of fields) {
-          if (f === "time" && ex.measurement_type === "timeOnly") {
-            const total = combineMmSs(
-              values[ex.id]?.mm,
-              values[ex.id]?.ss,
-            );
-            if (total == null) {
-              throw new Error(
-                `Please enter a valid time (mm:ss) for ${ex.name}.`,
-              );
-            }
-            entry.time = total;
-            continue;
-          }
-          const raw = values[ex.id]?.[f];
-          const n = raw == null || raw === "" ? NaN : Number(raw);
-          if (!Number.isFinite(n)) {
-            throw new Error(
-              `Please enter a valid ${fieldLabel(f, ex.measurement_type, ex.name).toLowerCase()} for ${ex.name}.`,
-            );
-          }
-          entry[f as keyof typeof entry] = n;
-        }
-        exercisesToLog.push(entry);
-      }
-
-      if (exercisesToLog.length === 0) {
-        throw new Error("Add at least one exercise before saving.");
-      }
+      const exercisesToLog = buildExercisesToLog(selectedExercises, values);
 
       const sessionResult = await logSession(
         supabase,
@@ -375,6 +341,51 @@ function LogSessionForm() {
       </Button>
     </form>
   );
+}
+
+function buildExercisesToLog(
+  selectedExercises: ExerciseRow[],
+  values: PerExerciseValues,
+): LogSessionExerciseInput[] {
+  const exercisesToLog: LogSessionExerciseInput[] = [];
+
+  for (const ex of selectedExercises) {
+    const fields = fieldsForMeasurement(ex.measurement_type);
+    const entry: LogSessionExerciseInput = { exerciseId: ex.id };
+    for (const f of fields) {
+      if (f === "time" && ex.measurement_type === "timeOnly") {
+        const total = combineMmSs(
+          values[ex.id]?.mm,
+          values[ex.id]?.ss,
+        );
+        if (total == null) {
+          throw new Error(
+            `Please enter a valid time (mm:ss) for ${ex.name}.`,
+          );
+        }
+        entry.time = total;
+        continue;
+      }
+      const raw = values[ex.id]?.[f];
+      const n = raw == null || raw === "" ? NaN : Number(raw);
+      if (!Number.isFinite(n)) {
+        throw new Error(
+          `Please enter a valid ${fieldLabel(f, ex.measurement_type, ex.name).toLowerCase()} for ${ex.name}.`,
+        );
+      }
+      if (f === "weight") entry.weight = n;
+      else if (f === "reps") entry.reps = n;
+      else if (f === "time") entry.time = n;
+      else if (f === "distance") entry.distance = n;
+    }
+    exercisesToLog.push(entry);
+  }
+
+  if (exercisesToLog.length === 0) {
+    throw new Error("Add at least one exercise before saving.");
+  }
+
+  return exercisesToLog;
 }
 
 function ExerciseEntry({
@@ -725,7 +736,14 @@ function SessionDetailView({
   onBack: () => void;
 }) {
   const { supabase, session } = useAuth();
+  const queryClient = useQueryClient();
   const tokenTag = session?.token?.slice(-8) ?? "anon";
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [values, setValues] = useState<PerExerciseValues>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const detailQuery = useQuery({
     queryKey: ["session-detail", sessionId, tokenTag],
@@ -735,6 +753,112 @@ function SessionDetailView({
     },
     enabled: !!supabase,
   });
+
+  const exercisesQuery = useQuery({
+    queryKey: ["exercises", tokenTag],
+    queryFn: () => {
+      if (!supabase) throw new Error("Not signed in");
+      return fetchExercises(supabase);
+    },
+    enabled: !!supabase,
+  });
+
+  const exercises = exercisesQuery.data ?? [];
+  const alreadySelected = (detailQuery.data?.entries ?? [])
+    .map((entry) => entry.exercise?.id)
+    .filter((id): id is string => Boolean(id));
+  const selectedExercises = useMemo(
+    () =>
+      selectedIds
+        .map((id) => exercises.find((e) => e.id === id))
+        .filter((x): x is ExerciseRow => Boolean(x)),
+    [selectedIds, exercises],
+  );
+  const adding = pickerOpen || selectedIds.length > 0;
+
+  function removeExercise(id: string) {
+    setSelectedIds((prev) => prev.filter((x) => x !== id));
+    setValues((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }
+
+  function onPickerDone(ids: string[]) {
+    setSelectedIds((prev) => {
+      const merged = [...prev];
+      for (const id of ids) if (!merged.includes(id)) merged.push(id);
+      return merged;
+    });
+    setPickerOpen(false);
+  }
+
+  function resetAddForm() {
+    setPickerOpen(false);
+    setSelectedIds([]);
+    setValues({});
+    setError(null);
+  }
+
+  async function handleAdd(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!supabase || !session) return;
+    setError(null);
+    setNotice(null);
+    setSubmitting(true);
+    try {
+      const exercisesToLog = buildExercisesToLog(selectedExercises, values);
+      const result = await addExercisesToSession(
+        supabase,
+        session.token,
+        sessionId,
+        exercisesToLog,
+        new Map(selectedExercises.map((exercise) => [exercise.id, exercise])),
+      );
+      const pbNames = result.results
+        .filter((entry) => entry.result.isPersonalBest)
+        .map((entry) => {
+          const exercise = selectedExercises.find((ex) => ex.id === entry.exerciseId);
+          return exercise?.name ?? "Exercise";
+        });
+      setNotice(
+        pbNames.length > 0
+          ? `Added to this session. New PB: ${pbNames.join(", ")}.`
+          : "Added to this session.",
+      );
+      resetAddForm();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["session-detail"] }),
+        queryClient.invalidateQueries({ queryKey: ["session-history"] }),
+        queryClient.invalidateQueries({ queryKey: ["board"] }),
+        queryClient.invalidateQueries({ queryKey: ["personal-bests"] }),
+        queryClient.invalidateQueries({ queryKey: ["sessions"] }),
+        queryClient.invalidateQueries({ queryKey: ["pb-history"] }),
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (pickerOpen) {
+    return (
+      <ExercisePicker
+        exercises={exercises}
+        loading={exercisesQuery.isLoading}
+        error={
+          exercisesQuery.isError
+            ? (exercisesQuery.error as Error).message
+            : null
+        }
+        alreadySelected={[...alreadySelected, ...selectedIds]}
+        onCancel={() => setPickerOpen(false)}
+        onDone={onPickerDone}
+      />
+    );
+  }
 
   return (
     <div>
@@ -764,7 +888,25 @@ function SessionDetailView({
         </div>
       )}
       {detailQuery.data && (
-        <SessionDetailBody detail={detailQuery.data} />
+        <SessionDetailBody
+          detail={detailQuery.data}
+          notice={notice}
+          adding={adding}
+          selectedExercises={selectedExercises}
+          values={values}
+          error={error}
+          submitting={submitting}
+          onChangeValue={(id, field, v) =>
+            setValues((prev) => ({
+              ...prev,
+              [id]: { ...(prev[id] ?? {}), [field]: v },
+            }))
+          }
+          onRemove={removeExercise}
+          onOpenPicker={() => setPickerOpen(true)}
+          onCancelAdd={resetAddForm}
+          onSubmit={handleAdd}
+        />
       )}
     </div>
   );
@@ -772,8 +914,30 @@ function SessionDetailView({
 
 function SessionDetailBody({
   detail,
+  notice,
+  adding,
+  selectedExercises,
+  values,
+  error,
+  submitting,
+  onChangeValue,
+  onRemove,
+  onOpenPicker,
+  onCancelAdd,
+  onSubmit,
 }: {
   detail: { session: SessionListRow; entries: SessionEntryRow[] };
+  notice: string | null;
+  adding: boolean;
+  selectedExercises: ExerciseRow[];
+  values: PerExerciseValues;
+  error: string | null;
+  submitting: boolean;
+  onChangeValue: (exerciseId: string, field: string, value: string) => void;
+  onRemove: (id: string) => void;
+  onOpenPicker: () => void;
+  onCancelAdd: () => void;
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
 }) {
   const { session, entries } = detail;
   return (
@@ -797,6 +961,12 @@ function SessionDetailBody({
         )}
       </div>
 
+      {notice && (
+        <div className="rounded-[16px] bg-card p-4 text-sm text-foreground">
+          {notice}
+        </div>
+      )}
+
       {entries.length === 0 ? (
         <div className="rounded-[16px] bg-card p-6 text-center text-sm text-muted-foreground">
           No exercises logged in this session.
@@ -807,6 +977,73 @@ function SessionDetailBody({
             <SessionEntryCard key={entry.id} entry={entry} />
           ))}
         </div>
+      )}
+
+      {adding ? (
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="rounded-[16px] bg-card p-4">
+            <SectionHeader title="Add exercises" />
+            {selectedExercises.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Select at least one exercise.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {selectedExercises.map((ex) => (
+                  <ExerciseEntry
+                    key={ex.id}
+                    exercise={ex}
+                    values={values[ex.id] ?? {}}
+                    onChange={(field, v) => onChangeValue(ex.id, field, v)}
+                    onRemove={() => onRemove(ex.id)}
+                  />
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={onOpenPicker}
+              className="mt-4 flex items-center gap-3 text-sm font-medium text-foreground"
+            >
+              <span className="inline-flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                <Plus className="size-4" strokeWidth={2.5} />
+              </span>
+              Add exercise
+            </button>
+          </div>
+          {error && (
+            <div className="rounded-[16px] bg-card p-4">
+              <div className="text-sm font-semibold text-destructive">
+                Couldn't add exercises
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">{error}</p>
+            </div>
+          )}
+          <div className="flex flex-col gap-3">
+            <Button type="submit" disabled={submitting || selectedExercises.length === 0}>
+              {submitting ? "Saving…" : "Save"}
+            </Button>
+            <button
+              type="button"
+              onClick={onCancelAdd}
+              disabled={submitting}
+              className="text-sm font-medium text-primary"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : (
+        <button
+          type="button"
+          onClick={onOpenPicker}
+          className="flex items-center gap-3 text-sm font-medium text-foreground"
+        >
+          <span className="inline-flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
+            <Plus className="size-4" strokeWidth={2.5} />
+          </span>
+          Add exercise
+        </button>
       )}
     </div>
   );
