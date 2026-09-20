@@ -309,7 +309,7 @@ struct ProgressionView: View {
     }
 
     private var historyEntries: [ProgressionEntry] {
-        entries.sorted { $0.date > $1.date }
+        ProgressionEntryMerger.historyListOrder(entries)
     }
 
     private var historyListHeight: CGFloat {

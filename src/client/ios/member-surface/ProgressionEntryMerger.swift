@@ -45,7 +45,8 @@ enum ProgressionEntryMerger {
         }
 
         // Manuals (including undated) appear in history so they can be edited/deleted.
-        // Undated rows sort by createdAt and are excluded from the chart.
+        // Undated rows keep createdAt on `date` for secondary order; the history
+        // list puts the whole undated group first. Chart excludes them.
         for pb in personalBests {
             guard pb.deletedAt == nil else { continue }
             if pb.entryType == .sessionDerived {
@@ -99,5 +100,15 @@ enum ProgressionEntryMerger {
         }
 
         return merged.sorted { $0.date < $1.date }
+    }
+
+    /// History list: all undated rows first, then dated newest-first (web parity).
+    static func historyListOrder(_ entries: [ProgressionEntry]) -> [ProgressionEntry] {
+        entries.sorted { lhs, rhs in
+            if lhs.isUndated != rhs.isUndated {
+                return lhs.isUndated
+            }
+            return lhs.date > rhs.date
+        }
     }
 }

@@ -370,7 +370,7 @@ Deno.test({
 
       const stored = await admin
         .from("personal_bests")
-        .select("id, weight, achieved_at, updated_at, deleted_at")
+        .select("id, weight, achieved_at, updated_at, deleted_at, synced_at")
         .eq("id", manualId)
         .single();
       if (stored.error) throw stored.error;
@@ -379,6 +379,7 @@ Deno.test({
       assertEquals(stored.data.achieved_at, "2026-08-15");
       assertEquals(stored.data.deleted_at, null);
       assert(stored.data.updated_at != null);
+      assert(stored.data.synced_at != null);
     } finally {
       try {
         await tombstoneIsolatedGymTree(admin, [gymId]);

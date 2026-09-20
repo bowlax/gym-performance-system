@@ -6,6 +6,8 @@
  * - Values and optional date (`achievedAt` null = undated lifetime-only)
  * - Does **not** require beating the current PB
  * - Dated ↔ undated is allowed; derivation at read time decides current vs lifetime
+ * - `synced_at` is stamped so iOS incremental pull (`synced_at=gt.<marker>`)
+ *   sees the web write
  */
 
 import {
@@ -155,6 +157,7 @@ export const handleUpdateManualPBRequest = createEdgeRequestHandler(
         distance: request.distance,
         achieved_at: request.achievedAt,
         updated_at: now,
+        synced_at: now,
       })
       .eq("id", existing.id)
       .select(

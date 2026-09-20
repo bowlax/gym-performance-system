@@ -158,4 +158,18 @@ export function mergeProgressionEntries(params: {
   });
 }
 
+/** History list: all undated rows first, then dated newest-first. */
+export function sortProgressionHistoryForList(
+  history: ProgressionEntryRow[],
+): ProgressionEntryRow[] {
+  return [...history].sort((left, right) => {
+    if (left.isUndated !== right.isUndated) {
+      return left.isUndated ? -1 : 1;
+    }
+    const leftTime = left.date ? new Date(left.date).getTime() : 0;
+    const rightTime = right.date ? new Date(right.date).getTime() : 0;
+    return rightTime - leftTime;
+  });
+}
+
 export type { DerivedPBDisplay, StalenessSetting };

@@ -397,5 +397,47 @@ struct ProgressionEntryMergerTests {
         #expect(entries.count == 1)
         #expect(entries.first?.formattedValue == "100kg × 5")
     }
+
+    @Test
+    func historyListPutsUndatedBeforeDatedNewestFirst() {
+        let squat = exercise(named: "Free Squat")
+        let calendar = Calendar(identifier: .gregorian)
+        let datedOlder = calendar.date(from: DateComponents(year: 2026, month: 5, day: 29))!
+        let datedNewer = calendar.date(from: DateComponents(year: 2026, month: 6, day: 10))!
+        let oldUndated = PersonalBestModel(
+            memberId: memberId,
+            exerciseId: squat.id,
+            weight: nil,
+            reps: 18,
+            achievedAt: nil,
+            entryType: .manualEntry,
+            createdAt: calendar.date(from: DateComponents(year: 2026, month: 7, day: 21))!
+        )
+        let olderDated = manualPB(
+            exerciseId: squat.id,
+            weight: 100,
+            reps: 17,
+            achievedAt: datedOlder
+        )
+        let newerDated = manualPB(
+            exerciseId: squat.id,
+            weight: 110,
+            reps: 16,
+            achievedAt: datedNewer
+        )
+
+        let merged = ProgressionEntryMerger.merge(
+            sessionHistory: [],
+            personalBests: [newerDated, oldUndated, olderDated],
+            exercise: squat,
+            from: .distantPast
+        )
+        let list = ProgressionEntryMerger.historyListOrder(merged)
+
+        #expect(list.map(\.isUndated) == [true, false, false])
+        #expect(list[0].personalBestId == oldUndated.id)
+        #expect(list[1].personalBestId == newerDated.id)
+        #expect(list[2].personalBestId == olderDated.id)
+    }
 }
 #endif

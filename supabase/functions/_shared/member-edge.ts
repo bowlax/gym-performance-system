@@ -336,7 +336,7 @@ export async function softDeletePersonalBest(
   const now = new Date().toISOString();
   const { error } = await supabase
     .from("personal_bests")
-    .update({ deleted_at: now, updated_at: now })
+    .update({ deleted_at: now, updated_at: now, synced_at: now })
     .eq("id", personalBestId);
 
   if (error) {
@@ -351,7 +351,7 @@ export async function softDeleteSet(
   const now = new Date().toISOString();
   const { error } = await supabase
     .from("sets")
-    .update({ deleted_at: now, updated_at: now })
+    .update({ deleted_at: now, updated_at: now, synced_at: now })
     .eq("id", setId);
 
   if (error) {
@@ -363,6 +363,8 @@ export async function softDeleteSet(
  * Soft-delete a session and every child entry/set.
  * Same stamp as `softDeleteSet` / iOS `deleteSession`: `deleted_at` + `updated_at`
  * on the whole tree so later pulls apply tombstones instead of resurrecting.
+ * `synced_at` is stamped so iOS incremental pull (`synced_at=gt.<marker>`)
+ * sees web-originated tombstones.
  */
 export async function softDeleteSessionCascade(
   supabase: UserClient,
@@ -399,7 +401,7 @@ export async function softDeleteSessionCascade(
   if (entryIds.length > 0) {
     const { error: setsError } = await supabase
       .from("sets")
-      .update({ deleted_at: now, updated_at: now })
+      .update({ deleted_at: now, updated_at: now, synced_at: now })
       .in("exercise_entry_id", entryIds);
     if (setsError) {
       throw setsError;
@@ -407,7 +409,7 @@ export async function softDeleteSessionCascade(
 
     const { error: entryUpdateError } = await supabase
       .from("exercise_entries")
-      .update({ deleted_at: now, updated_at: now })
+      .update({ deleted_at: now, updated_at: now, synced_at: now })
       .in("id", entryIds);
     if (entryUpdateError) {
       throw entryUpdateError;
@@ -416,7 +418,7 @@ export async function softDeleteSessionCascade(
 
   const { error: sessionUpdateError } = await supabase
     .from("sessions")
-    .update({ deleted_at: now, updated_at: now })
+    .update({ deleted_at: now, updated_at: now, synced_at: now })
     .eq("id", sessionId);
   if (sessionUpdateError) {
     throw sessionUpdateError;

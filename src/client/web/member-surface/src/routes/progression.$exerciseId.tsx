@@ -62,6 +62,7 @@ import {
   type AddManualPBResult,
 } from "@/lib/gp/pb-actions";
 import { todayISO } from "@/lib/gp/log-set";
+import { sortProgressionHistoryForList } from "@/lib/gp/progression-entry-merger";
 import {
   manualSheetSaveLabel,
   manualSheetSuccessMessage,
@@ -1019,11 +1020,7 @@ function HistoryList({
   onDelete: (row: ProgressionEntryRow) => void;
   onEdit: (row: ProgressionEntryRow) => void;
 }) {
-  const rows = [...history].sort((a, b) => {
-    const ta = a.date ? new Date(a.date).getTime() : 0;
-    const tb = b.date ? new Date(b.date).getTime() : 0;
-    return tb - ta;
-  });
+  const rows = sortProgressionHistoryForList(history);
 
   return (
     <div>

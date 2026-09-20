@@ -4,6 +4,8 @@
  * Records a manual personal-best entry. Compares against derived current PB (#28 step 4).
  * `achievedAt` may be null (undated lifetime entry) or a YYYY-MM-DD string.
  * Missing / null → store null. Invalid non-null string → 400 (never invent today).
+ * `synced_at` is stamped so iOS incremental pull (`synced_at=gt.<marker>`)
+ * sees web-originated rows.
  */
 
 import {
@@ -141,6 +143,7 @@ handleEdgeRequest(async (req, claims, authHeader) => {
     return jsonResponse({ isNewPB: false, personalBest: null }, 200);
   }
 
+  const now = new Date().toISOString();
   const { data, error } = await supabase
     .from("personal_bests")
     .insert({
@@ -155,6 +158,8 @@ handleEdgeRequest(async (req, claims, authHeader) => {
       distance: request.distance,
       achieved_at: request.achievedAt,
       entry_type: "manualEntry",
+      updated_at: now,
+      synced_at: now,
     })
     .select(
       "id, gym_id, member_id, exercise_id, set_id, weight, reps, time_seconds, distance, achieved_at, entry_type",
