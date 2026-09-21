@@ -20,6 +20,7 @@ import {
 import { fetchOwnerSurfaceGrant } from "../_shared/edge-pb-reads.ts";
 import {
   customerDisplayName,
+  customerRosterId,
   detectTeamUpAuthPrefix,
   lookupCustomerByEmail,
 } from "../_shared/teamup-customers.ts";
@@ -27,6 +28,7 @@ import {
 export {
   customerDisplayName,
   customerEmail,
+  customerRosterId,
   emailsMatch,
   pickCustomerByEmail,
 } from "../_shared/teamup-customers.ts";
@@ -39,13 +41,14 @@ export interface OwnerMemberNameRow {
 
 interface MemberSyncRow extends OwnerMemberNameRow {
   teamup_email: string | null;
+  teamup_roster_id: string | null;
 }
 
 async function listMembersForSync(grantGymId: string): Promise<MemberSyncRow[]> {
   const service = createServiceRoleClient();
   const { data, error } = await service
     .from("members")
-    .select("id, teamup_customer_id, display_name, teamup_email")
+    .select("id, teamup_customer_id, display_name, teamup_email, teamup_roster_id")
     .eq("gym_id", grantGymId)
     .is("deleted_at", null);
 
@@ -58,6 +61,7 @@ async function listMembersForSync(grantGymId: string): Promise<MemberSyncRow[]> 
       teamup_customer_id?: unknown;
       display_name?: unknown;
       teamup_email?: unknown;
+      teamup_roster_id?: unknown;
     };
     if (typeof record.id !== "string") continue;
     rows.push({
@@ -70,6 +74,10 @@ async function listMembersForSync(grantGymId: string): Promise<MemberSyncRow[]> 
         typeof record.display_name === "string" ? record.display_name : "Member",
       teamup_email:
         typeof record.teamup_email === "string" ? record.teamup_email : null,
+      teamup_roster_id:
+        typeof record.teamup_roster_id === "string"
+          ? record.teamup_roster_id
+          : null,
     });
   }
   return rows;
@@ -104,10 +112,16 @@ export async function syncNamesFromTeamUp(grantGymId: string): Promise<number> {
       member.teamup_email,
     );
     const name = record ? customerDisplayName(record) : null;
-    if (!name || name === member.display_name) continue;
+    const rosterId = record ? customerRosterId(record) : null;
+    const patch: Record<string, unknown> = {};
+    if (name && name !== member.display_name) patch.display_name = name;
+    if (rosterId && rosterId !== member.teamup_roster_id) {
+      patch.teamup_roster_id = rosterId;
+    }
+    if (Object.keys(patch).length === 0) continue;
     const { error } = await service
       .from("members")
-      .update({ display_name: name })
+      .update(patch)
       .eq("id", member.member_id)
       .eq("gym_id", grantGymId);
     if (error) throw error;

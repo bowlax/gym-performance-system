@@ -9,14 +9,14 @@
     "enabled": true
   },
   "triggers": {
-    "crons": ["0 5 * * *"]
+    "crons": ["0 5 * * *", "0 8,9,13,14,20,21 * * *"]
   },
   "vars": {
     "SUPABASE_URL": "https://ivrsxhuktebvypgtfoww.supabase.co"
   },
   // Create with: npx wrangler kv namespace create OWNER_SESSION
   // then replace this id. Secrets: OWNER_BOT_KEY, OWNER_SESSION_SECRET,
-  // SUPABASE_PUBLISHABLE_KEY via `wrangler secret put`.
+  // SUPABASE_PUBLISHABLE_KEY, LOG_REMINDER_CRON_SECRET via `wrangler secret put`.
   "kv_namespaces": [
     {
       "binding": "OWNER_SESSION",

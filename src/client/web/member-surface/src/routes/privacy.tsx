@@ -43,7 +43,7 @@ function PrivacyScreen() {
 
       <article className="prose prose-sm max-w-none text-foreground [&_h2]:mt-8 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-foreground [&_h3]:mt-4 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-foreground [&_p]:mt-2 [&_p]:text-sm [&_p]:leading-relaxed [&_p]:text-muted-foreground [&_li]:text-sm [&_li]:leading-relaxed [&_li]:text-muted-foreground [&_td]:text-sm [&_td]:text-muted-foreground [&_th]:text-sm [&_a]:text-primary">
         <p className="text-muted-foreground">
-          <strong className="text-foreground">Last updated: 11 September 2026</strong>
+          <strong className="text-foreground">Last updated: 21 September 2026</strong>
         </p>
 
         <p>
@@ -105,7 +105,8 @@ function PrivacyScreen() {
           </li>
           <li>
             <strong>App settings</strong> — preferences you set in the app, such as
-            whether personal bests expire over time.
+            whether personal bests expire over time and whether to receive
+            session reminder emails.
           </li>
           <li>
             <strong>Basic device/technical information</strong> needed to operate
@@ -124,6 +125,13 @@ function PrivacyScreen() {
           <strong>email or WhatsApp</strong> in the ordinary course of gym
           membership and coaching. Those channels are not used by the app to
           collect training logs automatically.
+        </p>
+        <p>
+          If you are a connected member, the app may also send a log reminder
+          email to the TeamUp address on file when you were booked into a class
+          that has ended and no session has been logged yet. Every message
+          includes a one-click unsubscribe. You can turn reminder emails back on
+          in Settings.
         </p>
         <p>
           We do not collect payment information, health information beyond
@@ -166,6 +174,16 @@ function PrivacyScreen() {
                 </td>
                 <td>
                   Your consent, given when you connect — see Section 4
+                </td>
+              </tr>
+              <tr>
+                <td>Log reminder email</td>
+                <td>
+                  To remind connected members to log a booked session
+                </td>
+                <td>
+                  Legitimate interest, with a one-click opt-out in every message
+                  and a Settings control to turn them back on
                 </td>
               </tr>
               <tr>

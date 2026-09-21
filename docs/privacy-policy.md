@@ -1,6 +1,6 @@
 # GymPerformance Privacy Policy
 
-**Last updated: 11 September 2026**
+**Last updated: 21 September 2026**
 
 This policy explains what information GymPerformance collects, why, and
 what choices you have. It applies to the GymPerformance app and its
@@ -52,7 +52,8 @@ visible to your coach. When you connect, we collect:
   bests, and session dates that you log or that were logged with your
   knowledge (e.g. by a coach).
 - **App settings** — preferences you set in the app, such as whether
-  personal bests expire over time.
+  personal bests expire over time and whether to receive session
+  reminder emails.
 - **Basic device/technical information** needed to operate sync (e.g. a
   device identifier used only to coordinate your own data across your
   own devices — not used to track you across other apps or services).
@@ -65,6 +66,12 @@ Separately from the app, Wolf Way of Life Fitness may contact you by
 **email or WhatsApp** in the ordinary course of gym membership and
 coaching. Those channels are not used by the app to collect training
 logs automatically.
+
+If you are a connected member, the app may also send a log reminder
+email to the TeamUp address on file when you were booked into a class
+that has ended and no session has been logged yet. Every message
+includes a one-click unsubscribe. You can turn reminder emails back
+on in Settings.
 
 We do not collect payment information, health information beyond
 exercise performance, or location data. The app does not include
@@ -80,6 +87,7 @@ other vendors.
 | Training data (connected) | To back up your history, sync it across your devices, and let it be used within the app | Your consent, given when you connect |
 | TeamUp identity | To recognise you as the same member across devices and link you to your gym membership | Your consent, given when you connect |
 | Data visible to your coach | So your coach can see your training progress and support you | Your consent, given when you connect — see Section 4 |
+| Log reminder email | To remind connected members to log a booked session | Legitimate interest, with a one-click opt-out in every message and a Settings control to turn them back on |
 | App settings | To make the app work the way you've configured it | Your consent / legitimate interest in providing the service you asked for |
 
 Connecting your account **is** the moment you give this consent. Before

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { authorizeBotKey, timingSafeEqual } from "./bot-auth";
 import { handleOwnerFetch, handleOwnerScheduled, type OwnerApiEnv } from "./owner-api-handlers";
+import { LOG_REMINDER_CRON, NAME_SYNC_CRON } from "./london-schedule";
 import {
   isValidOwnerSessionData,
   readSealedOwnerSession,
@@ -40,6 +41,7 @@ async function makeEnv(
     OWNER_SESSION: kv,
     SUPABASE_URL: "https://example.supabase.co",
     SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
+    LOG_REMINDER_CRON_SECRET: "cron-secret-for-tests-32chars-min",
     kv,
   };
 }
@@ -452,6 +454,87 @@ describe("handleOwnerScheduled", () => {
     });
     expect(called).toContain("/functions/v1/owner-member-names");
     expect(called).toContain("refresh=1");
+  });
+
+  test("name-sync cron is unchanged when the reminder cron also fires", async () => {
+    const urls: string[] = [];
+    const env = await makeEnv(session(9_999_999_999));
+    await handleOwnerScheduled(
+      env,
+      {
+        fetchImpl: async (input) => {
+          urls.push(String(input));
+          return new Response(JSON.stringify({ members: [] }), { status: 200 });
+        },
+      },
+      { cron: NAME_SYNC_CRON, scheduledTime: Date.parse("2026-07-15T05:00:00.000Z") },
+    );
+    expect(urls).toEqual([
+      expect.stringContaining("/functions/v1/owner-member-names"),
+    ]);
+  });
+
+  test("BST instants fire only at 09:00/14:00/21:00 London", async () => {
+    const env = await makeEnv(session(9_999_999_999));
+    const cases: Array<{ at: string; fire: boolean }> = [
+      { at: "2026-07-15T08:00:00.000Z", fire: true },
+      { at: "2026-07-15T09:00:00.000Z", fire: false },
+      { at: "2026-07-15T13:00:00.000Z", fire: true },
+      { at: "2026-07-15T14:00:00.000Z", fire: false },
+      { at: "2026-07-15T20:00:00.000Z", fire: true },
+      { at: "2026-07-15T21:00:00.000Z", fire: false },
+    ];
+    for (const row of cases) {
+      let called = "";
+      await handleOwnerScheduled(
+        env,
+        {
+          fetchImpl: async (input, init) => {
+            called = String(input);
+            expect(headerAuth(init)?.startsWith("Bearer cron-secret")).toBe(true);
+            expect(JSON.parse(String(init?.body)).now).toBe(row.at);
+            return new Response(JSON.stringify({ sent: 0 }), { status: 200 });
+          },
+        },
+        { cron: LOG_REMINDER_CRON, scheduledTime: Date.parse(row.at) },
+      );
+      if (row.fire) {
+        expect(called).toContain("/functions/v1/log-reminders");
+        expect(called).not.toContain("owner-member-names");
+      } else {
+        expect(called).toBe("");
+      }
+    }
+  });
+
+  test("GMT instants fire only at 09:00/14:00/21:00 London", async () => {
+    const env = await makeEnv(session(9_999_999_999));
+    const cases: Array<{ at: string; fire: boolean }> = [
+      { at: "2026-01-15T08:00:00.000Z", fire: false },
+      { at: "2026-01-15T09:00:00.000Z", fire: true },
+      { at: "2026-01-15T13:00:00.000Z", fire: false },
+      { at: "2026-01-15T14:00:00.000Z", fire: true },
+      { at: "2026-01-15T20:00:00.000Z", fire: false },
+      { at: "2026-01-15T21:00:00.000Z", fire: true },
+    ];
+    for (const row of cases) {
+      let called = "";
+      await handleOwnerScheduled(
+        env,
+        {
+          fetchImpl: async (input) => {
+            called = String(input);
+            return new Response(JSON.stringify({ sent: 0 }), { status: 200 });
+          },
+        },
+        { cron: LOG_REMINDER_CRON, scheduledTime: Date.parse(row.at) },
+      );
+      if (row.fire) {
+        expect(called).toContain("/functions/v1/log-reminders");
+      } else {
+        expect(called).toBe("");
+      }
+    }
   });
 });
 

@@ -13,6 +13,7 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as LogRouteImport } from './routes/log'
 import { Route as DesignRouteImport } from './routes/design'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as RemindersUnsubscribeRouteImport } from './routes/reminders/unsubscribe'
 import { Route as ProgressionExerciseIdRouteImport } from './routes/progression.$exerciseId'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiAuthSignoutRouteImport } from './routes/api/auth/signout'
@@ -36,6 +37,11 @@ const DesignRoute = DesignRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RemindersUnsubscribeRoute = RemindersUnsubscribeRouteImport.update({
+  id: '/reminders/unsubscribe',
+  path: '/reminders/unsubscribe',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProgressionExerciseIdRoute = ProgressionExerciseIdRouteImport.update({
@@ -66,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/progression/$exerciseId': typeof ProgressionExerciseIdRoute
+  '/reminders/unsubscribe': typeof RemindersUnsubscribeRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/auth/signout': typeof ApiAuthSignoutRoute
 }
@@ -76,6 +83,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/progression/$exerciseId': typeof ProgressionExerciseIdRoute
+  '/reminders/unsubscribe': typeof RemindersUnsubscribeRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/auth/signout': typeof ApiAuthSignoutRoute
 }
@@ -87,6 +95,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/progression/$exerciseId': typeof ProgressionExerciseIdRoute
+  '/reminders/unsubscribe': typeof RemindersUnsubscribeRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/auth/signout': typeof ApiAuthSignoutRoute
 }
@@ -99,6 +108,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/auth/callback'
     | '/progression/$exerciseId'
+    | '/reminders/unsubscribe'
     | '/api/auth/session'
     | '/api/auth/signout'
   fileRoutesByTo: FileRoutesByTo
@@ -109,6 +119,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/auth/callback'
     | '/progression/$exerciseId'
+    | '/reminders/unsubscribe'
     | '/api/auth/session'
     | '/api/auth/signout'
   id:
@@ -119,6 +130,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/auth/callback'
     | '/progression/$exerciseId'
+    | '/reminders/unsubscribe'
     | '/api/auth/session'
     | '/api/auth/signout'
   fileRoutesById: FileRoutesById
@@ -130,6 +142,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   ProgressionExerciseIdRoute: typeof ProgressionExerciseIdRoute
+  RemindersUnsubscribeRoute: typeof RemindersUnsubscribeRoute
   ApiAuthSessionRoute: typeof ApiAuthSessionRoute
   ApiAuthSignoutRoute: typeof ApiAuthSignoutRoute
 }
@@ -162,6 +175,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reminders/unsubscribe': {
+      id: '/reminders/unsubscribe'
+      path: '/reminders/unsubscribe'
+      fullPath: '/reminders/unsubscribe'
+      preLoaderRoute: typeof RemindersUnsubscribeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/progression/$exerciseId': {
@@ -202,6 +222,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   ProgressionExerciseIdRoute: ProgressionExerciseIdRoute,
+  RemindersUnsubscribeRoute: RemindersUnsubscribeRoute,
   ApiAuthSessionRoute: ApiAuthSessionRoute,
   ApiAuthSignoutRoute: ApiAuthSignoutRoute,
 }

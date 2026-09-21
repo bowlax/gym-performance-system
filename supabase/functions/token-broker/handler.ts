@@ -72,7 +72,11 @@ import {
   verifyOAuthState,
   type TeamUpVerificationResult,
 } from "../_shared/teamup-oauth.ts";
-import { lookupDisplayNameByEmailBestEffort } from "../_shared/teamup-customers.ts";
+import {
+  customerDisplayName,
+  customerRosterId,
+  lookupCustomerRecordByEmailBestEffort,
+} from "../_shared/teamup-customers.ts";
 
 // Minimal schema types for compile-time checking without a generated Database type.
 interface GymRow {
@@ -344,6 +348,7 @@ async function createOrAdoptMember(
   deviceMemberId: string,
   displayName: string | null,
   teamupEmail: string | null,
+  teamupRosterId: string | null,
 ): Promise<MemberRow> {
   const { data: existing, error: lookupError } = await supabase
     .from("members")
@@ -363,6 +368,7 @@ async function createOrAdoptMember(
     const patch: Record<string, unknown> = {};
     if (displayName) patch.display_name = displayName;
     if (teamupEmail) patch.teamup_email = teamupEmail;
+    if (teamupRosterId) patch.teamup_roster_id = teamupRosterId;
     if (Object.keys(patch).length > 0) {
       const { error: updateError } = await supabase
         .from("members")
@@ -387,6 +393,7 @@ async function createOrAdoptMember(
   };
   if (displayName) insertRow.display_name = displayName;
   if (teamupEmail) insertRow.teamup_email = teamupEmail;
+  if (teamupRosterId) insertRow.teamup_roster_id = teamupRosterId;
 
   const { data: created, error: insertError } = await supabase
     .from("members")
@@ -693,11 +700,16 @@ async function issueMemberSession(
   }
 
   let displayName = verification.displayName;
+  let teamupRosterId: string | null = null;
   if (verification.teamupEmail) {
-    const rosterName = await lookupDisplayNameByEmailBestEffort(
+    const record = await lookupCustomerRecordByEmailBestEffort(
       verification.teamupEmail,
     );
-    if (rosterName) displayName = rosterName;
+    if (record) {
+      const rosterName = customerDisplayName(record);
+      if (rosterName) displayName = rosterName;
+      teamupRosterId = customerRosterId(record);
+    }
   }
 
   const member = await createOrAdoptMember(
@@ -707,6 +719,7 @@ async function issueMemberSession(
     deviceMemberId,
     displayName,
     verification.teamupEmail,
+    teamupRosterId,
   );
 
   // Stub / OAuth-unconfigured: hand-mint HS256 (local/dev only).

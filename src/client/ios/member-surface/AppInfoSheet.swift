@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Settings: personal-best staleness (#28) + Connect / sync status (#31 / #32).
+/// Settings: personal-best staleness (#28) + Connect / sync status (#31 / #32)
+/// + session reminder emails (connected members).
 struct AppInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppDependencies.self) private var dependencies
@@ -16,6 +17,9 @@ struct AppInfoSheet: View {
     @State private var connectionRevision = 0
     /// Bumps relative "Last synced" copy while the sheet is open.
     @State private var relativeClock = Date()
+    @State private var reminderEmailsEnabled = true
+    @State private var reminderLoaded = false
+    @State private var reminderSaving = false
 
     private var isConnected: Bool {
         _ = connectionRevision
@@ -50,6 +54,23 @@ struct AppInfoSheet: View {
                     Text("Personal bests")
                 } footer: {
                     Text(stalenessFooter)
+                }
+
+                if isConnected {
+                    Section {
+                        Toggle("Session reminder emails", isOn: Binding(
+                            get: { reminderEmailsEnabled },
+                            set: { next in
+                                reminderEmailsEnabled = next
+                                Task { await persistReminderEmails(next) }
+                            }
+                        ))
+                        .disabled(!reminderLoaded || reminderSaving)
+                    } header: {
+                        Text("Reminders")
+                    } footer: {
+                        Text(reminderFooter)
+                    }
                 }
 
                 Section {
@@ -126,6 +147,9 @@ struct AppInfoSheet: View {
                     relativeClock = Date()
                     try? await Task.sleep(nanoseconds: 30_000_000_000)
                 }
+            }
+            .task(id: isConnected) {
+                await loadReminderPreference()
             }
         }
         .tint(Color.wolfBlue)
@@ -226,6 +250,10 @@ struct AppInfoSheet: View {
         """
     }
 
+    private var reminderFooter: String {
+        "When this is on, we email you after a booked class ends if you haven’t logged it yet. Turn it off here or from the link in any reminder."
+    }
+
     private var accountFooter: String {
         if isConnected {
             return "Sync runs after you save a session, when you open the app (at most every six hours), or when you tap Sync now. Disconnect stops sync on this device; it does not delete cloud history."
@@ -263,6 +291,48 @@ struct AppInfoSheet: View {
         } catch {
             saveError = error.localizedDescription
         }
+    }
+
+    private func loadReminderPreference() async {
+        guard isConnected else {
+            reminderLoaded = false
+            reminderEmailsEnabled = true
+            return
+        }
+        reminderLoaded = false
+        do {
+            let (access, memberId) = try await reminderSyncAccess()
+            reminderEmailsEnabled = try await access.fetchLogReminderEmailsEnabled(
+                memberId: memberId
+            )
+            reminderLoaded = true
+        } catch {
+            saveError = error.localizedDescription
+        }
+    }
+
+    private func persistReminderEmails(_ nextEnabled: Bool) async {
+        guard reminderLoaded, !reminderSaving else { return }
+        reminderSaving = true
+        defer { reminderSaving = false }
+        do {
+            let (access, memberId) = try await reminderSyncAccess()
+            try await access.updateLogReminderEmailsEnabled(
+                memberId: memberId,
+                enabled: nextEnabled
+            )
+        } catch {
+            reminderEmailsEnabled = !nextEnabled
+            saveError = error.localizedDescription
+        }
+    }
+
+    private func reminderSyncAccess() async throws -> (PostgRESTSyncServiceAccess, UUID) {
+        guard let session = await MemberConnectionStore.ensureFreshSession() else {
+            throw SyncError.cloudNotConfigured
+        }
+        let credentials = try SyncCredentials.fromBrokerSession(session)
+        return (PostgRESTSyncServiceAccess(credentials: credentials), credentials.memberId)
     }
 }
 

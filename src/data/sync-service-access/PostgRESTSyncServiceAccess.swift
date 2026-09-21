@@ -73,6 +73,56 @@ struct PostgRESTSyncServiceAccess: SyncServiceAccess {
         return !rows.isEmpty
     }
 
+    /// `true` when `log_reminder_email_opted_out_at` is null (default subscribed).
+    func fetchLogReminderEmailsEnabled(memberId: UUID) async throws -> Bool {
+        var components = URLComponents(
+            url: credentials.restAPIBaseURL.appendingPathComponent("members"),
+            resolvingAgainstBaseURL: false
+        )
+        components?.queryItems = [
+            URLQueryItem(name: "select", value: "log_reminder_email_opted_out_at"),
+            URLQueryItem(name: "id", value: "eq.\(memberId.uuidString)"),
+        ]
+
+        guard let url = components?.url else {
+            throw SyncError.pullFailed(table: "members", statusCode: -1, detail: "Invalid URL")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue(credentials.publishableKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await urlSession.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw SyncError.pullFailed(table: "members", statusCode: -1, detail: "No HTTP response")
+        }
+        guard (200 ... 299).contains(http.statusCode) else {
+            let detail = String(data: data, encoding: .utf8) ?? ""
+            throw SyncError.pullFailed(table: "members", statusCode: http.statusCode, detail: detail)
+        }
+
+        let json = try JSONSerialization.jsonObject(with: data)
+        guard let rows = json as? [[String: Any]], let row = rows.first else {
+            throw SyncError.memberIdentityNotEstablished
+        }
+        let value = row["log_reminder_email_opted_out_at"]
+        return value == nil || value is NSNull
+    }
+
+    func updateLogReminderEmailsEnabled(memberId: UUID, enabled: Bool) async throws {
+        let now = Date()
+        let fields = SyncPayloadMapper.logReminderEmailsPatch(
+            enabled: enabled,
+            deviceId: credentials.deviceId,
+            now: now
+        )
+        let updated = try await patchMemberSettings(memberId: memberId, fields: fields)
+        if !updated {
+            throw SyncError.memberIdentityNotEstablished
+        }
+    }
+
     func pullSessions(since: Date?) async throws -> [CloudSessionRow] {
         let data = try await get(table: "sessions", since: since)
         return try CloudRowDecoder.decodeSessions(from: data)

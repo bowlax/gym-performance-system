@@ -31,7 +31,11 @@ import {
   currentPBEmptyReason,
 } from "@/lib/gp/current-pb-empty-copy";
 import { fetchMemberStaleness } from "@/lib/gp/derive-pb-reads";
-import { updateMemberStaleness } from "@/lib/gp/member-settings";
+import {
+  fetchLogReminderEmailsEnabled,
+  updateLogReminderEmailsEnabled,
+  updateMemberStaleness,
+} from "@/lib/gp/member-settings";
 import type { StalenessSetting } from "@gp-shared/pb-derivation.ts";
 import {
   clearSessionSaveSummary,
@@ -209,6 +213,8 @@ function SettingsDialog({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [reminderEmailsEnabled, setReminderEmailsEnabled] = useState(true);
+  const [savingReminders, setSavingReminders] = useState(false);
 
   const settingsQuery = useQuery({
     queryKey: ["member-staleness"],
@@ -219,12 +225,26 @@ function SettingsDialog({
     enabled: open && !!supabase,
   });
 
+  const reminderQuery = useQuery({
+    queryKey: ["member-log-reminder-emails"],
+    queryFn: () => {
+      if (!supabase) throw new Error("Not signed in");
+      return fetchLogReminderEmailsEnabled(supabase);
+    },
+    enabled: open && !!supabase,
+  });
+
   useEffect(() => {
     if (!settingsQuery.data) return;
     setEnabled(settingsQuery.data.enabled);
     setPeriods(settingsQuery.data.periods);
     setUnit(settingsQuery.data.unit === "months" ? "months" : "quarters");
   }, [settingsQuery.data]);
+
+  useEffect(() => {
+    if (reminderQuery.data === undefined) return;
+    setReminderEmailsEnabled(reminderQuery.data);
+  }, [reminderQuery.data]);
 
   async function persist(next: StalenessSetting) {
     if (!supabase) return;
@@ -239,6 +259,26 @@ function SettingsDialog({
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function persistReminders(nextEnabled: boolean) {
+    if (!supabase) return;
+    const previous = reminderEmailsEnabled;
+    setReminderEmailsEnabled(nextEnabled);
+    setSavingReminders(true);
+    setError(null);
+    try {
+      const saved = await updateLogReminderEmailsEnabled(supabase, nextEnabled);
+      setReminderEmailsEnabled(saved);
+      await queryClient.invalidateQueries({
+        queryKey: ["member-log-reminder-emails"],
+      });
+    } catch (e) {
+      setReminderEmailsEnabled(previous);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingReminders(false);
     }
   }
 
@@ -348,10 +388,41 @@ function SettingsDialog({
               best if you don’t maintain it within the window you choose. Your
               lifetime best is always kept.
             </p>
-            {error && (
-              <p className="mt-2 text-xs text-destructive">{error}</p>
+          </div>
+          {!!supabase && (
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Reminders
+            </div>
+            <label className="mt-3 flex items-center justify-between gap-3 text-sm font-medium text-foreground">
+              Session reminder emails
+              <input
+                type="checkbox"
+                checked={reminderEmailsEnabled}
+                disabled={
+                  savingReminders || reminderQuery.isLoading || !supabase
+                }
+                onChange={(e) => {
+                  void persistReminders(e.target.checked);
+                }}
+                className="size-4 accent-primary"
+              />
+            </label>
+            <p className="mt-3 text-xs text-muted-foreground">
+              When this is on, we email you after a booked class ends if you
+              haven&apos;t logged it yet. Turn it off here or from the link in
+              any reminder.
+            </p>
+            {reminderQuery.isError && (
+              <p className="mt-2 text-xs text-destructive">
+                {(reminderQuery.error as Error).message}
+              </p>
             )}
           </div>
+          )}
+          {error && (
+            <p className="text-xs text-destructive">{error}</p>
+          )}
           <div className="border-t border-border pt-2">
             <Link
               to="/privacy"

@@ -347,6 +347,7 @@ Deno.test({
       if (name === "GYMPERF_SUPABASE_PUBLISHABLE_KEY") return env.anonKey;
       if (name === "SERVICE_ROLE_KEY") return env.serviceRoleKey;
       if (name === "JWT_SIGNING_SECRET") return env.jwtSecret;
+      if (name === "TEAMUP_M2M_TOKEN") return undefined;
       if (name === "TEAMUP_OAUTH_CLIENT_ID") return "client";
       if (name === "TEAMUP_OAUTH_CLIENT_SECRET") return "secret";
       if (name === "TEAMUP_OAUTH_REDIRECT_URI") {
@@ -479,6 +480,120 @@ Deno.test({
         if (authUserId) {
           await admin.auth.admin.deleteUser(authUserId);
         }
+        await tombstoneIsolatedGymTree(admin, [gymId]);
+      } catch (cleanupError) {
+        testError ??= cleanupError;
+      } finally {
+        Deno.env.get = originalGet;
+      }
+    }
+    if (testError) throw testError;
+  },
+});
+
+Deno.test({
+  name: "HTTP POST connect persists teamup_roster_id from the same email lookup",
+  ignore: !isLoopbackSupabaseUrl(
+    Deno.env.get("SUPABASE_URL") ?? Deno.env.get("API_URL") ??
+      "http://127.0.0.1:54321",
+  ),
+  sanitizeResources: false,
+  sanitizeOps: false,
+  async fn() {
+    const env = await liveEnv();
+    if (!env) throw new Error("live env disappeared");
+
+    const originalGet = Deno.env.get.bind(Deno.env);
+    const originalFetch = globalThis.fetch;
+    Deno.env.get = (name: string) => {
+      if (name === "SUPABASE_URL") return env.url;
+      if (name === "SUPABASE_ANON_KEY") return env.anonKey;
+      if (name === "SUPABASE_PUBLISHABLE_KEY") return env.anonKey;
+      if (name === "GYMPERF_SUPABASE_PUBLISHABLE_KEY") return env.anonKey;
+      if (name === "SERVICE_ROLE_KEY") return env.serviceRoleKey;
+      if (name === "JWT_SIGNING_SECRET") return env.jwtSecret;
+      if (name === "TEAMUP_M2M_TOKEN") return "test-m2m-token";
+      if (name === "TEAMUP_OAUTH_CLIENT_ID") return "client";
+      if (name === "TEAMUP_OAUTH_CLIENT_SECRET") return "secret";
+      if (name === "TEAMUP_OAUTH_REDIRECT_URI") {
+        return "https://broker.example/functions/v1/token-broker?oauth=callback";
+      }
+      if (name === "TEAMUP_OAUTH_PROVIDER_ID") return "5404319";
+      return originalGet(name);
+    };
+
+    globalThis.fetch = async (input, init) => {
+      const url = new URL(String(input));
+      if (url.origin === "https://goteamup.com") {
+        const query = url.searchParams.get("query");
+        if (query === "roster-connect@example.com") {
+          return new Response(
+            JSON.stringify({
+              count: 1,
+              next: null,
+              results: [{
+                id: 6714431,
+                first_name: "Ada",
+                last_name: "Lovelace",
+                email: "roster-connect@example.com",
+                status: "converted",
+              }],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response(
+          JSON.stringify({ count: 0, next: null, results: [] }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return await originalFetch(input, init);
+    };
+
+    const admin = createClient(env.url, env.serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const gymId = crypto.randomUUID();
+    const deviceMemberId = crypto.randomUUID();
+    const providerId = String(
+      1_000_000_000 + (Number.parseInt(gymId.slice(0, 8), 16) % 100_000_000),
+    );
+    const teamupCustomerId = `roster-${gymId.slice(0, 8)}`;
+    let authUserId: string | null = null;
+    let testError: unknown;
+    try {
+      const gymInsert = await admin.from("gyms").insert({
+        id: gymId,
+        teamup_provider_id: providerId,
+        name: "Roster Connect Gym",
+      });
+      if (gymInsert.error) throw gymInsert.error;
+      const token = makeFakeTeamUpJwt({
+        sub: teamupCustomerId,
+        email: "roster-connect@example.com",
+        name: "JWT Name",
+        scope: `read_write provider:${providerId}`,
+      });
+      const res = await connectWithJwtName(token, deviceMemberId);
+      await assertConnectOk(res, "roster connect");
+      const row = await admin
+        .from("members")
+        .select("display_name, teamup_roster_id, teamup_email, auth_user_id")
+        .eq("id", deviceMemberId)
+        .single();
+      if (row.error) throw row.error;
+      assertEquals(row.data.display_name, "Ada Lovelace");
+      assertEquals(row.data.teamup_roster_id, "6714431");
+      assertEquals(row.data.teamup_email, "roster-connect@example.com");
+      authUserId = typeof row.data.auth_user_id === "string"
+        ? row.data.auth_user_id
+        : null;
+    } catch (error) {
+      testError = error;
+    } finally {
+      globalThis.fetch = originalFetch;
+      try {
+        if (authUserId) await admin.auth.admin.deleteUser(authUserId);
         await tombstoneIsolatedGymTree(admin, [gymId]);
       } catch (cleanupError) {
         testError ??= cleanupError;

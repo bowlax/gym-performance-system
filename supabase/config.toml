@@ -68,3 +68,6 @@ verify_jwt = true
 
 [functions.owner-member-names]
 verify_jwt = true
+
+[functions.log-reminders]
+verify_jwt = false

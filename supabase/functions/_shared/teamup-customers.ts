@@ -31,6 +31,16 @@ export function customerDisplayName(record: Record<string, unknown>): string | n
   return null;
 }
 
+export function customerRosterId(record: Record<string, unknown>): string | null {
+  const id = record.id;
+  if (typeof id === "number" && Number.isFinite(id)) return String(id);
+  if (typeof id === "string") {
+    const trimmed = id.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  return null;
+}
+
 export function customerEmail(record: Record<string, unknown>): string | null {
   const direct = optionalString(record.email) ??
     optionalString(record.email_address);
@@ -128,6 +138,21 @@ export async function lookupCustomerByEmail(
   return pickCustomerByEmail(rows, email);
 }
 
+/** Best-effort full roster customer for connect / name-sync. */
+export async function lookupCustomerRecordByEmailBestEffort(
+  email: string,
+): Promise<Record<string, unknown> | null> {
+  const token = Deno.env.get("TEAMUP_M2M_TOKEN")?.trim();
+  const providerId = Deno.env.get("TEAMUP_OAUTH_PROVIDER_ID")?.trim();
+  if (!token || !providerId || !email.trim()) return null;
+  try {
+    const prefix = await detectTeamUpAuthPrefix(token, providerId);
+    return await lookupCustomerByEmail(token, providerId, prefix, email);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Best-effort roster name for connect. Missing M2M config or TeamUp errors
  * return null so OAuth still succeeds; display_name stays as-is until refresh.
@@ -135,19 +160,6 @@ export async function lookupCustomerByEmail(
 export async function lookupDisplayNameByEmailBestEffort(
   email: string,
 ): Promise<string | null> {
-  const token = Deno.env.get("TEAMUP_M2M_TOKEN")?.trim();
-  const providerId = Deno.env.get("TEAMUP_OAUTH_PROVIDER_ID")?.trim();
-  if (!token || !providerId || !email.trim()) return null;
-  try {
-    const prefix = await detectTeamUpAuthPrefix(token, providerId);
-    const record = await lookupCustomerByEmail(
-      token,
-      providerId,
-      prefix,
-      email,
-    );
-    return record ? customerDisplayName(record) : null;
-  } catch {
-    return null;
-  }
+  const record = await lookupCustomerRecordByEmailBestEffort(email);
+  return record ? customerDisplayName(record) : null;
 }

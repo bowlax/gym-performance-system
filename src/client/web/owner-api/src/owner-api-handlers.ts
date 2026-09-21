@@ -1,6 +1,11 @@
 import { authorizeBotKey } from "./bot-auth";
 import { refreshGoTrueSession } from "./gotrue-refresh";
 import {
+  LOG_REMINDER_CRON,
+  NAME_SYNC_CRON,
+  shouldRunLogReminder,
+} from "./london-schedule";
+import {
   parseOwnerViewQuery,
   VIEW_ROUTES,
   type OwnerViewRoute,
@@ -26,11 +31,17 @@ export interface OwnerApiEnv {
   OWNER_SESSION: OwnerSessionKv;
   SUPABASE_URL: string;
   SUPABASE_PUBLISHABLE_KEY: string;
+  LOG_REMINDER_CRON_SECRET?: string;
 }
 
 export interface OwnerApiDeps {
   fetchImpl?: typeof fetch;
   nowSeconds?: number;
+}
+
+export interface OwnerScheduledEvent {
+  cron: string;
+  scheduledTime: number;
 }
 
 const ROUTES: Record<string, string> = {
@@ -244,10 +255,52 @@ export async function handleOwnerFetch(
   }
 }
 
+function isLogReminderCron(cron: string): boolean {
+  return cron === LOG_REMINDER_CRON || cron === "0 * * * *";
+}
+
+async function invokeLogReminders(
+  env: OwnerApiEnv,
+  deps: OwnerApiDeps,
+  scheduledTime: number,
+): Promise<void> {
+  const secret = env.LOG_REMINDER_CRON_SECRET?.trim();
+  if (!secret) {
+    throw new Error("LOG_REMINDER_CRON_SECRET is not configured");
+  }
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  const target = new URL(
+    "functions/v1/log-reminders",
+    env.SUPABASE_URL.endsWith("/") ? env.SUPABASE_URL : `${env.SUPABASE_URL}/`,
+  );
+  const response = await fetchImpl(target.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${secret}`,
+      apikey: env.SUPABASE_PUBLISHABLE_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ now: new Date(scheduledTime).toISOString() }),
+  });
+  if (!response.ok) {
+    throw new Error(`Scheduled log reminder failed (HTTP ${response.status})`);
+  }
+}
+
 export async function handleOwnerScheduled(
   env: OwnerApiEnv,
   deps: OwnerApiDeps = {},
+  event: OwnerScheduledEvent = {
+    cron: NAME_SYNC_CRON,
+    scheduledTime: Date.now(),
+  },
 ): Promise<void> {
+  if (isLogReminderCron(event.cron)) {
+    if (!shouldRunLogReminder(event.scheduledTime)) return;
+    await invokeLogReminders(env, deps, event.scheduledTime);
+    return;
+  }
+
   const resolved = await resolveOwnerAccessToken(env, deps);
   const refreshRequest = new Request("https://owner.local/api/owner/members?refresh=1", {
     method: "POST",

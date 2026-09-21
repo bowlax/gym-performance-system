@@ -106,8 +106,10 @@ enum SyncPayloadMapper {
 
     /// Settings-only PATCH body for `members`. Must not include broker-owned
     /// identity fields (`id`, `gym_id`, `teamup_customer_id`, `auth_user_id`,
-    /// `teamup_email`);
+    /// `teamup_email`, `teamup_roster_id`, `log_reminder_email_opted_out_at`);
     /// filter is `id=eq.{jwt member_id}`. Devices never establish Auth users.
+    /// Reminder opt-out uses `logReminderEmailsPatch` so a staleness save
+    /// cannot undo an email unsubscribe.
     static func memberSettingsPatch(
         _ member: UserIdentityModel,
         deviceId: UUID,
@@ -119,6 +121,21 @@ enum SyncPayloadMapper {
             "staleness_unit": member.stalenessUnit.rawValue,
             "updated_at": iso8601(member.updatedAt),
             "synced_at": iso8601(syncedAt),
+            "source_device_id": deviceId.uuidString,
+        ]
+    }
+
+    /// Dedicated reminder-opt-out PATCH. `enabled: true` clears
+    /// `log_reminder_email_opted_out_at` (resubscribe).
+    static func logReminderEmailsPatch(
+        enabled: Bool,
+        deviceId: UUID,
+        now: Date
+    ) -> [String: Any] {
+        [
+            "log_reminder_email_opted_out_at": enabled ? NSNull() : iso8601(now),
+            "updated_at": iso8601(now),
+            "synced_at": iso8601(now),
             "source_device_id": deviceId.uuidString,
         ]
     }

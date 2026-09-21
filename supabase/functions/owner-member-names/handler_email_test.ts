@@ -2,6 +2,7 @@ import { assertEquals } from "jsr:@std/assert@1";
 import {
   customerDisplayName,
   customerEmail,
+  customerRosterId,
   emailsMatch,
   pickCustomerByEmail,
 } from "./handler.ts";
@@ -30,6 +31,12 @@ Deno.test("pickCustomerByEmail requires an exact email match and ignores id", ()
 Deno.test("emailsMatch is case-insensitive", () => {
   assertEquals(emailsMatch("A@B.Co", "a@b.co"), true);
   assertEquals(emailsMatch("a@b.co", "c@d.co"), false);
+});
+
+Deno.test("customerRosterId stringifies numeric TeamUp ids", () => {
+  assertEquals(customerRosterId({ id: 6714431 }), "6714431");
+  assertEquals(customerRosterId({ id: "6714431" }), "6714431");
+  assertEquals(customerRosterId({}), null);
 });
 
 Deno.test("customerEmail reads email, email_address, or nested user.email", () => {

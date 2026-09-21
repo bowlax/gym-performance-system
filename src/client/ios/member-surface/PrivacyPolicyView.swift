@@ -29,7 +29,7 @@ struct PrivacyPolicyView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("GymPerformance Privacy Policy")
                 .exerciseTitleStyle()
-            Text("Last updated: 11 September 2026")
+            Text("Last updated: 21 September 2026")
                 .captionLabelStyle()
         }
     }
@@ -77,10 +77,12 @@ struct PrivacyPolicyView: View {
 
     • Your TeamUp identity — a stable identifier from TeamUp (your TeamUp customer ID), which we use to recognise you across devices. We do not collect or store your TeamUp password; login happens directly with TeamUp.
     • Your training data — exercises, sets, weights, reps, personal bests, and session dates that you log or that were logged with your knowledge (e.g. by a coach).
-    • App settings — preferences you set in the app, such as whether personal bests expire over time.
+    • App settings — preferences you set in the app, such as whether personal bests expire over time and whether to receive session reminder emails.
     • Basic device/technical information needed to operate sync (e.g. a device identifier used only to coordinate your own data across your own devices — not used to track you across other apps or services).
 
     Separately from the app, Wolf Way of Life Fitness may contact you by email or WhatsApp in the ordinary course of gym membership and coaching. Those channels are not used by the app to collect training logs automatically.
+
+    If you are a connected member, the app may also send a log reminder email to the TeamUp address on file when you were booked into a class that has ended and no session has been logged yet. Every message includes a one-click unsubscribe. You can turn reminder emails back on in Settings.
 
     We do not collect payment information, health information beyond exercise performance, or location data. The app does not include analytics, advertising, or crash-reporting SDKs that send your data to other vendors.
     """
@@ -91,6 +93,8 @@ struct PrivacyPolicyView: View {
     TeamUp identity — to recognise you as the same member across devices and link you to your gym membership. Legal basis: your consent, given when you connect.
 
     Data visible to your coach — so your coach can see your training progress and support you. Legal basis: your consent, given when you connect — see Section 4.
+
+    Log reminder email — to remind connected members to log a booked session. Legal basis: legitimate interest, with a one-click opt-out in every message and a Settings control to turn them back on.
 
     App settings — to make the app work the way you've configured it. Legal basis: your consent / legitimate interest in providing the service you asked for.
 

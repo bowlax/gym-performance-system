@@ -4,3 +4,5 @@
 OWNER_BOT_KEY=
 OWNER_SESSION_SECRET=
 SUPABASE_PUBLISHABLE_KEY=
+# Cron secret for POST /functions/v1/log-reminders (must match the Edge Function secret).
+LOG_REMINDER_CRON_SECRET=

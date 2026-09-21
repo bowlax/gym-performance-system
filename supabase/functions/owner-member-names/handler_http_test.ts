@@ -241,6 +241,22 @@ Deno.test({
             { status: 200, headers: { "Content-Type": "application/json" } },
           );
         }
+        if (query === "already-named@example.com") {
+          return new Response(
+            JSON.stringify({
+              count: 1,
+              next: null,
+              results: [{
+                id: 9990001,
+                first_name: "Ada",
+                last_name: "Lovelace",
+                email: "already-named@example.com",
+                status: "converted",
+              }],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
         return new Response(
           JSON.stringify({ count: 0, next: null, results: [] }),
           { status: 200, headers: { "Content-Type": "application/json" } },
@@ -257,6 +273,7 @@ Deno.test({
     const matched = crypto.randomUUID();
     const unmatched = crypto.randomUUID();
     const noEmail = crypto.randomUUID();
+    const alreadyNamed = crypto.randomUUID();
     const ownerCaller = crypto.randomUUID();
     const providerId = `email-names-${gymId.slice(0, 8)}`;
 
@@ -289,6 +306,13 @@ Deno.test({
           teamup_customer_id: "EMAIL-NONE",
           display_name: "Member",
         },
+        {
+          id: alreadyNamed,
+          gym_id: gymId,
+          teamup_customer_id: "EMAIL-NAMED",
+          display_name: "Ada Lovelace",
+          teamup_email: "already-named@example.com",
+        },
       ]);
       if (membersInsert.error) throw membersInsert.error;
 
@@ -308,6 +332,20 @@ Deno.test({
       assertEquals(byId.get(matched)?.display_name, "Ada Lovelace");
       assertEquals(byId.get(unmatched)?.display_name, "Member");
       assertEquals(byId.get(noEmail)?.display_name, "Member");
+      assertEquals(byId.get(alreadyNamed)?.display_name, "Ada Lovelace");
+
+      const rosterRows = await admin
+        .from("members")
+        .select("id, teamup_roster_id")
+        .eq("gym_id", gymId);
+      if (rosterRows.error) throw rosterRows.error;
+      const rosterById = new Map(
+        (rosterRows.data ?? []).map((row) => [row.id, row.teamup_roster_id]),
+      );
+      assertEquals(rosterById.get(matched), "6714431");
+      assertEquals(rosterById.get(alreadyNamed), "9990001");
+      assertEquals(rosterById.get(unmatched) ?? null, null);
+      assertEquals(rosterById.get(noEmail) ?? null, null);
     } finally {
       globalThis.fetch = originalFetch;
       try {

@@ -103,7 +103,38 @@ struct SyncPayloadMapperTests {
         #expect(row["teamup_customer_id"] == nil)
         #expect(row["auth_user_id"] == nil)
         #expect(row["teamup_email"] == nil)
+        #expect(row["teamup_roster_id"] == nil)
+        #expect(row["log_reminder_email_opted_out_at"] == nil)
         #expect(row["source_device_id"] as? String == deviceId.uuidString)
+    }
+
+    @Test
+    func logReminderEmailsPatchClearsOptOutWhenEnabled() {
+        let deviceId = UUID()
+        let now = Date(timeIntervalSince1970: 1_735_776_000)
+        let row = SyncPayloadMapper.logReminderEmailsPatch(
+            enabled: true,
+            deviceId: deviceId,
+            now: now
+        )
+
+        #expect(row["log_reminder_email_opted_out_at"] is NSNull)
+        #expect(row["source_device_id"] as? String == deviceId.uuidString)
+        #expect(row["staleness_enabled"] == nil)
+    }
+
+    @Test
+    func logReminderEmailsPatchSetsTimestampWhenDisabled() {
+        let now = Date(timeIntervalSince1970: 1_735_776_000)
+        let row = SyncPayloadMapper.logReminderEmailsPatch(
+            enabled: false,
+            deviceId: UUID(),
+            now: now
+        )
+
+        #expect(row["log_reminder_email_opted_out_at"] is String)
+        #expect(row["updated_at"] as? String == row["log_reminder_email_opted_out_at"] as? String)
+        #expect(row["synced_at"] as? String == row["updated_at"] as? String)
     }
 
     @Test

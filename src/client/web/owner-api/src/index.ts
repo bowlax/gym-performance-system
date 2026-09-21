@@ -5,10 +5,15 @@ export default {
     return handleOwnerFetch(request, env);
   },
   async scheduled(
-    _controller: ScheduledController,
+    controller: ScheduledController,
     env: OwnerApiEnv,
     ctx: ExecutionContext,
   ): Promise<void> {
-    ctx.waitUntil(handleOwnerScheduled(env));
+    ctx.waitUntil(
+      handleOwnerScheduled(env, {}, {
+        cron: controller.cron,
+        scheduledTime: controller.scheduledTime,
+      }),
+    );
   },
 };
