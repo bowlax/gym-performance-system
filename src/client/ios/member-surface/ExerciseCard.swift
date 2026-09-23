@@ -5,8 +5,6 @@ struct ExerciseCard: View {
     let currentPB: PersonalBestModel?
     let onRemove: () -> Void
 
-    private let maxSets = 3
-
     var body: some View {
         VStack(alignment: .leading, spacing: .cardSpacing) {
             HStack {
@@ -25,30 +23,8 @@ struct ExerciseCard: View {
                 .font(.system(.caption, design: .rounded))
                 .foregroundStyle(currentPB == nil ? Color.secondary : Color.wolfBlue)
 
-            ForEach(Array(draft.sets.enumerated()), id: \.offset) { index, _ in
-                if index > 0 {
-                    Divider()
-                        .overlay(Color.primary.opacity(0.06))
-                }
-
-                HStack(spacing: 8) {
-                    Text("Set \(index + 1)")
-                        .captionLabelStyle()
-                        .frame(width: 44, alignment: .leading)
-
-                    SetInputRow(value: $draft.sets[index], exercise: draft.exercise)
-                }
-            }
-
-            if draft.sets.count < maxSets {
-                Button {
-                    draft.sets.append(SetDraftValue.initial(for: draft.exercise))
-                } label: {
-                    Label("Add set", systemImage: "plus")
-                        .font(.system(.subheadline, design: .rounded))
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(Color.wolfBlue)
+            if !draft.sets.isEmpty {
+                SetInputRow(value: $draft.sets[0], exercise: draft.exercise)
             }
         }
         .padding(.cardPadding)
