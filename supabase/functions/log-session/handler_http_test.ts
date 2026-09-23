@@ -3,8 +3,9 @@
  *
  * Routing tests always run against handleLogSessionRequest.
  * Live tests POST that handler with a signed member JWT, then confirm the
- * session tree is written in one transaction (all-or-nothing) and that a
- * retry with the same client ids is idempotent.
+ * session tree is written in one transaction (all-or-nothing), that a
+ * retry with the same client ids is idempotent, and that synced_at is
+ * stamped so iOS pull can see the rows.
  */
 import { assertEquals, assert } from "jsr:@std/assert@1";
 import { SignJWT } from "jsr:@panva/jose@6";
@@ -310,7 +311,7 @@ Deno.test({
 
       const sessionRows = await admin
         .from("sessions")
-        .select("id, notes, calories_burned, deleted_at")
+        .select("id, notes, calories_burned, deleted_at, synced_at")
         .eq("member_id", memberId)
         .is("deleted_at", null);
       if (sessionRows.error) throw sessionRows.error;
@@ -318,13 +319,23 @@ Deno.test({
       assertEquals(sessionRows.data[0].id, successSessionId);
       assertEquals(sessionRows.data[0].notes, "atomic save");
       assertEquals(sessionRows.data[0].calories_burned, 350);
+      assert(sessionRows.data[0].synced_at != null);
+
+      const entryRows = await admin
+        .from("exercise_entries")
+        .select("id, synced_at, deleted_at")
+        .in("id", [successEntry1, successEntry2]);
+      if (entryRows.error) throw entryRows.error;
+      assertEquals(entryRows.data.length, 2);
+      assert(entryRows.data.every((row) => row.synced_at != null && row.deleted_at == null));
 
       const setRows = await admin
         .from("sets")
-        .select("id, weight, reps, deleted_at")
+        .select("id, weight, reps, deleted_at, synced_at")
         .in("id", [successSet1, successSet2]);
       if (setRows.error) throw setRows.error;
       assertEquals(setRows.data.length, 2);
+      assert(setRows.data.every((row) => row.synced_at != null && row.deleted_at == null));
 
       const missingExerciseId = crypto.randomUUID();
       const rollbackRes = await handleLogSessionRequest(
