@@ -7,12 +7,41 @@
  *
  * SESSION_SECRET is NOT listed here — it is a Cloudflare runtime secret
  * (wrangler secret / .dev.vars), never baked into the client.
+ *
+ * The project URL is the same one owner-api commits in wrangler.jsonc and
+ * the live member web bundle. A missing build env, or the example host used
+ * for a local stub, must not leave kiosk login pointed at a different store.
  */
-export const SUPABASE_URL =
-  import.meta.env.VITE_GYMPERF_SUPABASE_URL ?? "";
+export const WOLF_SUPABASE_URL = "https://ivrsxhuktebvypgtfoww.supabase.co";
 
-export const SUPABASE_PUBLISHABLE_KEY =
-  import.meta.env.VITE_GYMPERF_SUPABASE_PUBLISHABLE_KEY ?? "";
+/** Publishable key already shipped in the live member-web bundle. */
+export const WOLF_SUPABASE_PUBLISHABLE_KEY =
+  "sb_publishable_8exI94gG65l7izkBZtaGOw_Xi5Ui1H0";
+
+export function resolveSupabasePublicValue(
+  configured: string | undefined,
+  fallback: string,
+): string {
+  const value = (configured ?? "").trim();
+  if (
+    !value ||
+    value.includes("example.supabase.co") ||
+    value === "example-publishable-key"
+  ) {
+    return fallback;
+  }
+  return value;
+}
+
+export const SUPABASE_URL = resolveSupabasePublicValue(
+  import.meta.env.VITE_GYMPERF_SUPABASE_URL,
+  WOLF_SUPABASE_URL,
+);
+
+export const SUPABASE_PUBLISHABLE_KEY = resolveSupabasePublicValue(
+  import.meta.env.VITE_GYMPERF_SUPABASE_PUBLISHABLE_KEY,
+  WOLF_SUPABASE_PUBLISHABLE_KEY,
+);
 
 /** Stub-broker only. Unused when real OAuth is active. */
 export const TEST_DEVICE_MEMBER_ID =

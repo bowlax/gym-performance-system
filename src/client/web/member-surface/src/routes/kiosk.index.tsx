@@ -49,8 +49,8 @@ function KioskHome() {
 }
 
 function KioskLogin({ onSignedIn }: { onSignedIn: () => void }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
+  const [key, setKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,7 +62,7 @@ function KioskLogin({ onSignedIn }: { onSignedIn: () => void }) {
       const res = await fetch("/api/kiosk/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ username, key }),
       });
       const body = await res.json().catch(() => ({})) as { error?: string };
       if (!res.ok) {
@@ -88,18 +88,18 @@ function KioskLogin({ onSignedIn }: { onSignedIn: () => void }) {
       </div>
       <div className="rounded-[16px] bg-card p-4 space-y-3">
         <FormField
-          label="Email"
-          type="email"
+          label="Username"
+          type="text"
           autoComplete="username"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
+          value={username}
+          onChange={(event) => setUsername(event.target.value)}
         />
         <FormField
-          label="Password"
+          label="Key"
           type="password"
           autoComplete="current-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
+          value={key}
+          onChange={(event) => setKey(event.target.value)}
         />
       </div>
       {error && (

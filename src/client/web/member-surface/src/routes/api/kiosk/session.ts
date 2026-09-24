@@ -32,10 +32,23 @@ export const Route = createFileRoute("/api/kiosk/session")({
           );
         }
         const record = typeof body === "object" && body !== null
-          ? body as { email?: unknown; password?: unknown }
+          ? body as {
+            username?: unknown;
+            key?: unknown;
+            email?: unknown;
+            password?: unknown;
+          }
           : {};
-        const email = typeof record.email === "string" ? record.email : "";
-        const password = typeof record.password === "string" ? record.password : "";
+        const username = typeof record.username === "string"
+          ? record.username
+          : typeof record.email === "string"
+          ? record.email
+          : "";
+        const key = typeof record.key === "string"
+          ? record.key
+          : typeof record.password === "string"
+          ? record.password
+          : "";
         if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
           return Response.json(
             { error: "Supabase public config missing on server" },
@@ -44,8 +57,8 @@ export const Route = createFileRoute("/api/kiosk/session")({
         }
         try {
           const session = await signInOwnerWithPassword({
-            email,
-            password,
+            email: username,
+            password: key,
             supabaseUrl: SUPABASE_URL,
             publishableKey: SUPABASE_PUBLISHABLE_KEY,
           });

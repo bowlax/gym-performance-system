@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { AUTH_SESSION_COOKIE } from "./auth-session";
 import {
+  resolveSupabasePublicValue,
+  WOLF_SUPABASE_PUBLISHABLE_KEY,
+  WOLF_SUPABASE_URL,
+} from "./env";
+import {
   KIOSK_SESSION_COOKIE,
   KIOSK_SESSION_MAX_AGE_SECONDS,
 } from "./kiosk-session";
@@ -17,6 +22,23 @@ function jwt(payload: Record<string, unknown>): string {
     .replaceAll("=", "");
   return `eyJhbGciOiJub25lIn0.${body}.sig`;
 }
+
+describe("kiosk supabase target", () => {
+  test("example host and empty config resolve to the Wolf project", () => {
+    expect(resolveSupabasePublicValue("", WOLF_SUPABASE_URL)).toBe(
+      "https://ivrsxhuktebvypgtfoww.supabase.co",
+    );
+    expect(
+      resolveSupabasePublicValue("https://example.supabase.co", WOLF_SUPABASE_URL),
+    ).toBe(WOLF_SUPABASE_URL);
+    expect(
+      resolveSupabasePublicValue("example-publishable-key", WOLF_SUPABASE_PUBLISHABLE_KEY),
+    ).toBe(WOLF_SUPABASE_PUBLISHABLE_KEY);
+    expect(
+      resolveSupabasePublicValue("http://127.0.0.1:54321", WOLF_SUPABASE_URL),
+    ).toBe("http://127.0.0.1:54321");
+  });
+});
 
 describe("kiosk owner login", () => {
   test("cookie is separate from the member session and lasts 400 days", () => {
@@ -77,6 +99,9 @@ describe("kiosk owner login", () => {
         publishableKey: "anon",
         fetchImpl: async () => new Response("{}", { status: 400 }),
       }),
-    ).rejects.toBeInstanceOf(KioskLoginError);
+    ).rejects.toMatchObject({
+      status: 401,
+      message: "Username or key is incorrect.",
+    });
   });
 });

@@ -1,6 +1,8 @@
 /**
- * Human login for the two dedicated owner Auth users.
- * Email + password via GoTrue. Not the owner-api bot key, and not TeamUp.
+ * Human login for the two dedicated owner Auth users on the Wolf Supabase
+ * project. GoTrue's password grant is the credential check: the username is
+ * the Auth email, and the key is that user's password. Not the owner-api
+ * bot key, and not TeamUp.
  */
 
 import type { AuthSessionData } from "./auth-session";
@@ -39,7 +41,7 @@ export async function signInOwnerWithPassword(params: {
   const email = params.email.trim();
   const password = params.password;
   if (!email || !password) {
-    throw new KioskLoginError("Enter your email and password.", 400);
+    throw new KioskLoginError("Enter your username and key.", 400);
   }
 
   const fetchImpl = params.fetchImpl ?? fetch;
@@ -61,7 +63,7 @@ export async function signInOwnerWithPassword(params: {
   });
 
   if (response.status === 400 || response.status === 401) {
-    throw new KioskLoginError("Email or password is incorrect.", 401);
+    throw new KioskLoginError("Username or key is incorrect.", 401);
   }
   if (!response.ok) {
     throw new KioskLoginError("Could not sign in.", 502);
