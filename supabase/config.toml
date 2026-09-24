@@ -71,3 +71,6 @@ verify_jwt = true
 
 [functions.log-reminders]
 verify_jwt = false
+
+[functions.kiosk-log]
+verify_jwt = false

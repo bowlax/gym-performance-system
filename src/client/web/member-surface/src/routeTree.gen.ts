@@ -11,11 +11,20 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as LogRouteImport } from './routes/log'
+import { Route as KioskRouteImport } from './routes/kiosk'
 import { Route as DesignRouteImport } from './routes/design'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as KioskIndexRouteImport } from './routes/kiosk.index'
 import { Route as RemindersUnsubscribeRouteImport } from './routes/reminders/unsubscribe'
 import { Route as ProgressionExerciseIdRouteImport } from './routes/progression.$exerciseId'
+import { Route as KioskLoggedRouteImport } from './routes/kiosk.logged'
+import { Route as KioskLogRouteImport } from './routes/kiosk.log'
+import { Route as KioskConfirmRouteImport } from './routes/kiosk.confirm'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
+import { Route as ApiKioskSubmitRouteImport } from './routes/api/kiosk/submit'
+import { Route as ApiKioskSessionRouteImport } from './routes/api/kiosk/session'
+import { Route as ApiKioskMembersRouteImport } from './routes/api/kiosk/members'
+import { Route as ApiKioskExercisesRouteImport } from './routes/api/kiosk/exercises'
 import { Route as ApiAuthSignoutRouteImport } from './routes/api/auth/signout'
 import { Route as ApiAuthSessionRouteImport } from './routes/api/auth/session'
 
@@ -29,6 +38,11 @@ const LogRoute = LogRouteImport.update({
   path: '/log',
   getParentRoute: () => rootRouteImport,
 } as any)
+const KioskRoute = KioskRouteImport.update({
+  id: '/kiosk',
+  path: '/kiosk',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DesignRoute = DesignRouteImport.update({
   id: '/design',
   path: '/design',
@@ -38,6 +52,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const KioskIndexRoute = KioskIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => KioskRoute,
 } as any)
 const RemindersUnsubscribeRoute = RemindersUnsubscribeRouteImport.update({
   id: '/reminders/unsubscribe',
@@ -49,9 +68,44 @@ const ProgressionExerciseIdRoute = ProgressionExerciseIdRouteImport.update({
   path: '/progression/$exerciseId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const KioskLoggedRoute = KioskLoggedRouteImport.update({
+  id: '/logged',
+  path: '/logged',
+  getParentRoute: () => KioskRoute,
+} as any)
+const KioskLogRoute = KioskLogRouteImport.update({
+  id: '/log',
+  path: '/log',
+  getParentRoute: () => KioskRoute,
+} as any)
+const KioskConfirmRoute = KioskConfirmRouteImport.update({
+  id: '/confirm',
+  path: '/confirm',
+  getParentRoute: () => KioskRoute,
+} as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiKioskSubmitRoute = ApiKioskSubmitRouteImport.update({
+  id: '/api/kiosk/submit',
+  path: '/api/kiosk/submit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiKioskSessionRoute = ApiKioskSessionRouteImport.update({
+  id: '/api/kiosk/session',
+  path: '/api/kiosk/session',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiKioskMembersRoute = ApiKioskMembersRouteImport.update({
+  id: '/api/kiosk/members',
+  path: '/api/kiosk/members',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiKioskExercisesRoute = ApiKioskExercisesRouteImport.update({
+  id: '/api/kiosk/exercises',
+  path: '/api/kiosk/exercises',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthSignoutRoute = ApiAuthSignoutRouteImport.update({
@@ -68,13 +122,22 @@ const ApiAuthSessionRoute = ApiAuthSessionRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/design': typeof DesignRoute
+  '/kiosk': typeof KioskRouteWithChildren
   '/log': typeof LogRoute
   '/privacy': typeof PrivacyRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/kiosk/confirm': typeof KioskConfirmRoute
+  '/kiosk/log': typeof KioskLogRoute
+  '/kiosk/logged': typeof KioskLoggedRoute
   '/progression/$exerciseId': typeof ProgressionExerciseIdRoute
   '/reminders/unsubscribe': typeof RemindersUnsubscribeRoute
+  '/kiosk/': typeof KioskIndexRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/auth/signout': typeof ApiAuthSignoutRoute
+  '/api/kiosk/exercises': typeof ApiKioskExercisesRoute
+  '/api/kiosk/members': typeof ApiKioskMembersRoute
+  '/api/kiosk/session': typeof ApiKioskSessionRoute
+  '/api/kiosk/submit': typeof ApiKioskSubmitRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -82,35 +145,61 @@ export interface FileRoutesByTo {
   '/log': typeof LogRoute
   '/privacy': typeof PrivacyRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/kiosk/confirm': typeof KioskConfirmRoute
+  '/kiosk/log': typeof KioskLogRoute
+  '/kiosk/logged': typeof KioskLoggedRoute
   '/progression/$exerciseId': typeof ProgressionExerciseIdRoute
   '/reminders/unsubscribe': typeof RemindersUnsubscribeRoute
+  '/kiosk': typeof KioskIndexRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/auth/signout': typeof ApiAuthSignoutRoute
+  '/api/kiosk/exercises': typeof ApiKioskExercisesRoute
+  '/api/kiosk/members': typeof ApiKioskMembersRoute
+  '/api/kiosk/session': typeof ApiKioskSessionRoute
+  '/api/kiosk/submit': typeof ApiKioskSubmitRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/design': typeof DesignRoute
+  '/kiosk': typeof KioskRouteWithChildren
   '/log': typeof LogRoute
   '/privacy': typeof PrivacyRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/kiosk/confirm': typeof KioskConfirmRoute
+  '/kiosk/log': typeof KioskLogRoute
+  '/kiosk/logged': typeof KioskLoggedRoute
   '/progression/$exerciseId': typeof ProgressionExerciseIdRoute
   '/reminders/unsubscribe': typeof RemindersUnsubscribeRoute
+  '/kiosk/': typeof KioskIndexRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
   '/api/auth/signout': typeof ApiAuthSignoutRoute
+  '/api/kiosk/exercises': typeof ApiKioskExercisesRoute
+  '/api/kiosk/members': typeof ApiKioskMembersRoute
+  '/api/kiosk/session': typeof ApiKioskSessionRoute
+  '/api/kiosk/submit': typeof ApiKioskSubmitRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/design'
+    | '/kiosk'
     | '/log'
     | '/privacy'
     | '/auth/callback'
+    | '/kiosk/confirm'
+    | '/kiosk/log'
+    | '/kiosk/logged'
     | '/progression/$exerciseId'
     | '/reminders/unsubscribe'
+    | '/kiosk/'
     | '/api/auth/session'
     | '/api/auth/signout'
+    | '/api/kiosk/exercises'
+    | '/api/kiosk/members'
+    | '/api/kiosk/session'
+    | '/api/kiosk/submit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -118,26 +207,44 @@ export interface FileRouteTypes {
     | '/log'
     | '/privacy'
     | '/auth/callback'
+    | '/kiosk/confirm'
+    | '/kiosk/log'
+    | '/kiosk/logged'
     | '/progression/$exerciseId'
     | '/reminders/unsubscribe'
+    | '/kiosk'
     | '/api/auth/session'
     | '/api/auth/signout'
+    | '/api/kiosk/exercises'
+    | '/api/kiosk/members'
+    | '/api/kiosk/session'
+    | '/api/kiosk/submit'
   id:
     | '__root__'
     | '/'
     | '/design'
+    | '/kiosk'
     | '/log'
     | '/privacy'
     | '/auth/callback'
+    | '/kiosk/confirm'
+    | '/kiosk/log'
+    | '/kiosk/logged'
     | '/progression/$exerciseId'
     | '/reminders/unsubscribe'
+    | '/kiosk/'
     | '/api/auth/session'
     | '/api/auth/signout'
+    | '/api/kiosk/exercises'
+    | '/api/kiosk/members'
+    | '/api/kiosk/session'
+    | '/api/kiosk/submit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DesignRoute: typeof DesignRoute
+  KioskRoute: typeof KioskRouteWithChildren
   LogRoute: typeof LogRoute
   PrivacyRoute: typeof PrivacyRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
@@ -145,6 +252,10 @@ export interface RootRouteChildren {
   RemindersUnsubscribeRoute: typeof RemindersUnsubscribeRoute
   ApiAuthSessionRoute: typeof ApiAuthSessionRoute
   ApiAuthSignoutRoute: typeof ApiAuthSignoutRoute
+  ApiKioskExercisesRoute: typeof ApiKioskExercisesRoute
+  ApiKioskMembersRoute: typeof ApiKioskMembersRoute
+  ApiKioskSessionRoute: typeof ApiKioskSessionRoute
+  ApiKioskSubmitRoute: typeof ApiKioskSubmitRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -163,6 +274,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LogRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/kiosk': {
+      id: '/kiosk'
+      path: '/kiosk'
+      fullPath: '/kiosk'
+      preLoaderRoute: typeof KioskRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/design': {
       id: '/design'
       path: '/design'
@@ -176,6 +294,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/kiosk/': {
+      id: '/kiosk/'
+      path: '/'
+      fullPath: '/kiosk/'
+      preLoaderRoute: typeof KioskIndexRouteImport
+      parentRoute: typeof KioskRoute
     }
     '/reminders/unsubscribe': {
       id: '/reminders/unsubscribe'
@@ -191,11 +316,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProgressionExerciseIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/kiosk/logged': {
+      id: '/kiosk/logged'
+      path: '/logged'
+      fullPath: '/kiosk/logged'
+      preLoaderRoute: typeof KioskLoggedRouteImport
+      parentRoute: typeof KioskRoute
+    }
+    '/kiosk/log': {
+      id: '/kiosk/log'
+      path: '/log'
+      fullPath: '/kiosk/log'
+      preLoaderRoute: typeof KioskLogRouteImport
+      parentRoute: typeof KioskRoute
+    }
+    '/kiosk/confirm': {
+      id: '/kiosk/confirm'
+      path: '/confirm'
+      fullPath: '/kiosk/confirm'
+      preLoaderRoute: typeof KioskConfirmRouteImport
+      parentRoute: typeof KioskRoute
+    }
     '/auth/callback': {
       id: '/auth/callback'
       path: '/auth/callback'
       fullPath: '/auth/callback'
       preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/kiosk/submit': {
+      id: '/api/kiosk/submit'
+      path: '/api/kiosk/submit'
+      fullPath: '/api/kiosk/submit'
+      preLoaderRoute: typeof ApiKioskSubmitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/kiosk/session': {
+      id: '/api/kiosk/session'
+      path: '/api/kiosk/session'
+      fullPath: '/api/kiosk/session'
+      preLoaderRoute: typeof ApiKioskSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/kiosk/members': {
+      id: '/api/kiosk/members'
+      path: '/api/kiosk/members'
+      fullPath: '/api/kiosk/members'
+      preLoaderRoute: typeof ApiKioskMembersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/kiosk/exercises': {
+      id: '/api/kiosk/exercises'
+      path: '/api/kiosk/exercises'
+      fullPath: '/api/kiosk/exercises'
+      preLoaderRoute: typeof ApiKioskExercisesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/signout': {
@@ -215,9 +389,26 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface KioskRouteChildren {
+  KioskConfirmRoute: typeof KioskConfirmRoute
+  KioskLogRoute: typeof KioskLogRoute
+  KioskLoggedRoute: typeof KioskLoggedRoute
+  KioskIndexRoute: typeof KioskIndexRoute
+}
+
+const KioskRouteChildren: KioskRouteChildren = {
+  KioskConfirmRoute: KioskConfirmRoute,
+  KioskLogRoute: KioskLogRoute,
+  KioskLoggedRoute: KioskLoggedRoute,
+  KioskIndexRoute: KioskIndexRoute,
+}
+
+const KioskRouteWithChildren = KioskRoute._addFileChildren(KioskRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DesignRoute: DesignRoute,
+  KioskRoute: KioskRouteWithChildren,
   LogRoute: LogRoute,
   PrivacyRoute: PrivacyRoute,
   AuthCallbackRoute: AuthCallbackRoute,
@@ -225,6 +416,10 @@ const rootRouteChildren: RootRouteChildren = {
   RemindersUnsubscribeRoute: RemindersUnsubscribeRoute,
   ApiAuthSessionRoute: ApiAuthSessionRoute,
   ApiAuthSignoutRoute: ApiAuthSignoutRoute,
+  ApiKioskExercisesRoute: ApiKioskExercisesRoute,
+  ApiKioskMembersRoute: ApiKioskMembersRoute,
+  ApiKioskSessionRoute: ApiKioskSessionRoute,
+  ApiKioskSubmitRoute: ApiKioskSubmitRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
