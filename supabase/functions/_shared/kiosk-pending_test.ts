@@ -1,4 +1,5 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
+import { kioskMemberOptions } from "./kiosk-names.ts";
 import {
   buildKioskConfirmEmail,
   hasResolvedKioskName,
@@ -61,6 +62,36 @@ Deno.test("resolved kiosk name requires roster match, email, and a real display 
     }),
     false,
   );
+});
+
+Deno.test("kiosk member options keep resolved names and drop emails", () => {
+  const options = kioskMemberOptions([
+    {
+      id: "00000000-0000-4000-8000-000000000010",
+      display_name: "  Ada Lovelace ",
+      teamup_email: "ada@example.com",
+      teamup_roster_id: "1",
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000011",
+      display_name: "Member",
+      teamup_email: "placeholder@example.com",
+      teamup_roster_id: "2",
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000012",
+      display_name: "No Roster",
+      teamup_email: "noroster@example.com",
+      teamup_roster_id: null,
+    },
+  ]);
+  assertEquals(options, [
+    {
+      member_id: "00000000-0000-4000-8000-000000000010",
+      display_name: "Ada Lovelace",
+    },
+  ]);
+  assert(!JSON.stringify(options).includes("ada@example.com"));
 });
 
 Deno.test("kiosk submit accepts one set per exercise and rejects multi-set", () => {

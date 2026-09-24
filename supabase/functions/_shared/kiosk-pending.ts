@@ -9,24 +9,11 @@
 
 import { DATE_PATTERN, isUuid, optionalNumber, optionalString } from "./member-edge.ts";
 
-export const UNRESOLVED_DISPLAY_NAME = "Member";
-
-export interface KioskNameRow {
-  display_name: string | null;
-  teamup_email: string | null;
-  teamup_roster_id: string | null;
-  deleted_at?: string | null;
-}
-
-export function hasResolvedKioskName(member: KioskNameRow): boolean {
-  if (member.deleted_at) return false;
-  const name = member.display_name?.trim() ?? "";
-  if (name.length === 0 || name === UNRESOLVED_DISPLAY_NAME) return false;
-  const email = member.teamup_email?.trim() ?? "";
-  if (email.length === 0) return false;
-  const rosterId = member.teamup_roster_id?.trim() ?? "";
-  return rosterId.length > 0;
-}
+export {
+  hasResolvedKioskName,
+  UNRESOLVED_DISPLAY_NAME,
+  type KioskNameRow,
+} from "./kiosk-names.ts";
 
 export interface KioskSetInput {
   id: string;

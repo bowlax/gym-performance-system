@@ -125,9 +125,12 @@ function KioskPicker() {
       .then(async (res) => {
         const body = await res.json().catch(() => ({})) as {
           error?: string;
+          message?: string;
           members?: KioskMember[];
         };
-        if (!res.ok) throw new Error(body.error ?? "Could not load members.");
+        if (!res.ok) {
+          throw new Error(body.error ?? body.message ?? "Could not load members.");
+        }
         if (cancelled) return;
         const rows = body.members ?? [];
         setMembers(rows);
