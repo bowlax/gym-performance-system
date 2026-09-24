@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { proxyKioskFunction } from "@/lib/gp/kiosk-upstream.server";
+import { submitKioskSession } from "@/lib/gp/kiosk-save.server";
 
 export const Route = createFileRoute("/api/kiosk/submit")({
   server: {
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/api/kiosk/submit")({
         const record = typeof body === "object" && body !== null
           ? body as Record<string, unknown>
           : {};
-        return proxyKioskFunction({ ...record, action: "submit" });
+        return submitKioskSession(request, record);
       },
     },
   },

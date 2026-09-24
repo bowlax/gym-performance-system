@@ -36,11 +36,31 @@ create index kiosk_pending_sessions_member
 
 alter table public.kiosk_pending_sessions enable row level security;
 
--- No policies. authenticated and anon see nothing. service_role bypasses RLS.
+-- No select policy. Live readers and the owner JWT cannot list pending rows.
+-- Owners may insert and delete rows for their own gym so the kiosk web app
+-- can store a pending log with the same session it uses to read members.
+-- service_role bypasses RLS.
 revoke all on public.kiosk_pending_sessions from public;
 revoke all on public.kiosk_pending_sessions from anon;
 revoke all on public.kiosk_pending_sessions from authenticated;
 grant select, insert, update, delete on public.kiosk_pending_sessions to service_role;
+grant insert, delete on public.kiosk_pending_sessions to authenticated;
+
+create policy kiosk_pending_owner_insert on public.kiosk_pending_sessions
+    for insert
+    to authenticated
+    with check (
+        gym_id = (auth.jwt() ->> 'gym_id')::uuid
+        and (auth.jwt() ->> 'app_role') = 'owner'
+    );
+
+create policy kiosk_pending_owner_delete on public.kiosk_pending_sessions
+    for delete
+    to authenticated
+    using (
+        gym_id = (auth.jwt() ->> 'gym_id')::uuid
+        and (auth.jwt() ->> 'app_role') = 'owner'
+    );
 
 create or replace function public.commit_kiosk_pending(p_token_hash text)
 returns jsonb
@@ -236,9 +256,7 @@ end;
 $$;
 
 revoke all on function public.commit_kiosk_pending(text) from public;
-revoke all on function public.commit_kiosk_pending(text) from anon;
-revoke all on function public.commit_kiosk_pending(text) from authenticated;
-grant execute on function public.commit_kiosk_pending(text) to service_role;
+grant execute on function public.commit_kiosk_pending(text) to anon, authenticated, service_role;
 
 comment on function public.commit_kiosk_pending(text) is
     'Turns one kiosk_pending_sessions row into a normal session, entries, and sets, then deletes the pending row. Does not consult created_at. No expiry.';

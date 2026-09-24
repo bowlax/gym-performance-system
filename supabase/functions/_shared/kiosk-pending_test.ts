@@ -164,4 +164,11 @@ Deno.test("pending migration is a separate table with no expiry and no session f
   assert(sql.includes("insert into public.sessions"));
   assert(!sql.includes("created_at <"));
   assert(!/interval/i.test(sql));
+  assert(sql.includes("grant insert, delete on public.kiosk_pending_sessions to authenticated"));
+  assert(sql.includes("for insert"));
+  assert(sql.includes("for delete"));
+  assert(!/for select/i.test(sql));
+  assert(sql.includes(
+    "grant execute on function public.commit_kiosk_pending(text) to anon, authenticated, service_role",
+  ));
 });

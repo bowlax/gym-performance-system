@@ -26,11 +26,15 @@ export const Route = createFileRoute("/kiosk/confirm")({
         } catch {
           return html(502, "Could not confirm that session. Try the link again.");
         }
+        const text = await upstream.text();
         if (upstream.ok) {
           return new Response(null, {
             status: 302,
             headers: { Location: "/kiosk/logged", "Cache-Control": "no-store" },
           });
+        }
+        if (text.includes("PGRST202") || text.includes("kiosk_pending_sessions")) {
+          return html(503, "Confirmation is not available yet.");
         }
         if (upstream.status === 404) {
           return html(404, "This confirmation link has already been used or is not valid.");

@@ -2,6 +2,7 @@ import "@tanstack/react-start/server-only";
 
 import { kioskMemberOptions } from "@gp-shared/kiosk-names.ts";
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "./env";
+import { confirmKioskPending } from "./kiosk-save.server";
 import { readFreshKioskSession } from "./kiosk-session.server";
 
 const NO_STORE = { "Cache-Control": "private, no-store" };
@@ -81,22 +82,6 @@ export async function listKioskMembers(): Promise<Response> {
   );
 }
 
-export async function proxyKioskFunction(body: unknown): Promise<Response> {
-  const headers = await kioskOwnerHeaders();
-  if (headers instanceof Response) return headers;
-  const target = new URL("functions/v1/kiosk-log", supabaseOrigin());
-  const upstream = await fetch(target, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
-  const text = await upstream.text();
-  return new Response(text, {
-    status: upstream.status,
-    headers: { ...NO_STORE, "Content-Type": "application/json" },
-  });
-}
-
 export async function proxyKioskExercises(): Promise<Response> {
   const headers = await kioskOwnerHeaders();
   if (headers instanceof Response) return headers;
@@ -118,10 +103,5 @@ export async function proxyKioskExercises(): Promise<Response> {
 }
 
 export async function confirmKioskToken(token: string): Promise<Response> {
-  const target = new URL("functions/v1/kiosk-log/confirm", supabaseOrigin());
-  target.searchParams.set("token", token);
-  return await fetch(target, {
-    method: "GET",
-    headers: { apikey: SUPABASE_PUBLISHABLE_KEY },
-  });
+  return confirmKioskPending(token);
 }
