@@ -1,8 +1,9 @@
 /**
  * Log-reminder job: TeamUp attendances → roster-id join → Resend.
  *
- * One email per member per London date. Three UTC wakes; the Worker
- * only invokes this when Europe/London hour is 9, 14, or 21.
+ * One email per member per London date. Worker cron wakes several UTC
+ * hours; this job only sends on weekday 09/14/21 or weekend 10 (Sat) /
+ * 11 (Sun) Europe/London, using the morning template on weekends.
  */
 
 import { createServiceRoleClient } from "./member-edge.ts";
@@ -18,8 +19,7 @@ import {
 } from "./log-reminder-copy.ts";
 import {
   londonCalendarDate,
-  reminderSlotFromLondonHour,
-  londonHour,
+  reminderSlotAt,
   type ReminderSlot,
 } from "./log-reminder-schedule.ts";
 import { signLogReminderOptOutToken } from "./log-reminder-token.ts";
@@ -213,7 +213,7 @@ async function listDayAttendances(
 export async function runLogReminderJob(
   deps: LogReminderDeps,
 ): Promise<LogReminderRunResult> {
-  const slot = reminderSlotFromLondonHour(londonHour(deps.nowMs));
+  const slot = reminderSlotAt(deps.nowMs);
   if (!slot) {
     return {
       slot: null,

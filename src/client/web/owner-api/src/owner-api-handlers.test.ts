@@ -474,15 +474,15 @@ describe("handleOwnerScheduled", () => {
     ]);
   });
 
-  test("BST instants fire only at 09:00/14:00/21:00 London", async () => {
+  test("BST weekday instants fire only at 09:00/14:00/21:00 London", async () => {
     const env = await makeEnv(session(9_999_999_999));
     const cases: Array<{ at: string; fire: boolean }> = [
-      { at: "2026-07-15T08:00:00.000Z", fire: true },
-      { at: "2026-07-15T09:00:00.000Z", fire: false },
-      { at: "2026-07-15T13:00:00.000Z", fire: true },
-      { at: "2026-07-15T14:00:00.000Z", fire: false },
-      { at: "2026-07-15T20:00:00.000Z", fire: true },
-      { at: "2026-07-15T21:00:00.000Z", fire: false },
+      { at: "2026-07-15T08:00:00.000Z", fire: true }, // Wed 09:00
+      { at: "2026-07-15T09:00:00.000Z", fire: false }, // Wed 10:00
+      { at: "2026-07-15T13:00:00.000Z", fire: true }, // Wed 14:00
+      { at: "2026-07-15T14:00:00.000Z", fire: false }, // Wed 15:00
+      { at: "2026-07-15T20:00:00.000Z", fire: true }, // Wed 21:00
+      { at: "2026-07-15T21:00:00.000Z", fire: false }, // Wed 22:00
     ];
     for (const row of cases) {
       let called = "";
@@ -507,15 +507,58 @@ describe("handleOwnerScheduled", () => {
     }
   });
 
-  test("GMT instants fire only at 09:00/14:00/21:00 London", async () => {
+  test("GMT weekday instants fire only at 09:00/14:00/21:00 London", async () => {
     const env = await makeEnv(session(9_999_999_999));
     const cases: Array<{ at: string; fire: boolean }> = [
-      { at: "2026-01-15T08:00:00.000Z", fire: false },
-      { at: "2026-01-15T09:00:00.000Z", fire: true },
-      { at: "2026-01-15T13:00:00.000Z", fire: false },
-      { at: "2026-01-15T14:00:00.000Z", fire: true },
-      { at: "2026-01-15T20:00:00.000Z", fire: false },
-      { at: "2026-01-15T21:00:00.000Z", fire: true },
+      { at: "2026-01-15T08:00:00.000Z", fire: false }, // Thu 08:00
+      { at: "2026-01-15T09:00:00.000Z", fire: true }, // Thu 09:00
+      { at: "2026-01-15T13:00:00.000Z", fire: false }, // Thu 13:00
+      { at: "2026-01-15T14:00:00.000Z", fire: true }, // Thu 14:00
+      { at: "2026-01-15T20:00:00.000Z", fire: false }, // Thu 20:00
+      { at: "2026-01-15T21:00:00.000Z", fire: true }, // Thu 21:00
+    ];
+    for (const row of cases) {
+      let called = "";
+      await handleOwnerScheduled(
+        env,
+        {
+          fetchImpl: async (input) => {
+            called = String(input);
+            return new Response(JSON.stringify({ sent: 0 }), { status: 200 });
+          },
+        },
+        { cron: LOG_REMINDER_CRON, scheduledTime: Date.parse(row.at) },
+      );
+      if (row.fire) {
+        expect(called).toContain("/functions/v1/log-reminders");
+      } else {
+        expect(called).toBe("");
+      }
+    }
+  });
+
+  test("weekend London slots: Sat 10:00 and Sun 11:00 only (morning)", async () => {
+    const env = await makeEnv(session(9_999_999_999));
+    const cases: Array<{ at: string; fire: boolean }> = [
+      // Saturday 2026-07-18 BST
+      { at: "2026-07-18T08:00:00.000Z", fire: false }, // 09:00
+      { at: "2026-07-18T09:00:00.000Z", fire: true }, // 10:00
+      { at: "2026-07-18T10:00:00.000Z", fire: false }, // 11:00
+      { at: "2026-07-18T13:00:00.000Z", fire: false }, // 14:00
+      { at: "2026-07-18T20:00:00.000Z", fire: false }, // 21:00
+      // Sunday 2026-07-19 BST
+      { at: "2026-07-19T09:00:00.000Z", fire: false }, // 10:00
+      { at: "2026-07-19T10:00:00.000Z", fire: true }, // 11:00
+      { at: "2026-07-19T11:00:00.000Z", fire: false }, // 12:00
+      { at: "2026-07-19T13:00:00.000Z", fire: false }, // 14:00
+      // Saturday 2026-01-17 GMT
+      { at: "2026-01-17T09:00:00.000Z", fire: false }, // 09:00
+      { at: "2026-01-17T10:00:00.000Z", fire: true }, // 10:00
+      { at: "2026-01-17T11:00:00.000Z", fire: false }, // 11:00
+      // Sunday 2026-01-18 GMT
+      { at: "2026-01-18T10:00:00.000Z", fire: false }, // 10:00
+      { at: "2026-01-18T11:00:00.000Z", fire: true }, // 11:00
+      { at: "2026-01-18T14:00:00.000Z", fire: false }, // 14:00
     ];
     for (const row of cases) {
       let called = "";

@@ -24,10 +24,13 @@ const CRON_SECRET = "cron-secret-for-log-reminders-tests-32ch";
 const UNSUB_SECRET = "unsub-secret-for-log-reminders-tests-32ch";
 const MEMBER_WEB = "https://member.test";
 
-const MORNING_BST = "2026-07-15T08:00:00.000Z"; // 09:00 London
-const TEN_BST = "2026-07-15T09:00:00.000Z"; // 10:00 London
-const LUNCH_BST = "2026-07-15T13:00:00.000Z"; // 14:00 London
-const EVENING_BST = "2026-07-15T20:00:00.000Z"; // 21:00 London
+const MORNING_BST = "2026-07-15T08:00:00.000Z"; // Wed 09:00 London
+const TEN_BST = "2026-07-15T09:00:00.000Z"; // Wed 10:00 London (not a weekday slot)
+const LUNCH_BST = "2026-07-15T13:00:00.000Z"; // Wed 14:00 London
+const EVENING_BST = "2026-07-15T20:00:00.000Z"; // Wed 21:00 London
+const SAT_TEN_BST = "2026-07-18T09:00:00.000Z"; // Sat 10:00 London
+const SUN_ELEVEN_BST = "2026-07-19T10:00:00.000Z"; // Sun 11:00 London
+const SAT_NINE_BST = "2026-07-18T08:00:00.000Z"; // Sat 09:00 London (weekday hour, skip)
 
 interface LiveEnv {
   url: string;
@@ -360,6 +363,45 @@ Deno.test("HTTP POST job skips a non-slot London hour without sending", async ()
     assertEquals(body.sent, 0);
     assertEquals(body.slot, null);
     assertEquals(body.skipped?.not_slot_hour, 1);
+  } finally {
+    Deno.env.get = originalGet;
+  }
+});
+
+Deno.test("HTTP POST job skips Saturday at weekday London hours", async () => {
+  const originalGet = Deno.env.get.bind(Deno.env);
+  Deno.env.get = (name: string) => {
+    if (name === "LOG_REMINDER_CRON_SECRET") return CRON_SECRET;
+    return originalGet(name);
+  };
+  try {
+    const res = await handleLogRemindersRequest(jobRequest(SAT_NINE_BST));
+    assertEquals(res.status, 200);
+    const body = await res.json() as { skipped?: Record<string, number>; sent?: number; slot?: string | null };
+    assertEquals(body.sent, 0);
+    assertEquals(body.slot, null);
+    assertEquals(body.skipped?.not_slot_hour, 1);
+  } finally {
+    Deno.env.get = originalGet;
+  }
+});
+
+Deno.test("HTTP POST job accepts weekend morning slot hours before eligibility", async () => {
+  const originalGet = Deno.env.get.bind(Deno.env);
+  Deno.env.get = (name: string) => {
+    if (name === "LOG_REMINDER_CRON_SECRET") return CRON_SECRET;
+    // Missing TeamUp so the job fails after the slot gate (not a silent skip).
+    if (name === "TEAMUP_M2M_TOKEN") return undefined;
+    return originalGet(name);
+  };
+  try {
+    for (const now of [SAT_TEN_BST, SUN_ELEVEN_BST]) {
+      const res = await handleLogRemindersRequest(jobRequest(now));
+      assertEquals(res.status, 500);
+      const body = await res.json() as { error?: string; slot?: string | null };
+      assertEquals(body.error, "Internal server error");
+      assertEquals(body.slot, undefined);
+    }
   } finally {
     Deno.env.get = originalGet;
   }

@@ -9,7 +9,7 @@
     "enabled": true
   },
   "triggers": {
-    "crons": ["0 5 * * *", "0 8,9,13,14,20,21 * * *"]
+    "crons": ["0 5 * * *", "0 8,9,10,11,13,14,20,21 * * *"]
   },
   "vars": {
     "SUPABASE_URL": "https://ivrsxhuktebvypgtfoww.supabase.co"

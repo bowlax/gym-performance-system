@@ -12,7 +12,7 @@
     "owner-current-pbs:test": "cd supabase/functions && deno test --allow-read=../migrations --allow-env --allow-net owner-current-pbs/handler_http_test.ts _shared/owner_surface_grants_rls_policy_test.ts",
     "owner-pb-frequency:test": "cd supabase/functions && deno test --allow-env --allow-net owner-pb-frequency/handler_http_test.ts _shared/edge-pb-reads_frequency_test.ts",
     "owner-member-names:test": "cd supabase/functions && deno test --allow-env --allow-net owner-member-names/handler_http_test.ts owner-member-names/handler_email_test.ts",
-    "log-reminders:test": "cd supabase/functions && deno test --allow-env --allow-net log-reminders/handler_http_test.ts",
+    "log-reminders:test": "cd supabase/functions && deno test --allow-env --allow-net log-reminders/handler_http_test.ts _shared/log-reminder-schedule_test.ts",
     "delete-session:test": "cd supabase/functions && deno test --allow-env --allow-net delete-session/handler_http_test.ts",
     "log-session:test": "cd supabase/functions && deno test --allow-env --allow-net log-session/handler_http_test.ts",
     "add-exercises-to-session:test": "cd supabase/functions && deno test --allow-env --allow-net add-exercises-to-session/handler_http_test.ts",
