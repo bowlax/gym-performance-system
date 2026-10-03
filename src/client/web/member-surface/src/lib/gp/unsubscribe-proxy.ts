@@ -24,7 +24,8 @@ export function unsubscribeResponseContentType(
   method: string,
   upstreamContentType: string | null,
 ): string {
-  if (method === "GET") {
+  // GET landing page (and HEAD probes that mirror it).
+  if (method === "GET" || method === "HEAD") {
     return UNSUBSCRIBE_HTML_CONTENT_TYPE;
   }
   return upstreamContentType ?? "application/json";

@@ -22,6 +22,12 @@ describe("unsubscribeResponseContentType", () => {
     ).toBe("text/html; charset=utf-8");
   });
 
+  test("forces text/html for HEAD the same way as GET", () => {
+    expect(
+      unsubscribeResponseContentType("HEAD", "text/plain; charset=UTF-8"),
+    ).toBe("text/html; charset=utf-8");
+  });
+
   test("keeps upstream JSON Content-Type for one-click POST", () => {
     expect(
       unsubscribeResponseContentType("POST", "application/json"),
