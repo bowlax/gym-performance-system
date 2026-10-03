@@ -15,6 +15,7 @@ import { Route as DesignRouteImport } from './routes/design'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RemindersUnsubscribeRouteImport } from './routes/reminders/unsubscribe'
 import { Route as ProgressionExerciseIdRouteImport } from './routes/progression.$exerciseId'
+import { Route as KioskConfirmRouteImport } from './routes/kiosk/confirm'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as ApiAuthSignoutRouteImport } from './routes/api/auth/signout'
 import { Route as ApiAuthSessionRouteImport } from './routes/api/auth/session'
@@ -49,6 +50,11 @@ const ProgressionExerciseIdRoute = ProgressionExerciseIdRouteImport.update({
   path: '/progression/$exerciseId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const KioskConfirmRoute = KioskConfirmRouteImport.update({
+  id: '/kiosk/confirm',
+  path: '/kiosk/confirm',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/log': typeof LogRoute
   '/privacy': typeof PrivacyRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/kiosk/confirm': typeof KioskConfirmRoute
   '/progression/$exerciseId': typeof ProgressionExerciseIdRoute
   '/reminders/unsubscribe': typeof RemindersUnsubscribeRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
@@ -82,6 +89,7 @@ export interface FileRoutesByTo {
   '/log': typeof LogRoute
   '/privacy': typeof PrivacyRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/kiosk/confirm': typeof KioskConfirmRoute
   '/progression/$exerciseId': typeof ProgressionExerciseIdRoute
   '/reminders/unsubscribe': typeof RemindersUnsubscribeRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
@@ -94,6 +102,7 @@ export interface FileRoutesById {
   '/log': typeof LogRoute
   '/privacy': typeof PrivacyRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/kiosk/confirm': typeof KioskConfirmRoute
   '/progression/$exerciseId': typeof ProgressionExerciseIdRoute
   '/reminders/unsubscribe': typeof RemindersUnsubscribeRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
@@ -107,6 +116,7 @@ export interface FileRouteTypes {
     | '/log'
     | '/privacy'
     | '/auth/callback'
+    | '/kiosk/confirm'
     | '/progression/$exerciseId'
     | '/reminders/unsubscribe'
     | '/api/auth/session'
@@ -118,6 +128,7 @@ export interface FileRouteTypes {
     | '/log'
     | '/privacy'
     | '/auth/callback'
+    | '/kiosk/confirm'
     | '/progression/$exerciseId'
     | '/reminders/unsubscribe'
     | '/api/auth/session'
@@ -129,6 +140,7 @@ export interface FileRouteTypes {
     | '/log'
     | '/privacy'
     | '/auth/callback'
+    | '/kiosk/confirm'
     | '/progression/$exerciseId'
     | '/reminders/unsubscribe'
     | '/api/auth/session'
@@ -141,6 +153,7 @@ export interface RootRouteChildren {
   LogRoute: typeof LogRoute
   PrivacyRoute: typeof PrivacyRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  KioskConfirmRoute: typeof KioskConfirmRoute
   ProgressionExerciseIdRoute: typeof ProgressionExerciseIdRoute
   RemindersUnsubscribeRoute: typeof RemindersUnsubscribeRoute
   ApiAuthSessionRoute: typeof ApiAuthSessionRoute
@@ -191,6 +204,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProgressionExerciseIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/kiosk/confirm': {
+      id: '/kiosk/confirm'
+      path: '/kiosk/confirm'
+      fullPath: '/kiosk/confirm'
+      preLoaderRoute: typeof KioskConfirmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/callback': {
       id: '/auth/callback'
       path: '/auth/callback'
@@ -221,6 +241,7 @@ const rootRouteChildren: RootRouteChildren = {
   LogRoute: LogRoute,
   PrivacyRoute: PrivacyRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  KioskConfirmRoute: KioskConfirmRoute,
   ProgressionExerciseIdRoute: ProgressionExerciseIdRoute,
   RemindersUnsubscribeRoute: RemindersUnsubscribeRoute,
   ApiAuthSessionRoute: ApiAuthSessionRoute,

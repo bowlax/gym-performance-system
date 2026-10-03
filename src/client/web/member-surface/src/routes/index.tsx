@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Settings, ChevronRight, Trophy } from "lucide-react";
 import { PBCard } from "@/components/gp/pb-card";
 import { CalendarHeatmap } from "@/components/gp/calendar-heatmap";
@@ -37,6 +37,7 @@ import {
   updateMemberStaleness,
 } from "@/lib/gp/member-settings";
 import type { StalenessSetting } from "@gp-shared/pb-derivation.ts";
+import { takeKioskConfirmReturn, tokenFromKioskConfirmReturn } from "@/lib/gp/kiosk-confirm";
 import {
   clearSessionSaveSummary,
   readSessionSaveSummary,
@@ -66,12 +67,26 @@ export const Route = createFileRoute("/")({
 
 function BoardScreen() {
   const auth = useAuth();
+  const navigate = useNavigate();
   const [aboutOpen, setAboutOpen] = useState(false);
   const [saveSummary, setSaveSummary] = useState<SessionSaveSummary | null>(
     null,
   );
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const locationState = useRouterState({ select: (s) => s.location.state });
+
+  useEffect(() => {
+    if (pathname !== "/") return;
+    const path = takeKioskConfirmReturn();
+    if (!path) return;
+    const token = tokenFromKioskConfirmReturn(path);
+    if (!token) return;
+    void navigate({
+      to: "/kiosk/confirm",
+      search: { token },
+      replace: true,
+    });
+  }, [pathname, navigate]);
 
   useEffect(() => {
     if (pathname !== "/") return;
