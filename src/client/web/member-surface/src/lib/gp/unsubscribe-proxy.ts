@@ -1,12 +1,16 @@
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/lib/gp/env";
 
-/**
- * Supabase Edge Functions rewrite GET `text/html` responses to `text/plain`
- * on shared project domains (HTML hosting is only allowed with a custom
- * domain). The member-web Worker is the public unsubscribe landing host, so
- * it must force `text/html` for GET regardless of the upstream Content-Type.
- */
-export const UNSUBSCRIBE_HTML_CONTENT_TYPE = "text/html; charset=utf-8";
+export type UnsubscribeResult = {
+  ok: boolean;
+  status: number;
+  message: string;
+};
+
+export type UnsubscribeFetchOptions = {
+  fetchImpl?: typeof fetch;
+  supabaseUrl?: string;
+  supabasePublishableKey?: string;
+};
 
 export function unsubscribeUpstreamUrl(
   token: string,
@@ -20,50 +24,73 @@ export function unsubscribeUpstreamUrl(
   return target.toString();
 }
 
-export function unsubscribeResponseContentType(
-  method: string,
-  upstreamContentType: string | null,
+/** Prefer known status copy; fall back to the Edge Function HTML body. */
+export function unsubscribeMessageForResponse(
+  status: number,
+  body: string,
 ): string {
-  // GET landing page (and HEAD probes that mirror it).
-  if (method === "GET" || method === "HEAD") {
-    return UNSUBSCRIBE_HTML_CONTENT_TYPE;
+  if (status === 200) {
+    return "You are unsubscribed from session reminder emails. You can turn them back on in Settings.";
   }
-  return upstreamContentType ?? "application/json";
+  if (status === 400) {
+    return "This unsubscribe link is invalid or has expired.";
+  }
+  if (status === 503) {
+    return "Unsubscribe is not configured.";
+  }
+  const fromHtml = body.match(/<p>(.*?)<\/p>/i)?.[1]?.trim();
+  if (fromHtml) return fromHtml;
+  return "Something went wrong while updating your reminder preferences.";
 }
 
-export type ProxyUnsubscribeOptions = {
-  fetchImpl?: typeof fetch;
-  supabaseUrl?: string;
-  supabasePublishableKey?: string;
-};
+export async function performUnsubscribe(
+  token: string,
+  options: UnsubscribeFetchOptions = {},
+): Promise<UnsubscribeResult> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const supabaseUrl = options.supabaseUrl ?? SUPABASE_URL;
+  const supabasePublishableKey =
+    options.supabasePublishableKey ?? SUPABASE_PUBLISHABLE_KEY;
 
-export async function proxyUnsubscribe(
+  const upstream = await fetchImpl(unsubscribeUpstreamUrl(token, supabaseUrl), {
+    method: "GET",
+    headers: { apikey: supabasePublishableKey },
+    redirect: "manual",
+  });
+  const body = await upstream.text();
+  return {
+    ok: upstream.ok,
+    status: upstream.status,
+    message: unsubscribeMessageForResponse(upstream.status, body),
+  };
+}
+
+/** Gmail one-click POST — proxy JSON through; browsers use the GET landing page. */
+export async function proxyUnsubscribePost(
   request: Request,
-  options: ProxyUnsubscribeOptions = {},
+  options: UnsubscribeFetchOptions = {},
 ): Promise<Response> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const supabaseUrl = options.supabaseUrl ?? SUPABASE_URL;
   const supabasePublishableKey =
     options.supabasePublishableKey ?? SUPABASE_PUBLISHABLE_KEY;
   const token = new URL(request.url).searchParams.get("token") ?? "";
+
   const upstream = await fetchImpl(unsubscribeUpstreamUrl(token, supabaseUrl), {
-    method: request.method,
+    method: "POST",
     headers: {
       apikey: supabasePublishableKey,
       "Content-Type": request.headers.get("Content-Type") ??
         "application/x-www-form-urlencoded",
     },
-    body: request.method === "POST" ? await request.text() : undefined,
+    body: await request.text(),
     redirect: "manual",
   });
 
   return new Response(await upstream.text(), {
     status: upstream.status,
     headers: {
-      "Content-Type": unsubscribeResponseContentType(
-        request.method,
-        upstream.headers.get("Content-Type"),
-      ),
+      "Content-Type": upstream.headers.get("Content-Type") ?? "application/json",
       "Cache-Control": "no-store",
     },
   });

@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
-  proxyUnsubscribe,
-  unsubscribeResponseContentType,
+  performUnsubscribe,
+  proxyUnsubscribePost,
+  unsubscribeMessageForResponse,
   unsubscribeUpstreamUrl,
 } from "./unsubscribe-proxy";
 
@@ -15,77 +16,85 @@ describe("unsubscribeUpstreamUrl", () => {
   });
 });
 
-describe("unsubscribeResponseContentType", () => {
-  test("forces text/html for GET even when Supabase rewrote upstream to text/plain", () => {
-    expect(
-      unsubscribeResponseContentType("GET", "text/plain; charset=UTF-8"),
-    ).toBe("text/html; charset=utf-8");
+describe("unsubscribeMessageForResponse", () => {
+  test("maps known statuses to member-facing copy", () => {
+    expect(unsubscribeMessageForResponse(200, "")).toContain("unsubscribed");
+    expect(unsubscribeMessageForResponse(400, "")).toContain("invalid");
+    expect(unsubscribeMessageForResponse(503, "")).toContain("not configured");
   });
 
-  test("forces text/html for HEAD the same way as GET", () => {
+  test("falls back to the upstream HTML paragraph for other statuses", () => {
     expect(
-      unsubscribeResponseContentType("HEAD", "text/plain; charset=UTF-8"),
-    ).toBe("text/html; charset=utf-8");
-  });
-
-  test("keeps upstream JSON Content-Type for one-click POST", () => {
-    expect(
-      unsubscribeResponseContentType("POST", "application/json"),
-    ).toBe("application/json");
+      unsubscribeMessageForResponse(
+        502,
+        "<html><body><p>Upstream hiccup</p></body></html>",
+      ),
+    ).toBe("Upstream hiccup");
   });
 });
 
-describe("proxyUnsubscribe", () => {
+describe("performUnsubscribe", () => {
   const supabaseUrl = "https://proj.supabase.co";
   const supabasePublishableKey = "anon-key";
 
-  test("GET landing response is HTML even if upstream Content-Type is text/plain", async () => {
-    const html =
-      "<!DOCTYPE html><html lang=\"en\"><body><p>You are unsubscribed from session reminder emails. You can turn them back on in Settings.</p></body></html>";
+  test("returns ok + confirmation copy when upstream succeeds", async () => {
     let upstreamUrl = "";
-
-    const response = await proxyUnsubscribe(
-      new Request("https://member.test/reminders/unsubscribe?token=tok", {
-        method: "GET",
-      }),
-      {
-        supabaseUrl,
-        supabasePublishableKey,
-        fetchImpl: async (input, init) => {
-          upstreamUrl = String(input);
-          expect(init?.method).toBe("GET");
-          expect((init?.headers as Record<string, string>).apikey).toBe(
-            supabasePublishableKey,
-          );
-          return new Response(html, {
+    const result = await performUnsubscribe("tok", {
+      supabaseUrl,
+      supabasePublishableKey,
+      fetchImpl: async (input, init) => {
+        upstreamUrl = String(input);
+        expect(init?.method).toBe("GET");
+        expect((init?.headers as Record<string, string>).apikey).toBe(
+          supabasePublishableKey,
+        );
+        return new Response(
+          "<!DOCTYPE html><html><body><p>You are unsubscribed</p></body></html>",
+          {
             status: 200,
             headers: { "Content-Type": "text/plain; charset=UTF-8" },
-          });
-        },
+          },
+        );
       },
-    );
+    });
 
     expect(upstreamUrl).toBe(
       "https://proj.supabase.co/functions/v1/log-reminders/unsubscribe?token=tok",
     );
-    expect(response.status).toBe(200);
-    expect(response.headers.get("Content-Type")).toBe(
-      "text/html; charset=utf-8",
-    );
-    expect(response.headers.get("Cache-Control")).toBe("no-store");
-    expect(await response.text()).toBe(html);
+    expect(result).toEqual({
+      ok: true,
+      status: 200,
+      message:
+        "You are unsubscribed from session reminder emails. You can turn them back on in Settings.",
+    });
   });
 
-  test("POST one-click keeps JSON Content-Type from upstream", async () => {
-    const response = await proxyUnsubscribe(
+  test("returns invalid-link copy for 400", async () => {
+    const result = await performUnsubscribe("bad", {
+      supabaseUrl,
+      supabasePublishableKey,
+      fetchImpl: async () =>
+        new Response("<p>This unsubscribe link is invalid or has expired.</p>", {
+          status: 400,
+        }),
+    });
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(400);
+    expect(result.message).toContain("invalid");
+  });
+});
+
+describe("proxyUnsubscribePost", () => {
+  test("proxies one-click POST JSON without rewriting Content-Type", async () => {
+    const response = await proxyUnsubscribePost(
       new Request("https://member.test/reminders/unsubscribe?token=tok", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: "List-Unsubscribe=One-Click",
       }),
       {
-        supabaseUrl,
-        supabasePublishableKey,
+        supabaseUrl: "https://proj.supabase.co",
+        supabasePublishableKey: "anon",
         fetchImpl: async () =>
           new Response(JSON.stringify({ ok: true }), {
             status: 200,
