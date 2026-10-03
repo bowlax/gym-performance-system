@@ -10,7 +10,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
-import { loadEnv, type Plugin } from "vite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** Pure PB modules shared with Deno Edge Functions — single TS source. */
@@ -26,11 +25,16 @@ const gpSharedDir = path.resolve(
  * is evaluated, and Lovable's built-in loadEnv only loads the `VITE_` prefix.
  * This plugin runs during config resolution (with the correct mode) and uses
  * loadEnv with an empty prefix so GYMPERF_* keys from .env.local are available.
+ *
+ * loadEnv is imported dynamically so this ESM config does not create a
+ * require() cycle with @lovable.dev/vite-tanstack-config's CJS entry on
+ * Node 22+ (ERR_REQUIRE_CYCLE_MODULE).
  */
-function gymPerfEnvDefinePlugin(): Plugin {
+function gymPerfEnvDefinePlugin() {
   return {
     name: "gymperf-env-define",
-    config(_config, { mode }) {
+    async config(_config: unknown, { mode }: { mode: string }) {
+      const { loadEnv } = await import("vite");
       const env = loadEnv(mode, process.cwd(), "");
       return {
         define: {
