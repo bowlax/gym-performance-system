@@ -3,7 +3,7 @@ import { formatLondonClock } from "./log-reminder-schedule.ts";
 
 export const REMINDER_FROM = "Wolf Reminders <reminders@lbconsulting.tech>";
 export const WOLF_LOGO_URL =
-  "https://bowlax.github.io/gym-performance-system/landing/app-icon.png";
+  "https://gymperf-member-web.7r2t2gzhkq.workers.dev/landing/app-icon.png";
 
 export interface ReminderClass {
   name: string | null;
