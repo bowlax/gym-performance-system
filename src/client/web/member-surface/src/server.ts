@@ -47,8 +47,8 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
-    // Prefer the bundled explanation page when the request reaches the Worker
-    // (static `public/landing/` missing or not matched). Assets still win when present.
+    // Bundled explanation page. Pair with wrangler `assets.run_worker_first`
+    // for `/landing` so the Assets layer cannot 404 before this runs.
     const landing = serveLandingPage(request);
     if (landing) return landing;
 

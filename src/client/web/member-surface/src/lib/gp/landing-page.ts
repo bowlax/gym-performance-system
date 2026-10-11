@@ -472,15 +472,11 @@ const LANDING_HEADERS = {
 export function serveLandingPage(request: Request): Response | null {
   if (request.method !== "GET" && request.method !== "HEAD") return null;
 
-  const url = new URL(request.url);
-  const { pathname } = url;
+  const { pathname } = new URL(request.url);
   if (pathname !== "/landing" && pathname !== "/landing/") return null;
 
-  if (pathname === "/landing") {
-    url.pathname = "/landing/";
-    return Response.redirect(url.toString(), 307);
-  }
-
+  // Serve HTML for both spellings — do not 307 to `/landing/` and depend on
+  // Assets directory-index behaviour (that is what made the page "go missing").
   return new Response(request.method === "HEAD" ? null : LANDING_HTML, {
     status: 200,
     headers: LANDING_HEADERS,

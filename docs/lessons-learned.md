@@ -189,3 +189,11 @@ kiosk confirm, etc.) needs a **Worker-bundled** route or `server.ts`
 handler, not assets alone. Keep icons in `public/` if emails deep-link
 them; put the HTML (or React screen) in the route tree / server entry
 so omitting a static file cannot erase the page.
+
+**Cloudflare Assets caveat:** with the default Assets-first routing,
+`/landing/` is only in the asset map as `landing/index.html`. When that
+file is missing, the Assets layer can return 404 **without invoking the
+Worker**, so a `server.ts` fallback never runs. Set
+`assets.run_worker_first` for those paths in `wrangler.jsonc`, and serve
+HTML for both `/landing` and `/landing/` (do not rely on Assets
+directory-index redirects).

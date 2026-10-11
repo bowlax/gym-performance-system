@@ -11,5 +11,12 @@
   // seals the gp_auth cookie. Never put it in [vars] (those are plaintext).
   "observability": {
     "enabled": true
+  },
+  // Assets are checked before the Worker by default. `/landing/` only exists as
+  // `landing/index.html` in the asset map — when a redeploy omits that file,
+  // the Assets layer can 404 without ever invoking the Worker bundle handler.
+  // Force the Worker first so `serveLandingPage` always owns these paths.
+  "assets": {
+    "run_worker_first": ["/landing", "/landing/"]
   }
 }
