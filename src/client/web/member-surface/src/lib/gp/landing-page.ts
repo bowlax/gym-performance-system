@@ -403,7 +403,7 @@ export const LANDING_HTML = `<!DOCTYPE html>
       <li>
         <div>
           <strong>Log sessions and watch progression</strong>
-          <span>After training, log what you did. The board updates, and each exercise has a progression chart so you can see how your PBs move over time.</span>
+          <span>After training, log what you did on the iPhone app, on the web, or on the kiosk app running on the iPad in the gym. The board updates, and each exercise has a progression chart so you can see how your PBs move over time.</span>
         </div>
       </li>
     </ol>
