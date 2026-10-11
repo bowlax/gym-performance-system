@@ -1,0 +1,488 @@
+/**
+ * Member explanation page served at `/landing/`.
+ *
+ * Kept in the Worker bundle (not only `public/`) so Lovable/Nitro redeploys
+ * that omit static `public/landing/index.html` still return the page instead
+ * of the TanStack 404 shell — same failure shape as the kiosk confirm wipe.
+ */
+
+export const LANDING_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GymPerformance - Way of Life Fitness</title>
+  <link rel="icon" href="/landing/favicon.ico" sizes="any">
+  <link rel="icon" href="/landing/favicon-32x32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/landing/apple-touch-icon.png" sizes="180x180">
+  <meta name="theme-color" content="#000000">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0a0a0a;
+      color: #f0f0f0;
+      line-height: 1.7;
+    }
+
+    /* HEADER */
+    header {
+      background: #000;
+      padding: 24px 20px;
+      text-align: center;
+      border-bottom: 1px solid #1a1a1a;
+    }
+
+    header img {
+      height: 48px;
+      margin-bottom: 8px;
+    }
+
+    /* HERO */
+    .hero {
+      background: #000;
+      padding: 64px 20px 56px;
+      text-align: center;
+      border-bottom: 1px solid #1a1a1a;
+    }
+
+    .app-icon {
+      width: 100px;
+      height: 100px;
+      border: 2px solid #1A5BA6;
+      border-radius: 22px;
+      margin: 0 auto 24px;
+      display: block;
+      object-fit: cover;
+    }
+
+    .hero h1 {
+      font-size: 2.4rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.5px;
+      margin-bottom: 16px;
+    }
+
+    .hero h1 span {
+      color: #1A5BA6;
+    }
+
+    .hero p {
+      font-size: 1.1rem;
+      color: #999;
+      max-width: 520px;
+      margin: 0 auto 32px;
+    }
+
+    .entry-paths {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      max-width: 560px;
+      margin: 0 auto;
+      text-align: left;
+    }
+
+    @media (max-width: 540px) {
+      .entry-paths { grid-template-columns: 1fr; }
+    }
+
+    .entry-path {
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .entry-path h2 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #fff;
+      margin: 0;
+    }
+
+    .entry-path p {
+      font-size: 0.9rem;
+      color: #777;
+      margin: 0;
+      flex: 1;
+    }
+
+    .btn-primary {
+      display: inline-block;
+      background: #1A5BA6;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      text-decoration: none;
+      text-align: center;
+      transition: background 0.2s;
+    }
+
+    .btn-primary:hover {
+      background: #165090;
+    }
+
+    .entry-note {
+      font-size: 0.8rem;
+      color: #666;
+    }
+
+    .path-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #1A5BA6;
+      margin-bottom: 8px;
+    }
+
+    .steps .path-note {
+      display: block;
+      margin-top: 8px;
+      font-size: 0.85rem;
+      color: #666;
+    }
+
+    /* SECTIONS */
+    section {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 56px 20px;
+    }
+
+    section + section {
+      border-top: 1px solid #1a1a1a;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 24px;
+    }
+
+    p {
+      color: #aaa;
+      margin-bottom: 16px;
+    }
+
+    /* FEATURES */
+    .features {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 540px) {
+      .features { grid-template-columns: 1fr; }
+      .hero h1 { font-size: 1.8rem; }
+    }
+
+    .feature-card {
+      background: #111;
+      border: 1px solid #1e1e1e;
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .feature-card .icon {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+
+    .feature-card h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+
+    .feature-card p {
+      font-size: 0.9rem;
+      color: #777;
+      margin: 0;
+    }
+
+    /* DOWNLOAD STEPS */
+    .steps {
+      counter-reset: step;
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .steps li {
+      counter-increment: step;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      background: #111;
+      border: 1px solid #1e1e1e;
+      border-radius: 14px;
+      padding: 18px 20px;
+    }
+
+    .steps li::before {
+      content: counter(step);
+      background: #1A5BA6;
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.9rem;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .steps li div {
+      flex: 1;
+    }
+
+    .steps li strong {
+      display: block;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .steps li span {
+      font-size: 0.9rem;
+      color: #777;
+    }
+
+    .steps a {
+      color: #1A5BA6;
+      text-decoration: none;
+    }
+
+    /* FAQ */
+    .faq {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .faq-item {
+      background: #111;
+      border: 1px solid #1e1e1e;
+      border-radius: 14px;
+      padding: 20px;
+    }
+
+    .faq-item h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+
+    .faq-item p {
+      font-size: 0.9rem;
+      color: #777;
+      margin: 0;
+    }
+
+    /* FOOTER */
+    footer {
+      border-top: 1px solid #1a1a1a;
+      text-align: center;
+      padding: 32px 20px;
+      font-size: 0.85rem;
+      color: #444;
+    }
+
+    footer a {
+      color: #555;
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      color: #777;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <p style="color:#1A5BA6; font-weight:700; font-size:1.1rem; letter-spacing:1px;">WAY OF LIFE FITNESS</p>
+  </header>
+
+  <div class="hero">
+    <img
+      src="/landing/app-icon.png"
+      alt="GymPerformance app icon"
+      class="app-icon"
+      width="100"
+      height="100"
+    >
+    <h1>Gym<span>Performance</span></h1>
+    <p>Track your personal bests, log your training, and see your progression — on iPhone or on the web. Same TeamUp login. Same training history.</p>
+
+    <div class="entry-paths">
+      <div class="entry-path">
+        <h2>Use it on your iPhone</h2>
+        <p>Download from the App Store for training at the gym, offline access, and full account controls.</p>
+        <a href="https://apps.apple.com/gb/app/wolf-pack-gymperformance/id6776679549" class="btn-primary" target="_blank" rel="noopener">Get the iPhone app</a>
+        <span class="entry-note">Requires iPhone with iOS 17 or later</span>
+      </div>
+      <div class="entry-path">
+        <h2>Use it on the web</h2>
+        <p>Open in any browser — board, logging, progression, and settings with the same connected account.</p>
+        <a href="https://gymperf-member-web.7r2t2gzhkq.workers.dev" class="btn-primary">Open the web app</a>
+        <span class="entry-note">Works on phone or desktop browser</span>
+      </div>
+    </div>
+  </div>
+
+  <section>
+    <h2>What it does</h2>
+    <p>GymPerformance gives every WOLF member a personal record of their training. Your personal bests, your sessions, your progression — one account you can open on your phone or in a browser.</p>
+    <p>It's built around the exercises you already do at the gym. Every PB exercise on the board is tracked automatically — log a session, and it tells you if you've set a new personal best.</p>
+
+    <div class="features" style="margin-top:32px;">
+      <div class="feature-card">
+        <div class="icon">🏆</div>
+        <h3>Personal Bests</h3>
+        <p>Your current PB for every exercise, always up to date — wherever you open the board.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📋</div>
+        <h3>Session Logging</h3>
+        <p>Log what you did after each session. Quick, simple, and takes under two minutes.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📈</div>
+        <h3>Progression</h3>
+        <p>See how your PBs have moved over time with a clear chart for every exercise.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📅</div>
+        <h3>Consistency</h3>
+        <p>Track how often you're training each week and month at a glance.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How to get started</h2>
+    <p>Pick iPhone or web above, then the flow is the same: connect with TeamUp, and your training history is there.</p>
+
+    <ol class="steps">
+      <li>
+        <div>
+          <strong>Open GymPerformance</strong>
+          <span>On iPhone: download from the <a href="https://apps.apple.com/gb/app/wolf-pack-gymperformance/id6776679549" target="_blank" rel="noopener">App Store</a>. On the web: open the <a href="https://gymperf-member-web.7r2t2gzhkq.workers.dev">web app</a> in your browser.</span>
+        </div>
+      </li>
+      <li>
+        <div>
+          <strong>Connect with TeamUp</strong>
+          <span>Sign in with the same TeamUp membership you use at the gym. That links your account so your training data backs up and follows you between iPhone and web.</span>
+        </div>
+      </li>
+      <li>
+        <div>
+          <strong>See your board</strong>
+          <span>If you already have history with us, it appears automatically. If you're starting fresh, add your current personal bests so the board has somewhere to begin — you can update them later.</span>
+          <span class="path-note">First-run PB setup is guided on iPhone; on the web you can add manual PBs from an exercise's progression screen.</span>
+        </div>
+      </li>
+      <li>
+        <div>
+          <strong>Log sessions and watch progression</strong>
+          <span>After training, log what you did. The board updates, and each exercise has a progression chart so you can see how your PBs move over time.</span>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Frequently asked questions</h2>
+
+    <div class="faq">
+      <div class="faq-item">
+        <h3>Is it the same account on iPhone and web?</h3>
+        <p>Yes. Connect with the same TeamUp login on either surface — it's one account, not two copies of your data. Your board, sessions, and progression are the same wherever you open GymPerformance. You can log or delete a session, add or edit a manual PB, and reset a current PB on iPhone or on the web.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>Is my data private?</h3>
+        <p>On iPhone, until you connect with TeamUp your training data stays on your device. Once you connect (on iPhone or web), it backs up so it can follow you across surfaces and your coaches can support you. Read the full <a href="/privacy" style="color:#1A5BA6;">privacy policy</a> for details.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>Can I disconnect my account?</h3>
+        <p>Yes — on the iPhone app, go to Settings and tap Disconnect. That stops sync on that device; your history stays in our system and on the phone, so reconnecting later picks up where you left off. Disconnect isn't available on the web; sign out if you need to.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>What device do I need?</h3>
+        <p>The iPhone app runs on any iPhone with iOS 17 or later — iPhone XS and newer, from 2018 onwards. The web app runs in a modern browser on a phone or computer, including Android.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>Is it free?</h3>
+        <p>Yes, completely free for Wolf Way of Life Fitness members.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>Will I lose my data if the app updates?</h3>
+        <p>No. Your sessions, personal bests, and history are preserved when the iPhone app updates from the App Store, and the same connected history is what you see on the web.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>Which exercises are tracked?</h3>
+        <p>All the PB exercises on the gym board - including squats, deadlifts, bench press, overhead press, dumbbell exercises, chin-ups, cable row, plank, ski 500m, and bike.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>I have a question or found a problem</h3>
+        <p>Email Lee at <a href="mailto:gymperformance@lbconsulting.tech" style="color:#1A5BA6;">gymperformance@lbconsulting.tech</a>, or send a WhatsApp.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>© 2026 Way of Life Fitness &nbsp;·&nbsp; <a href="/privacy">Privacy Policy</a></p>
+  </footer>
+
+</body>
+</html>
+`;
+
+const LANDING_HEADERS = {
+  "content-type": "text/html; charset=utf-8",
+  "cache-control": "public, max-age=0, must-revalidate",
+};
+
+/** Serve `/landing` + `/landing/` before the SPA not-found handler. */
+export function serveLandingPage(request: Request): Response | null {
+  if (request.method !== "GET" && request.method !== "HEAD") return null;
+
+  const url = new URL(request.url);
+  const { pathname } = url;
+  if (pathname !== "/landing" && pathname !== "/landing/") return null;
+
+  if (pathname === "/landing") {
+    url.pathname = "/landing/";
+    return Response.redirect(url.toString(), 307);
+  }
+
+  return new Response(request.method === "HEAD" ? null : LANDING_HTML, {
+    status: 200,
+    headers: LANDING_HEADERS,
+  });
+}
