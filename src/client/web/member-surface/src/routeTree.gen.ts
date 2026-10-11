@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as LogRouteImport } from './routes/log'
+import { Route as LandingRouteImport } from './routes/landing'
 import { Route as DesignRouteImport } from './routes/design'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RemindersUnsubscribeRouteImport } from './routes/reminders/unsubscribe'
@@ -28,6 +29,11 @@ const PrivacyRoute = PrivacyRouteImport.update({
 const LogRoute = LogRouteImport.update({
   id: '/log',
   path: '/log',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LandingRoute = LandingRouteImport.update({
+  id: '/landing',
+  path: '/landing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DesignRoute = DesignRouteImport.update({
@@ -74,6 +80,7 @@ const ApiAuthSessionRoute = ApiAuthSessionRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/design': typeof DesignRoute
+  '/landing': typeof LandingRoute
   '/log': typeof LogRoute
   '/privacy': typeof PrivacyRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/design': typeof DesignRoute
+  '/landing': typeof LandingRoute
   '/log': typeof LogRoute
   '/privacy': typeof PrivacyRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -99,6 +107,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/design': typeof DesignRoute
+  '/landing': typeof LandingRoute
   '/log': typeof LogRoute
   '/privacy': typeof PrivacyRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -113,6 +122,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/design'
+    | '/landing'
     | '/log'
     | '/privacy'
     | '/auth/callback'
@@ -125,6 +135,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/design'
+    | '/landing'
     | '/log'
     | '/privacy'
     | '/auth/callback'
@@ -137,6 +148,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/design'
+    | '/landing'
     | '/log'
     | '/privacy'
     | '/auth/callback'
@@ -150,6 +162,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DesignRoute: typeof DesignRoute
+  LandingRoute: typeof LandingRoute
   LogRoute: typeof LogRoute
   PrivacyRoute: typeof PrivacyRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
@@ -174,6 +187,13 @@ declare module '@tanstack/react-router' {
       path: '/log'
       fullPath: '/log'
       preLoaderRoute: typeof LogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/landing': {
+      id: '/landing'
+      path: '/landing'
+      fullPath: '/landing'
+      preLoaderRoute: typeof LandingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/design': {
@@ -238,6 +258,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DesignRoute: DesignRoute,
+  LandingRoute: LandingRoute,
   LogRoute: LogRoute,
   PrivacyRoute: PrivacyRoute,
   AuthCallbackRoute: AuthCallbackRoute,

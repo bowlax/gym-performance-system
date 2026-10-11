@@ -168,3 +168,24 @@ centering note (accepted as expected desktop-browser behaviour for a
 phone-first app). Passing tests did not substitute for a real
 click-through, and a real click-through's own findings still needed
 scrutiny before being trusted as real bugs.
+
+---
+
+## Member Worker static pages go missing after redeploy
+
+**Symptom:** `/landing/` (and earlier `/kiosk/confirm`) intermittently
+404 with the TanStack "Page not found" shell on
+`gymperf-member-web`, even though the HTML exists in the repo under
+`public/`.
+
+**Shape:** Nitro/Cloudflare serves `public/` as Worker Assets. When a
+redeploy (especially Lovable-synced) ships without that static file,
+the request falls through to the SPA router, which has no matching
+route, so members see the in-app 404. The next deploy that includes
+the asset makes the URL "work again" — it looks flaky.
+
+**Fix pattern:** anything members must always reach (explanation page,
+kiosk confirm, etc.) needs a **Worker-bundled** route or `server.ts`
+handler, not assets alone. Keep icons in `public/` if emails deep-link
+them; put the HTML (or React screen) in the route tree / server entry
+so omitting a static file cannot erase the page.
