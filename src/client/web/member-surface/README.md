@@ -73,7 +73,7 @@ Must be ≥ 32 characters. Used only on the Worker to seal/unseal `gp_auth` — 
 
 Live workers.dev URL pattern: `https://gymperf-member-web.<account>.workers.dev` (also linked from `docs/landing/`).
 
-**Explanation page (`/landing/`):** HTML lives in `public/landing/` (icons + static copy) and is also embedded in the Worker (`src/lib/gp/landing-page.ts`, wired from `src/server.ts` and `src/routes/landing.ts`). The Worker copy is the durability layer — if a deploy drops the static file, `/landing/` still returns the page instead of the SPA 404 shell.
+**Explanation page (`/landing/`):** HTML lives in `public/landing/` (icons + static copy) and is also embedded in the Worker (`src/lib/gp/landing-page.ts`, wired from `src/server.ts` and `src/routes/landing.ts`). `wrangler.jsonc` sets `assets.run_worker_first` for `/landing` so the Assets layer cannot 404 before the Worker handler runs.
 
 ## Design system
 

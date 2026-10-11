@@ -24,31 +24,22 @@ describe("serveLandingPage", () => {
     ).toBeNull();
   });
 
-  test("redirects /landing to /landing/", () => {
-    const response = serveLandingPage(
-      new Request("https://example.com/landing?utm=1"),
-    );
-    expect(response).not.toBeNull();
-    expect(response!.status).toBe(307);
-    expect(response!.headers.get("location")).toBe(
-      "https://example.com/landing/?utm=1",
-    );
-  });
-
-  test("serves the explanation HTML at /landing/", async () => {
-    const response = serveLandingPage(
-      new Request("https://example.com/landing/"),
-    );
-    expect(response).not.toBeNull();
-    expect(response!.status).toBe(200);
-    expect(response!.headers.get("content-type")).toBe(
-      "text/html; charset=utf-8",
-    );
-    const body = await response!.text();
-    expect(body).toBe(LANDING_HTML);
-    expect(body).toContain("GymPerformance - Way of Life Fitness");
-    expect(body).toContain('src="/landing/app-icon.png"');
-    expect(body).toContain('href="/privacy"');
+  test("serves the explanation HTML at /landing and /landing/", async () => {
+    for (const path of ["/landing", "/landing/"]) {
+      const response = serveLandingPage(
+        new Request(`https://example.com${path}?utm=1`),
+      );
+      expect(response).not.toBeNull();
+      expect(response!.status).toBe(200);
+      expect(response!.headers.get("content-type")).toBe(
+        "text/html; charset=utf-8",
+      );
+      const body = await response!.text();
+      expect(body).toBe(LANDING_HTML);
+      expect(body).toContain("GymPerformance - Way of Life Fitness");
+      expect(body).toContain('src="/landing/app-icon.png"');
+      expect(body).toContain("kiosk app running on the iPad in the gym");
+    }
   });
 
   test("HEAD /landing/ returns headers without a body", async () => {
