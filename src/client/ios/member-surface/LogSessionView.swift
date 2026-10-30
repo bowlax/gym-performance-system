@@ -149,9 +149,7 @@ struct LogSessionView: View {
                 SessionHistoryView()
             }
             .sheet(isPresented: $showCelebration, onDismiss: {
-                resetSession()
-                dependencies.refresh()
-                switchToBoard()
+                finishAndLeaveLog(refresh: true)
             }) {
                 PBCelebrationSheet(newPBs: celebrationPBs)
             }
@@ -206,9 +204,7 @@ struct LogSessionView: View {
             // so a pull from *this* trigger cannot land mid-comparison (#32).
             if result.newPBs.isEmpty {
                 dependencies.syncCoordinator.syncAfterSessionSaved()
-                resetSession()
-                dependencies.refresh()
-                switchToBoard()
+                finishAndLeaveLog(refresh: true)
             } else {
                 celebrationPBs = result.newPBs
                 showCelebration = true
@@ -228,8 +224,25 @@ struct LogSessionView: View {
     }
 
     private func cancelSession() {
-        resetSession()
-        switchToBoard()
+        finishAndLeaveLog(refresh: false)
+    }
+
+    /// Leave Log without crashing when a set TextField was still first-responder.
+    ///
+    /// Build 19 SIGTRAP (2026-10-30): `resetSession()` cleared `draftExercises`,
+    /// then `switchToBoard()` tore the form down; UIKit's resign/endEditing path
+    /// read a `Binding` into the emptied array (`Array._checkSubscript`).
+    /// Dismiss the keyboard while bindings are still valid, then clear + leave
+    /// on the next turn after that flush.
+    private func finishAndLeaveLog(refresh: Bool) {
+        KeyboardDismissal.dismiss()
+        DispatchQueue.main.async {
+            resetSession()
+            if refresh {
+                dependencies.refresh()
+            }
+            switchToBoard()
+        }
     }
 
     private func resetSession() {
