@@ -123,10 +123,6 @@ function measurementFields(input: {
 }
 
 export function buildLogSessionPayload(input: LogSessionInput): LogSessionPayload {
-  if (input.exercises.length === 0) {
-    throw new Error("At least one exercise is required to log a session.");
-  }
-
   return {
     session: {
       id: crypto.randomUUID(),
@@ -232,12 +228,13 @@ export async function logSession(
 ): Promise<LogSessionResult> {
   const payload = buildLogSessionPayload(input);
 
-  const bundleBefore = await fetchBoardDerivationBundle(supabase);
+  const bundleBefore =
+    input.exercises.length === 0 ? null : await fetchBoardDerivationBundle(supabase);
   const beforeCurrentByExercise = new Map<string, ReturnType<typeof deriveExerciseReadState>["currentPB"]>();
 
   for (const ex of input.exercises) {
     const exercise = exercisesById.get(ex.exerciseId);
-    if (!exercise?.pb_rule) continue;
+    if (!exercise?.pb_rule || !bundleBefore) continue;
     const before = deriveExerciseReadState({
       pbRule: exercise.pb_rule,
       measurementType: exercise.measurement_type,
@@ -275,6 +272,10 @@ export async function logSession(
 
   const sessionId =
     typeof raw.session?.id === "string" ? raw.session.id : payload.session.id;
+  if (input.exercises.length === 0) {
+    return { sessionId, results: [] };
+  }
+
   const apiExercises = Array.isArray(raw.exercises) ? raw.exercises : [];
   const results: LogSessionResult["results"] = [];
   const loggedSetIdsByExercise = new Map<string, Set<string>>();

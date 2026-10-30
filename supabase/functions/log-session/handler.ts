@@ -147,10 +147,10 @@ export function parseLogSessionRequest(body: unknown): ParseResult {
     };
   }
 
-  if (!Array.isArray(record.exercises) || record.exercises.length === 0) {
+  if (!Array.isArray(record.exercises)) {
     return {
       ok: false,
-      error: "At least one exercise is required.",
+      error: "Invalid request body. Provide session and exercises.",
     };
   }
   if (record.exercises.length > MAX_EXERCISES) {

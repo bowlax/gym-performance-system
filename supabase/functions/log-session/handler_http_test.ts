@@ -10,7 +10,7 @@
 import { assertEquals, assert } from "jsr:@std/assert@1";
 import { SignJWT } from "jsr:@panva/jose@6";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { handleLogSessionRequest } from "./handler.ts";
+import { handleLogSessionRequest, parseLogSessionRequest } from "./handler.ts";
 import {
   onlyIfLoopback,
   tombstoneIsolatedGymTree,
@@ -59,7 +59,24 @@ Deno.test("HTTP POST log-session with invalid body returns 400", async () => {
   assertEquals(res.status, 400);
 });
 
-Deno.test("HTTP POST log-session with empty exercises returns 400", async () => {
+Deno.test("parseLogSessionRequest accepts an attendance session with no exercises", () => {
+  const parsed = parseLogSessionRequest({
+    session: {
+      date: "2026-09-16",
+      notes: "class",
+      calories_burned: 180,
+    },
+    exercises: [],
+  });
+  assertEquals(parsed.ok, true);
+  if (!parsed.ok) return;
+  assertEquals(parsed.request.exercises.length, 0);
+  assertEquals(parsed.request.session.date, "2026-09-16");
+  assertEquals(parsed.request.session.notes, "class");
+  assertEquals(parsed.request.session.calories_burned, 180);
+});
+
+Deno.test("HTTP POST log-session without an exercises array returns 400", async () => {
   const res = await handleLogSessionRequest(
     new Request(ENDPOINT, {
       method: "POST",
@@ -69,13 +86,12 @@ Deno.test("HTTP POST log-session with empty exercises returns 400", async () => 
       },
       body: JSON.stringify({
         session: { date: "2026-09-16" },
-        exercises: [],
       }),
     }),
   );
   assertEquals(res.status, 400);
   const body = await res.json() as { error?: string };
-  assertEquals(body.error, "At least one exercise is required.");
+  assertEquals(body.error, "Invalid request body. Provide session and exercises.");
 });
 
 Deno.test("HTTP POST log-session with duplicate ids returns 400", async () => {
@@ -419,6 +435,47 @@ Deno.test({
       if (inactiveSession.error) throw inactiveSession.error;
       assertEquals(inactiveSession.data.length, 0);
 
+      const attendanceSessionId = crypto.randomUUID();
+      const attendanceRes = await handleLogSessionRequest(
+        new Request(ENDPOINT, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${memberToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            session: {
+              id: attendanceSessionId,
+              date: "2026-09-17",
+              notes: "attendance",
+              calories_burned: 120,
+            },
+            exercises: [],
+          }),
+        }),
+      );
+      assertEquals(attendanceRes.status, 200);
+      const attendanceBody = await attendanceRes.json() as LogSessionResponse;
+      assertEquals(attendanceBody.session?.id, attendanceSessionId);
+      assertEquals(attendanceBody.exercises?.length, 0);
+
+      const attendanceRow = await admin
+        .from("sessions")
+        .select("id, notes, calories_burned, synced_at")
+        .eq("id", attendanceSessionId)
+        .maybeSingle();
+      if (attendanceRow.error) throw attendanceRow.error;
+      assertEquals(attendanceRow.data?.notes, "attendance");
+      assertEquals(attendanceRow.data?.calories_burned, 120);
+      assert(attendanceRow.data?.synced_at != null);
+
+      const attendanceEntries = await admin
+        .from("exercise_entries")
+        .select("id")
+        .eq("session_id", attendanceSessionId);
+      if (attendanceEntries.error) throw attendanceEntries.error;
+      assertEquals(attendanceEntries.data.length, 0);
+
       const memberClient = createClient(env.url, env.anonKey, {
         global: { headers: { Authorization: `Bearer ${memberToken}` } },
         auth: { autoRefreshToken: false, persistSession: false },
@@ -429,8 +486,8 @@ Deno.test({
         .is("deleted_at", null);
       if (history.error) throw history.error;
       assertEquals(
-        (history.data ?? []).map((row) => row.id),
-        [successSessionId],
+        (history.data ?? []).map((row) => row.id).sort(),
+        [successSessionId, attendanceSessionId].sort(),
       );
       assert(successSet1.length > 0);
     } finally {

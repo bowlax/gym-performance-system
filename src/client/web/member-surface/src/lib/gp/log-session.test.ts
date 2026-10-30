@@ -38,13 +38,19 @@ describe("buildLogSessionPayload", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  test("rejects an empty exercise list before any network call", () => {
-    expect(() =>
-      buildLogSessionPayload({
-        sessionDate: "2026-09-16",
-        exercises: [],
-      }),
-    ).toThrow("At least one exercise is required to log a session.");
+  test("accepts an attendance session with no exercises", () => {
+    const payload = buildLogSessionPayload({
+      sessionDate: "2026-09-16",
+      notes: "class",
+      calories_burned: 180,
+      exercises: [],
+    });
+
+    expect(payload.session.date).toBe("2026-09-16");
+    expect(payload.session.notes).toBe("class");
+    expect(payload.session.calories_burned).toBe(180);
+    expect(payload.session.id).toMatch(UUID_PATTERN);
+    expect(payload.exercises).toEqual([]);
   });
 });
 

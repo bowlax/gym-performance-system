@@ -294,7 +294,7 @@ function LogSessionForm() {
         <SectionHeader title="Exercises" />
         {selectedExercises.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No exercise is added. To add exercise, log your sets for the board
+            No exercises added. Add an exercise to log your sets for the board,
             or save this session as an attendance record.
           </p>
         ) : (
@@ -379,10 +379,6 @@ function buildExercisesToLog(
       else if (f === "distance") entry.distance = n;
     }
     exercisesToLog.push(entry);
-  }
-
-  if (exercisesToLog.length === 0) {
-    throw new Error("Add at least one exercise before saving.");
   }
 
   return exercisesToLog;
@@ -809,6 +805,9 @@ function SessionDetailView({
     setSubmitting(true);
     try {
       const exercisesToLog = buildExercisesToLog(selectedExercises, values);
+      if (exercisesToLog.length === 0) {
+        throw new Error("Add at least one exercise before saving.");
+      }
       const result = await addExercisesToSession(
         supabase,
         session.token,

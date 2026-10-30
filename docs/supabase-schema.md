@@ -165,7 +165,9 @@ create table sessions (
 Web members write a whole session through `public.log_session_atomic(payload jsonb)`
 (migration `20260916092322`, Edge Function `log-session`). The function is
 `SECURITY INVOKER` (RLS applies) and inserts the session, exercise entries, and
-sets in one transaction. The session, each exercise entry, and each set stamp
+sets in one transaction. An empty `exercises` array is valid (migration `20261014130755`) and stores the
+session as an attendance record (date, notes, calories) with no entries,
+matching iOS. The session, each exercise entry, and each set stamp
 `synced_at` (migration `20260923210858`) so iOS incremental pull sees the rows.
 Session PBs are still derived at read time — it does not insert `personal_bests`.
 
