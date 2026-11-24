@@ -713,7 +713,7 @@ The broker is the single place that understands TeamUp. It owns:
 - TeamUp token verification
 - The TeamUp-customer-ID to member-UUID mapping
 - Create-or-adopt of the member record
-- Role assignment by surface
+- Issuing a member session (`app_role: member`)
 - Establishing a Supabase Auth session whose JWT carries RLS claims (`member_id`, `gym_id`, `app_role`)
 
 ### The two identities and how they relate
@@ -753,11 +753,11 @@ A stub POST path (`teamupToken: "stub-token"`) remains for local/dev testing wit
 ### Connection flow (create-or-adopt)
 
 1. Member taps "Connect your TeamUp account" and completes the broker-driven TeamUp OAuth flow above (or the stub mint path in development)
-2. Broker receives the verified TeamUp identity and the device's local member UUID, plus the surface (to set app role)
+2. Broker receives the verified TeamUp identity and the device's local member UUID. The surface is `ios` or `memberWeb`.
 3. Broker looks up members by (gym_id, teamup_customer_id):
    - **No existing record** → CREATE a members row using the device's local UUID as primary key, storing the TeamUp customer ID. The local UUID becomes canonical
    - **Existing record** → ADOPT it. Return the existing member UUID. The device adopts this UUID going forward (second-device or returning-member case)
-4. Broker establishes a Supabase Auth session whose JWT carries claims: `member_id` (canonical UUID), `gym_id`, `app_role` (member, or coach/owner only when the TeamUp subject is allowlisted), and PostgREST `role: "authenticated"`
+4. Broker establishes a Supabase Auth session whose JWT carries claims: `member_id` (canonical UUID), `gym_id`, `app_role: member`, and PostgREST `role: "authenticated"`
 5. App uses that session JWT for sync and API requests; RLS reads `member_id`, `gym_id`, and `app_role`
 6. App syncs under the canonical member identity (see section 20)
 
@@ -785,13 +785,7 @@ This is why the member record is create-or-adopt, not always-create. TeamUp cust
 
 ### Role assignment
 
-The broker sets `app_role` from the verified TeamUp identity, not from the surface alone:
-
-- iOS member app / member web surface → `app_role: member`
-- Coach web → `app_role: coach` only when the token is TeamUp provider-mode and its subject is listed in `TEAMUP_COACH_SUBJECTS` (owner subjects may use this surface too)
-- Owner web → `app_role: owner` only when the token is TeamUp provider-mode and its subject is listed in `TEAMUP_OWNER_SUBJECTS`
-
-A customer-mode token cannot take a staff surface. An empty allowlist means nobody receives that role. The local stub path, used only when OAuth is unconfigured, still maps surface to role so development does not need those lists.
+The broker's only surfaces are the iOS app and the member website. Both receive `app_role: member`. `coachWeb` and `ownerWeb` are rejected. The owner session is stored on the owner API and is not minted here. RLS still understands `coach` and `owner` for that separately provisioned session.
 
 ### What RLS then enforces
 

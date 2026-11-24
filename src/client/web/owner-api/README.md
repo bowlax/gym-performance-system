@@ -4,7 +4,7 @@ Dedicated Cloudflare Worker. Steve never logs in. Incoming calls use a bot
 API key. The Worker holds Lee's owner Supabase session (sealed in KV) and
 proxies to the owner Edge Functions.
 
-This is not the member web surface and does not use `ownerWeb` / TeamUp.
+This is not the member web surface and does not use TeamUp.
 
 ## Routes
 

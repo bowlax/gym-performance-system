@@ -30,12 +30,12 @@
  *   TEAMUP_OAUTH_CLIENT_SECRET
  *   TEAMUP_OAUTH_REDIRECT_URI
  *   TEAMUP_OAUTH_PROVIDER_ID
- *   TEAMUP_OAUTH_ALLOWED_RETURN_URLS_IOS / _MEMBER_WEB / _COACH_WEB / _OWNER_WEB
+ *   TEAMUP_OAUTH_ALLOWED_RETURN_URLS_IOS / _MEMBER_WEB
  *                         — comma-separated exact-match allowlists for the client
  *                         `returnUrl` query param (per `surface`). Non-allowlisted
- *                         returnUrl is ignored (callback returns JSON). Shipped
- *                         clients today use ios + memberWeb; coach/owner lists are
- *                         for when those surfaces go live.
+ *                         returnUrl is ignored (callback returns JSON).
+ *                         Surfaces are `ios` and `memberWeb` only. The broker
+ *                         always issues `app_role: member`.
  *   TEAMUP_OAUTH_SCOPE (optional; default read_write provider:<PROVIDER_ID>)
  *   TEAMUP_OAUTH_AUTHORIZE_URL / TEAMUP_OAUTH_TOKEN_URL (optional overrides)
  *
@@ -66,8 +66,6 @@ import {
   parseOAuthCallbackParams,
   pkceCodeChallengeS256,
   readTeamUpOAuthConfig,
-  resolveAppRole,
-  parseSubjectAllowlist,
   resolveOAuthGetRoute,
   resolveOAuthReturnUrl,
   shouldUseStubTeamUpPath,
@@ -120,8 +118,8 @@ const corsHeaders: Record<string, string> = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-type Surface = "ios" | "memberWeb" | "coachWeb" | "ownerWeb";
-type AppRole = "member" | "coach" | "owner";
+type Surface = "ios" | "memberWeb";
+type AppRole = "member";
 
 interface TokenBrokerRequest {
   teamupToken: string;
@@ -132,12 +130,7 @@ interface TokenBrokerRequest {
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const SURFACES: readonly Surface[] = [
-  "ios",
-  "memberWeb",
-  "coachWeb",
-  "ownerWeb",
-];
+const SURFACES: readonly Surface[] = ["ios", "memberWeb"];
 
 const JWT_LIFETIME_SECONDS = 60 * 60;
 
@@ -292,18 +285,6 @@ async function verifyTeamUpToken(
 
   const config = readTeamUpOAuthConfig();
   return stubTeamUpVerification(config?.providerId);
-}
-
-function surfaceToRole(surface: Surface): AppRole {
-  switch (surface) {
-    case "ios":
-    case "memberWeb":
-      return "member";
-    case "coachWeb":
-      return "coach";
-    case "ownerWeb":
-      return "owner";
-  }
 }
 
 function requireEnv(name: string): string {
@@ -685,27 +666,12 @@ async function mintSupabaseJwt(
 async function issueMemberSession(
   verification: TeamUpVerificationResult,
   deviceMemberId: string,
-  surface: Surface,
+  _surface: Surface,
   useAuthSession: boolean,
 ): Promise<IssuedSession | { error: string; status: number }> {
-  // Local HS256 stub (OAuth unconfigured) still follows the surface. Production
-  // callbacks pass useAuthSession and take the allowlisted role below.
-  let role: AppRole;
-  if (!useAuthSession) {
-    role = surfaceToRole(surface);
-  } else {
-    const resolved = resolveAppRole({
-      surface,
-      mode: verification.mode,
-      teamupSubject: verification.teamupCustomerId,
-      ownerSubjects: parseSubjectAllowlist(Deno.env.get("TEAMUP_OWNER_SUBJECTS")),
-      coachSubjects: parseSubjectAllowlist(Deno.env.get("TEAMUP_COACH_SUBJECTS")),
-    });
-    if ("error" in resolved) {
-      return { error: resolved.error, status: 403 };
-    }
-    role = resolved.role;
-  }
+  // ios and memberWeb are the only surfaces. Both are members. The owner
+  // session is provisioned on the owner API and does not come through here.
+  const role: AppRole = "member";
 
   const supabase = createServiceClient();
   const gymId = await lookupGymId(supabase, verification.providerId);
@@ -738,8 +704,7 @@ async function issueMemberSession(
   );
 
   // Stub / OAuth-unconfigured: hand-mint HS256 (local/dev only).
-  // When OAuth is configured, callers must reject stub-token before this path;
-  // useAuthSession is then always true for remaining POSTs.
+  // Production callbacks pass useAuthSession and establish an Auth session.
   if (!useAuthSession) {
     const token = await mintSupabaseJwt(member.id, gymId, role);
     return { kind: "hs256", token };
@@ -794,7 +759,7 @@ async function handlePost(req: Request): Promise<Response> {
     return jsonResponse(
       {
         error:
-          "Invalid request body. Expected teamupToken (string), deviceMemberId (UUID), surface (ios | memberWeb | coachWeb | ownerWeb).",
+          "Invalid request body. Expected teamupToken (string), deviceMemberId (UUID), surface (ios | memberWeb).",
       },
       400,
     );
@@ -839,7 +804,7 @@ async function handleOAuthAuthorize(req: Request): Promise<Response> {
     return jsonResponse(
       {
         error:
-          "Invalid authorize request. Expected deviceMemberId (UUID), surface (ios | memberWeb | coachWeb | ownerWeb), optional returnUrl.",
+          "Invalid authorize request. Expected deviceMemberId (UUID), surface (ios | memberWeb), optional returnUrl.",
       },
       400,
     );
@@ -906,6 +871,10 @@ async function handleOAuthCallback(req: Request): Promise<Response> {
     return jsonResponse({ error: "Invalid or expired OAuth state" }, 400);
   }
 
+  if (!isSurface(state.surface)) {
+    return jsonResponse({ error: "Invalid or expired OAuth state" }, 400);
+  }
+
   const teamUpAccessToken = await exchangeTeamUpAuthorizationCode(config, {
     code,
     codeVerifier: state.codeVerifier,
@@ -916,7 +885,7 @@ async function handleOAuthCallback(req: Request): Promise<Response> {
   const result = await issueMemberSession(
     verification,
     state.deviceMemberId,
-    state.surface as Surface,
+    state.surface,
     true,
   );
 

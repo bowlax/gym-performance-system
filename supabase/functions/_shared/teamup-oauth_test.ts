@@ -23,8 +23,6 @@ import {
   verifyOAuthState,
   isClientSuppliedTeamUpTokenRejected,
   isStubTokenRejectedWhenOAuthConfigured,
-  parseSubjectAllowlist,
-  resolveAppRole,
   type OAuthGetRoute,
   type TeamUpOAuthConfig,
 } from "./teamup-oauth.ts";
@@ -124,71 +122,6 @@ Deno.test("stub-token is refused when OAuth is configured, allowed when unconfig
   } finally {
     Deno.env.get = originalGet;
   }
-});
-
-Deno.test("parseSubjectAllowlist trims and drops blanks", () => {
-  assertEquals(parseSubjectAllowlist(undefined), []);
-  assertEquals(parseSubjectAllowlist("  "), []);
-  assertEquals(parseSubjectAllowlist(" owner-1, coach-2 ,"), [
-    "owner-1",
-    "coach-2",
-  ]);
-});
-
-Deno.test("resolveAppRole ignores surface for members and allowlists staff", () => {
-  const owners = ["owner-sub"];
-  const coaches = ["coach-sub"];
-
-  assertEquals(
-    resolveAppRole({
-      surface: "ownerWeb",
-      mode: "provider",
-      teamupSubject: "staff-not-listed",
-      ownerSubjects: owners,
-      coachSubjects: coaches,
-    }),
-    { error: "This TeamUp account is not an owner for this gym" },
-  );
-  assertEquals(
-    resolveAppRole({
-      surface: "ownerWeb",
-      mode: "customer",
-      teamupSubject: "owner-sub",
-      ownerSubjects: owners,
-      coachSubjects: coaches,
-    }),
-    { error: "TeamUp customer token cannot access staff surfaces" },
-  );
-  assertEquals(
-    resolveAppRole({
-      surface: "ownerWeb",
-      mode: "provider",
-      teamupSubject: "owner-sub",
-      ownerSubjects: owners,
-      coachSubjects: coaches,
-    }),
-    { role: "owner" },
-  );
-  assertEquals(
-    resolveAppRole({
-      surface: "coachWeb",
-      mode: "provider",
-      teamupSubject: "coach-sub",
-      ownerSubjects: owners,
-      coachSubjects: coaches,
-    }),
-    { role: "coach" },
-  );
-  assertEquals(
-    resolveAppRole({
-      surface: "ios",
-      mode: "provider",
-      teamupSubject: "owner-sub",
-      ownerSubjects: owners,
-      coachSubjects: coaches,
-    }),
-    { role: "member" },
-  );
 });
 
 Deno.test("OAuth state round-trips with dedicated OAUTH_STATE_SECRET-style secret", async () => {

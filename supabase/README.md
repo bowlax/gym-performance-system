@@ -112,7 +112,7 @@ Required OAuth secrets (set together via `supabase secrets set`):
 | `ios` | `TEAMUP_OAUTH_ALLOWED_RETURN_URLS_IOS` | `gymperformance://connect` |
 | `memberWeb` | `TEAMUP_OAUTH_ALLOWED_RETURN_URLS_MEMBER_WEB` | `https://gymperf-member-web.<account>.workers.dev/auth/callback`, `http://localhost:5173/auth/callback` |
 
-The broker also accepts surfaces `coachWeb` / `ownerWeb` with return-URL allowlists `TEAMUP_OAUTH_ALLOWED_RETURN_URLS_COACH_WEB` / `_OWNER_WEB`. No coach/owner web clients are shipped yet. Those surfaces do not grant a role by themselves. Set `TEAMUP_OWNER_SUBJECTS` and `TEAMUP_COACH_SUBJECTS` (comma-separated TeamUp `sub` values) before they go live. A subject must also present a TeamUp provider-mode token. An empty list denies that role.
+The broker accepts `ios` and `memberWeb` only, and the session it mints is always `app_role: member`. The owner API does not use this broker.
 
 Other optional OAuth overrides: `TEAMUP_OAUTH_SCOPE`, `TEAMUP_OAUTH_AUTHORIZE_URL`, `TEAMUP_OAUTH_TOKEN_URL`.
 

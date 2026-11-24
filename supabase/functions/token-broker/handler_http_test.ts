@@ -202,6 +202,26 @@ Deno.test(
 );
 
 Deno.test(
+  "HTTP GET authorize rejects coachWeb and ownerWeb",
+  async () => {
+    const originalGet = Deno.env.get.bind(Deno.env);
+    Deno.env.get = oauthConfiguredEnvGet;
+    try {
+      for (const surface of ["coachWeb", "ownerWeb"]) {
+        const res = await handleBrokerRequest(
+          new Request(
+            `http://localhost/functions/v1/token-broker?oauth=authorize&deviceMemberId=aaaaaaaa-0000-0000-0000-000000000001&surface=${surface}`,
+          ),
+        );
+        assertEquals(res.status, 400);
+      }
+    } finally {
+      Deno.env.get = originalGet;
+    }
+  },
+);
+
+Deno.test(
   "HTTP GET authorize rejects unknown surface",
   async () => {
     const originalGet = Deno.env.get.bind(Deno.env);
@@ -216,7 +236,7 @@ Deno.test(
       const body = await res.json() as { error?: string };
       assertEquals(
         body.error,
-        "Invalid authorize request. Expected deviceMemberId (UUID), surface (ios | memberWeb | coachWeb | ownerWeb), optional returnUrl.",
+        "Invalid authorize request. Expected deviceMemberId (UUID), surface (ios | memberWeb), optional returnUrl.",
       );
     } finally {
       Deno.env.get = originalGet;
@@ -239,7 +259,7 @@ Deno.test(
       const body = await res.json() as { error?: string };
       assertEquals(
         body.error,
-        "Invalid authorize request. Expected deviceMemberId (UUID), surface (ios | memberWeb | coachWeb | ownerWeb), optional returnUrl.",
+        "Invalid authorize request. Expected deviceMemberId (UUID), surface (ios | memberWeb), optional returnUrl.",
       );
     } finally {
       Deno.env.get = originalGet;
