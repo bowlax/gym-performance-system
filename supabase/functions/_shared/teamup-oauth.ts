@@ -138,10 +138,22 @@ export function shouldUseStubTeamUpPath(teamupToken: string): boolean {
 }
 
 /**
+ * True when a POST body must be rejected because OAuth is live.
+ * Production sessions are issued only by the authorization-code callback.
+ * A client-supplied bearer, including `stub-token`, is not an identity.
+ */
+export function isClientSuppliedTeamUpTokenRejected(teamupToken: string): boolean {
+  return isTeamUpOAuthConfigured() && teamupToken.length > 0;
+}
+
+/**
  * True when a stub-token POST must be rejected (OAuth is live / production).
+ * Any other client-supplied bearer is rejected too — see
+ * `isClientSuppliedTeamUpTokenRejected`.
  */
 export function isStubTokenRejectedWhenOAuthConfigured(teamupToken: string): boolean {
-  return isTeamUpOAuthConfigured() && isStubTeamUpToken(teamupToken);
+  return isClientSuppliedTeamUpTokenRejected(teamupToken) &&
+    isStubTeamUpToken(teamupToken);
 }
 
 /**

@@ -6,10 +6,12 @@
  *
  * Paths:
  *   - OAuth unconfigured (local/dev): POST → hand-minted HS256 `{ token }`.
- *   - OAuth configured + stub-token POST: rejected (403) — no production HS256 mint.
- *   - OAuth configured + real TeamUp JWT or OAuth callback: Auth session ES256
- *     `{ access_token, refresh_token, expires_at, token }`. Requires Custom Access
- *     Token Hook so app_metadata is promoted to top-level claims.
+ *   - OAuth configured + any POST body (stub or a client-supplied bearer):
+ *     rejected (403). Production sessions are minted only on the OAuth callback,
+ *     after the broker exchanges the authorization code with TeamUp.
+ *   - OAuth callback: Auth session ES256 `{ access_token, refresh_token,
+ *     expires_at, token }`. Requires Custom Access Token Hook so app_metadata
+ *     is promoted to top-level claims.
  *
  * When TeamUp OAuth env vars are set, also exposes GET authorize/callback
  * routes for backend-driven OAuth (authorization code + PKCE). Without those
@@ -60,7 +62,7 @@ import {
   decodeTeamUpAccessToken,
   exchangeTeamUpAuthorizationCode,
   generatePkceCodeVerifier,
-  isStubTokenRejectedWhenOAuthConfigured,
+  isTeamUpOAuthConfigured,
   parseOAuthCallbackParams,
   pkceCodeChallengeS256,
   readTeamUpOAuthConfig,
@@ -277,12 +279,17 @@ function parseOAuthAuthorizeParams(
 async function verifyTeamUpToken(
   token: string,
 ): Promise<TeamUpVerificationResult> {
-  if (shouldUseStubTeamUpPath(token)) {
-    const config = readTeamUpOAuthConfig();
-    return stubTeamUpVerification(config?.providerId);
+  // Client-supplied bearers are never decoded. Production identity comes from
+  // the OAuth callback, which exchanges the code with TeamUp and then decodes
+  // the token TeamUp returned.
+  if (!shouldUseStubTeamUpPath(token)) {
+    throw new Error(
+      "Client-supplied TeamUp tokens are not accepted when TeamUp OAuth is configured",
+    );
   }
 
-  return decodeTeamUpAccessToken(token);
+  const config = readTeamUpOAuthConfig();
+  return stubTeamUpVerification(config?.providerId);
 }
 
 function surfaceToRole(surface: Surface): AppRole {
@@ -785,26 +792,25 @@ async function handlePost(req: Request): Promise<Response> {
     );
   }
 
-  // Production (OAuth configured): refuse stub-token — no HS256 session mint.
-  // Local/dev (OAuth unconfigured): stub-token still takes the HS256 path below.
-  if (isStubTokenRejectedWhenOAuthConfigured(request.teamupToken)) {
+  // Production (OAuth configured): no client-supplied bearer is exchanged for
+  // a session. Local/dev (OAuth unconfigured): stub POST still mints HS256.
+  if (isTeamUpOAuthConfigured()) {
     return jsonResponse(
       {
         error:
-          "stub-token is not accepted when TeamUp OAuth is configured. Use the OAuth authorize flow.",
+          "Client-supplied TeamUp tokens are not accepted when TeamUp OAuth is configured. Use the OAuth authorize flow.",
       },
       403,
     );
   }
 
   const verification = await verifyTeamUpToken(request.teamupToken);
-  // Auth session when OAuth is configured (stub path already rejected above).
-  const useAuthSession = !shouldUseStubTeamUpPath(request.teamupToken);
+  // Reached only when OAuth is unconfigured: local HS256 stub, never an Auth session.
   const result = await issueMemberSession(
     verification,
     request.deviceMemberId,
     request.surface,
-    useAuthSession,
+    false,
   );
 
   if ("error" in result) {

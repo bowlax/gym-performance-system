@@ -90,13 +90,12 @@ npx supabase db push        # remote: apply pending migrations
 
 ### Path selection (stub vs real OAuth)
 
-| Configuration | POST `teamupToken: "stub-token"` | GET `?oauth=authorize` |
-|---------------|----------------------------------|-------------------------|
+| Configuration | POST `teamupToken` (stub or any bearer) | GET `?oauth=authorize` |
+|---------------|------------------------------------------|-------------------------|
 | No TeamUp OAuth env vars (local/dev) | **Stub path**: HS256 session mint | `404` — OAuth not configured |
-| All four required OAuth vars set (prod) | **Rejected (403)** — no HS256 mint | Real TeamUp authorize redirect (PKCE) |
-| OAuth vars set + POST with real TeamUp JWT | Auth-session ES256 path | N/A |
+| All four required OAuth vars set (prod) | **Rejected (403)** — no session mint | Real TeamUp authorize redirect (PKCE) |
 
-**Boundary:** HS256 session mint exists only when OAuth is **unconfigured**. Deployed prod (OAuth configured) refuses `stub-token`.
+**Boundary:** HS256 session mint exists only when OAuth is **unconfigured**. Deployed prod (OAuth configured) refuses every client-supplied token. The only production session mint is the OAuth callback, after the broker exchanges the authorization code with TeamUp.
 
 Required OAuth secrets (set together via `supabase secrets set`):
 

@@ -21,6 +21,7 @@ import {
   teamUpDisplayNameFromClaims,
   teamUpEmailFromClaims,
   verifyOAuthState,
+  isClientSuppliedTeamUpTokenRejected,
   isStubTokenRejectedWhenOAuthConfigured,
   type OAuthGetRoute,
   type TeamUpOAuthConfig,
@@ -102,6 +103,9 @@ Deno.test("readTeamUpOAuthConfig builds scope from provider id", () => {
     assertEquals(shouldUseStubTeamUpPath("real-token"), false);
     assertEquals(isStubTokenRejectedWhenOAuthConfigured("stub-token"), true);
     assertEquals(isStubTokenRejectedWhenOAuthConfigured("real-token"), false);
+    assertEquals(isClientSuppliedTeamUpTokenRejected("stub-token"), true);
+    assertEquals(isClientSuppliedTeamUpTokenRejected("real-token"), true);
+    assertEquals(isClientSuppliedTeamUpTokenRejected(""), false);
   } finally {
     Deno.env.get = originalGet;
   }
@@ -114,6 +118,7 @@ Deno.test("stub-token is refused when OAuth is configured, allowed when unconfig
     assertEquals(isTeamUpOAuthConfigured(), false);
     assertEquals(shouldUseStubTeamUpPath("stub-token"), true);
     assertEquals(isStubTokenRejectedWhenOAuthConfigured("stub-token"), false);
+    assertEquals(isClientSuppliedTeamUpTokenRejected("real-token"), false);
   } finally {
     Deno.env.get = originalGet;
   }

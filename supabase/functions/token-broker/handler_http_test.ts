@@ -6,7 +6,7 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { SignJWT } from "jsr:@panva/jose@6";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { verifyOAuthState } from "../_shared/teamup-oauth.ts";
+import { signOAuthState, verifyOAuthState } from "../_shared/teamup-oauth.ts";
 import { handleOwnerMemberNamesRequest } from "../owner-member-names/handler.ts";
 import {
   isLoopbackSupabaseUrl,
@@ -63,7 +63,7 @@ Deno.test(
       const body = await res.json() as { error?: string };
       assertEquals(
         body.error,
-        "stub-token is not accepted when TeamUp OAuth is configured. Use the OAuth authorize flow.",
+        "Client-supplied TeamUp tokens are not accepted when TeamUp OAuth is configured. Use the OAuth authorize flow.",
       );
     } finally {
       Deno.env.get = originalGet;
@@ -87,8 +87,44 @@ Deno.test(
       assertEquals(res.status, 403);
       const body = await res.json() as { error?: string };
       assertEquals(
-        body.error?.includes("stub-token is not accepted") ?? false,
+        body.error?.includes("Client-supplied TeamUp tokens are not accepted") ??
+          false,
         true,
+      );
+    } finally {
+      Deno.env.get = originalGet;
+    }
+  },
+);
+
+Deno.test(
+  "HTTP POST client-supplied bearer with OAuth configured returns 403 and no session",
+  async () => {
+    const originalGet = Deno.env.get.bind(Deno.env);
+    Deno.env.get = oauthConfiguredEnvGet;
+    try {
+      const res = await handleBrokerRequest(
+        new Request("http://localhost/functions/v1/token-broker", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            teamupToken: "client-supplied-bearer",
+            deviceMemberId: "aaaaaaaa-0000-0000-0000-000000000001",
+            surface: "memberWeb",
+          }),
+        }),
+      );
+      assertEquals(res.status, 403);
+      const body = await res.json() as {
+        error?: string;
+        token?: string;
+        access_token?: string;
+      };
+      assertEquals(body.token, undefined);
+      assertEquals(body.access_token, undefined);
+      assertEquals(
+        body.error,
+        "Client-supplied TeamUp tokens are not accepted when TeamUp OAuth is configured. Use the OAuth authorize flow.",
       );
     } finally {
       Deno.env.get = originalGet;
@@ -303,21 +339,41 @@ async function mintOwnerJwt(
     .sign(new TextEncoder().encode(secret));
 }
 
+const OAUTH_STATE_SECRET_FOR_TESTS = "test-oauth-state-secret";
+
 async function connectWithJwtName(
   teamupToken: string,
   deviceMemberId: string,
 ): Promise<Response> {
-  return await handleBrokerRequest(
-    new Request("http://localhost/functions/v1/token-broker", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        teamupToken,
-        deviceMemberId,
-        surface: "memberWeb",
-      }),
-    }),
+  const state = await signOAuthState(
+    {
+      deviceMemberId,
+      surface: "memberWeb",
+      codeVerifier: "test-code-verifier",
+      returnUrl: null,
+    },
+    OAUTH_STATE_SECRET_FOR_TESTS,
   );
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.startsWith("https://goteamup.com/api/v2/auth/oauth/token")) {
+      return new Response(JSON.stringify({ access_token: teamupToken }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return await previousFetch(input, init);
+  };
+  try {
+    const callback = new URL("http://localhost/functions/v1/token-broker");
+    callback.searchParams.set("oauth", "callback");
+    callback.searchParams.set("code", "test-auth-code");
+    callback.searchParams.set("state", state);
+    return await handleBrokerRequest(new Request(callback));
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
 }
 
 async function assertConnectOk(res: Response, label: string): Promise<void> {
@@ -328,7 +384,7 @@ async function assertConnectOk(res: Response, label: string): Promise<void> {
 }
 
 Deno.test({
-  name: "HTTP POST connect writes JWT name onto members.display_name and reconnect overwrites",
+  name: "OAuth callback connect writes JWT name onto members.display_name and reconnect overwrites",
   ignore: !isLoopbackSupabaseUrl(
     Deno.env.get("SUPABASE_URL") ?? Deno.env.get("API_URL") ??
       "http://127.0.0.1:54321",
@@ -354,6 +410,7 @@ Deno.test({
         return "https://broker.example/functions/v1/token-broker?oauth=callback";
       }
       if (name === "TEAMUP_OAUTH_PROVIDER_ID") return "5404319";
+      if (name === "OAUTH_STATE_SECRET") return OAUTH_STATE_SECRET_FOR_TESTS;
       return originalGet(name);
     };
 
@@ -492,7 +549,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "HTTP POST connect persists teamup_roster_id from the same email lookup",
+  name: "OAuth callback connect persists teamup_roster_id from the same email lookup",
   ignore: !isLoopbackSupabaseUrl(
     Deno.env.get("SUPABASE_URL") ?? Deno.env.get("API_URL") ??
       "http://127.0.0.1:54321",
@@ -519,6 +576,7 @@ Deno.test({
         return "https://broker.example/functions/v1/token-broker?oauth=callback";
       }
       if (name === "TEAMUP_OAUTH_PROVIDER_ID") return "5404319";
+      if (name === "OAUTH_STATE_SECRET") return OAUTH_STATE_SECRET_FOR_TESTS;
       return originalGet(name);
     };
 

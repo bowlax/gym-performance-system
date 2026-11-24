@@ -748,7 +748,7 @@ OAuth is driven by the token broker Edge Function, not by the client holding Tea
 
 **Production signing and secrets:** Prod OAuth uses Supabase Auth ES256 sessions. `JWT_SIGNING_SECRET` is local/stub-only (HS256 mint when TeamUp OAuth env vars are unset) and is removed from deployed secrets. OAuth `state` HMAC uses a dedicated `OAUTH_STATE_SECRET` (must not be the project JWT secret). GitHub issue [#17](https://github.com/bowlax/gym-performance-system/issues/17) (HS256 → Auth-session ES256) closed 21 Jul 2026.
 
-A stub POST path (`teamupToken: "stub-token"`) remains for local/dev testing without TeamUp OAuth env vars. Operational detail (env vars, curl, path selection): `supabase/README.md`.
+A stub POST path (`teamupToken: "stub-token"`) remains for local/dev testing without TeamUp OAuth env vars. When those vars are set, every POST is rejected: a client-supplied TeamUp bearer is not an identity. Operational detail (env vars, curl, path selection): `supabase/README.md`.
 
 ### Connection flow (create-or-adopt)
 
