@@ -66,6 +66,8 @@ import {
   parseOAuthCallbackParams,
   pkceCodeChallengeS256,
   readTeamUpOAuthConfig,
+  resolveAppRole,
+  parseSubjectAllowlist,
   resolveOAuthGetRoute,
   resolveOAuthReturnUrl,
   shouldUseStubTeamUpPath,
@@ -302,10 +304,6 @@ function surfaceToRole(surface: Surface): AppRole {
     case "ownerWeb":
       return "owner";
   }
-}
-
-function isStaffSurface(surface: Surface): boolean {
-  return surface === "coachWeb" || surface === "ownerWeb";
 }
 
 function requireEnv(name: string): string {
@@ -690,13 +688,23 @@ async function issueMemberSession(
   surface: Surface,
   useAuthSession: boolean,
 ): Promise<IssuedSession | { error: string; status: number }> {
-  const role = surfaceToRole(surface);
-
-  if (verification.mode === "customer" && isStaffSurface(surface)) {
-    return {
-      error: "TeamUp customer token cannot access staff surfaces",
-      status: 403,
-    };
+  // Local HS256 stub (OAuth unconfigured) still follows the surface. Production
+  // callbacks pass useAuthSession and take the allowlisted role below.
+  let role: AppRole;
+  if (!useAuthSession) {
+    role = surfaceToRole(surface);
+  } else {
+    const resolved = resolveAppRole({
+      surface,
+      mode: verification.mode,
+      teamupSubject: verification.teamupCustomerId,
+      ownerSubjects: parseSubjectAllowlist(Deno.env.get("TEAMUP_OWNER_SUBJECTS")),
+      coachSubjects: parseSubjectAllowlist(Deno.env.get("TEAMUP_COACH_SUBJECTS")),
+    });
+    if ("error" in resolved) {
+      return { error: resolved.error, status: 403 };
+    }
+    role = resolved.role;
   }
 
   const supabase = createServiceClient();

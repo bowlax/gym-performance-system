@@ -757,7 +757,7 @@ A stub POST path (`teamupToken: "stub-token"`) remains for local/dev testing wit
 3. Broker looks up members by (gym_id, teamup_customer_id):
    - **No existing record** → CREATE a members row using the device's local UUID as primary key, storing the TeamUp customer ID. The local UUID becomes canonical
    - **Existing record** → ADOPT it. Return the existing member UUID. The device adopts this UUID going forward (second-device or returning-member case)
-4. Broker establishes a Supabase Auth session whose JWT carries claims: `member_id` (canonical UUID), `gym_id`, `app_role` (from surface/mode), and PostgREST `role: "authenticated"`
+4. Broker establishes a Supabase Auth session whose JWT carries claims: `member_id` (canonical UUID), `gym_id`, `app_role` (member, or coach/owner only when the TeamUp subject is allowlisted), and PostgREST `role: "authenticated"`
 5. App uses that session JWT for sync and API requests; RLS reads `member_id`, `gym_id`, and `app_role`
 6. App syncs under the canonical member identity (see section 20)
 
@@ -785,12 +785,13 @@ This is why the member record is create-or-adopt, not always-create. TeamUp cust
 
 ### Role assignment
 
-The broker sets `app_role` based on the surface that initiated auth:
-- iOS member app / member web surface → `app_role: member` (Customer mode)
-- Coach web surface → `app_role: coach` (Provider mode)
-- Owner web surface → `app_role: owner` (Provider mode, admin)
+The broker sets `app_role` from the verified TeamUp identity, not from the surface alone:
 
-TeamUp's own enforcement means a non-staff member cannot obtain a Provider-capable token even if they target the coach surface -- the broker will not be able to mint a coach JWT for them.
+- iOS member app / member web surface → `app_role: member`
+- Coach web → `app_role: coach` only when the token is TeamUp provider-mode and its subject is listed in `TEAMUP_COACH_SUBJECTS` (owner subjects may use this surface too)
+- Owner web → `app_role: owner` only when the token is TeamUp provider-mode and its subject is listed in `TEAMUP_OWNER_SUBJECTS`
+
+A customer-mode token cannot take a staff surface. An empty allowlist means nobody receives that role. The local stub path, used only when OAuth is unconfigured, still maps surface to role so development does not need those lists.
 
 ### What RLS then enforces
 

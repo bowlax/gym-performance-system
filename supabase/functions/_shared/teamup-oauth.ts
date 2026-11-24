@@ -68,6 +68,50 @@ export function stubTeamUpVerification(
   };
 }
 
+export function parseSubjectAllowlist(value: string | undefined): readonly string[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+/**
+ * Production app_role. Member surfaces are always members. Coach and owner
+ * require a TeamUp provider-mode token whose subject is on the server allowlist.
+ * The surface chooses which staff role to ask for. It does not grant that role.
+ */
+export function resolveAppRole(input: {
+  surface: OAuthSurface;
+  mode: TeamUpMode;
+  teamupSubject: string;
+  ownerSubjects: readonly string[];
+  coachSubjects: readonly string[];
+}): { role: "member" | "coach" | "owner" } | { error: string } {
+  if (input.surface === "ios" || input.surface === "memberWeb") {
+    return { role: "member" };
+  }
+
+  if (input.mode !== "provider") {
+    return { error: "TeamUp customer token cannot access staff surfaces" };
+  }
+
+  const subject = input.teamupSubject.trim();
+  if (input.surface === "ownerWeb") {
+    if (!input.ownerSubjects.includes(subject)) {
+      return { error: "This TeamUp account is not an owner for this gym" };
+    }
+    return { role: "owner" };
+  }
+
+  const coachAllowed = input.coachSubjects.includes(subject) ||
+    input.ownerSubjects.includes(subject);
+  if (!coachAllowed) {
+    return { error: "This TeamUp account is not a coach for this gym" };
+  }
+  return { role: "coach" };
+}
+
 function envOptional(name: string): string | undefined {
   const value = Deno.env.get(name)?.trim();
   return value && value.length > 0 ? value : undefined;

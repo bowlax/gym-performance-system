@@ -73,7 +73,9 @@ create policy members_read on members
         )
     );
 
--- Member updates own record only (e.g. display_name, sync_enabled)
+-- Member updates own settings only (staleness, reminder opt-out, sync bookkeeping).
+-- Identity columns are revoked from authenticated in
+-- 20261124121417_member_identity_column_privileges.sql.
 create policy members_update_own on members
     for update
     using (
